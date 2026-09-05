@@ -81012,6 +81012,24 @@ var USERS_KEY = 'bp_users';
    Возим его общим конвертом, как задания: занятые дни блогера и должны
    быть видны всем, кто смотрит его карточку. */
 var SLOT_KEY = 'bp_slots';
+/* Личные ключи человека: избранное, данные компании и настройки. Они
+   помечены в хранилище как «локальные» и никуда не уезжали — сменив
+   телефон, человек терял избранное и заполненные реквизиты компании.
+   Возим их одним конвертом «письмо себе», как профиль.
+
+   Черновики и уведомления сюда СОЗНАТЕЛЬНО не входят. Черновик человек
+   правит прямо сейчас, и приехавшая с другого устройства версия затёрла
+   бы набранное; уведомления рождаются из событий, которые и так ездят
+   своими конвертами, — они бы задвоились. */
+var MINE_SNAP = 'bpsync_mine';        /* без префикса bp_ — мимо перехвата bpData */
+/* Сторож против самой опасной гонки на ЧИСТОМ устройстве. Конверты
+   «личное» и «календарь» везут НАБОР целиком, поэтому пустой набор
+   стирает содержимое на сервере. А на новом телефоне до первого приёма
+   ленты всё пусто — и отправка, случившаяся раньше приёма, унесла бы
+   человеку избранное и календарь в ноль. Пока лента не пришла хотя бы
+   раз, наборы не отправляем. Записи по одной (заявки, сделки, отзывы)
+   этого не боятся: пустой список просто ничего не шлёт. */
+var _gotPull = false;
 var SNAP_KEY = 'bpsync_prof';        /* снимок профиля: по нему считаем, что изменилось */
 
 /* ── ПРОФИЛЬ ЧЕЛОВЕКА ────────────────────────────────────────────────
@@ -81109,11 +81127,89 @@ function pushProf(){
   put('prof', rid, rec, null, true);
 }
 
+/* ── личное: избранное, компания, настройки ──────────────────────
+   Читаем и пишем теми же дорогами, что и само приложение: у избранного
+   ключ свой на каждый аккаунт (bp_favs_<номер>), у компании — свой
+   (bp_company__u<номер>), и оба номера на другом устройстве ДРУГИЕ.
+   Поэтому берём значения через готовые функции приложения, а не по
+   голому имени ключа. */
+function favKey(){
+  try{ if(typeof _favKey === 'function') return _favKey(); }catch(e){}
+  var u = me();
+  return 'bp_favs_' + ((u && u.id) || 'guest');
+}
+function mineOf(){
+  var out = { v: 1, at: Date.now() };
+  try{ out.favs = JSON.parse(rawGet(favKey()) || '[]'); }catch(e){ out.favs = []; }
+  if(!Array.isArray(out.favs)) out.favs = [];
+  try{
+    out.company = (window.bpData && bpData.company && typeof bpData.company.get === 'function')
+      ? (bpData.company.get() || {}) : {};
+  }catch(e){ out.company = {}; }
+  try{ out.prefs = JSON.parse(rawGet('bp_prefs') || '{}') || {}; }catch(e){ out.prefs = {}; }
+  try{ out.muted = rawGet('bp_notif_muted') || ''; }catch(e){ out.muted = ''; }
+  return out;
+}
+function mineSnap(){
+  try{ var o = JSON.parse(rawGet(MINE_SNAP) || 'null'); return (o && typeof o === 'object') ? o : null; }
+  catch(e){ return null; }
+}
+function mineBody(v){
+  try{ return JSON.stringify({ favs: v.favs, company: v.company, prefs: v.prefs, muted: v.muted }); }
+  catch(e){ return ''; }
+}
+function pushMine(){
+  try{
+    if(!_gotPull) return;                    /* см. _gotPull */
+    var rid = profRid(); if(!rid) return;
+    var now = mineOf();
+    var sn = mineSnap();
+    var body = mineBody(now);
+    /* Отметку времени двигаем ТОЛЬКО когда что-то правда изменилось:
+       иначе каждое отправление выглядело бы свежее чужого и побеждало в
+       споре устройств просто потому, что случилось позже. */
+    if(sn && sn.body === body){ now.at = sn.at; }
+    else { rawSet(MINE_SNAP, JSON.stringify({ at: now.at, body: body })); }
+    put('mine', rid, now, null, true);
+  }catch(e){ E(e); }
+}
+function applyMine(data){
+  try{
+    if(!data || data.v !== 1) return false;
+    var sn = mineSnap();
+    var body = mineBody(data);
+    if(sn && sn.body === body) return false;                 /* это наше же */
+    /* Спорят два устройства — побеждает то, где правили позже. */
+    if(sn && Number(sn.at || 0) > Number(data.at || 0)) return false;
+    if(Array.isArray(data.favs)) rawSet(favKey(), JSON.stringify(data.favs));
+    try{
+      if(data.company && window.bpData && bpData.company && typeof bpData.company.save === 'function'){
+        bpData.company.save(data.company);
+      }
+    }catch(e){ E(e); }
+    if(data.prefs && typeof data.prefs === 'object') rawSet('bp_prefs', JSON.stringify(data.prefs));
+    if(typeof data.muted === 'string'){
+      if(data.muted) rawSet('bp_notif_muted', data.muted);
+      else { try{ window.localStorage.removeItem('bp_notif_muted'); }catch(e){} }
+    }
+    rawSet(MINE_SNAP, JSON.stringify({ at: Number(data.at) || Date.now(), body: body }));
+    /* Экраны перерисовываем теми же функциями, что и приложение. */
+    try{ if(typeof window.renderFavorites === 'function') window.renderFavorites(); }catch(e){}
+    try{ if(typeof window.bpPf2RenderDone === 'function') window.bpPf2RenderDone(); }catch(e){}
+    return true;
+  }catch(e){ E(e); return false; }
+}
+
 /* Чужой календарь: полностью заменяем дни ЭТОГО блогера тем, что
    приехало, а свои и чужие остальные не трогаем. Записи приходят уже с
    переведёнными личностями (bloggerId = 'srv:N' → местный номер). */
 function applySlots(rid, data){
   try{
+    if(!data || !Array.isArray(data.days)) return false;
+    /* Личности внутри переводим ТУТ: остальные приёмники делают то же
+       самое каждый у себя. Без этого в календаре осталось бы '#srv:1060'
+       вместо номера человека, и занятость не нашлась бы ни для кого. */
+    data = fromWire(data);
     if(!data || !Array.isArray(data.days)) return false;
     var whose = data.ownerId;
     /* Запасной путь для старых конвертов без ownerId: берём хозяина из
@@ -81124,9 +81220,16 @@ function applySlots(rid, data){
       }
     }
     if(whose == null) return false;
-    /* Свой календарь с сервера не принимаем: на этом устройстве он
-       первичен, иначе два устройства затирали бы друг друга по кругу. */
-    if(sameId(whose, myLocal())) return false;
+    /* Свой календарь: на устройстве, где он уже есть, местный главнее —
+       иначе два телефона затирали бы друг друга по кругу. Но на ЧИСТОМ
+       устройстве его надо вернуть, иначе человек потеряет свои занятые
+       дни при смене телефона. Признак чистого — своих дней нет вовсе. */
+    if(sameId(whose, myLocal())){
+      var have = arr(SLOT_KEY).some(function(sl){
+        return sl && sl.bloggerId != null && sameId(sl.bloggerId, whose);
+      });
+      if(have) return false;
+    }
     var all = arr(SLOT_KEY).filter(function(sl){
       return !(sl && sl.bloggerId != null && sameId(sl.bloggerId, whose));
     });
@@ -81340,10 +81443,14 @@ function pushAll(){
       put('camp', String(c.id), c, null, true);
     });
 
+    /* ЛИЧНОЕ — «письмо себе»: избранное, компания, настройки. */
+    pushMine();
+
     /* КАЛЕНДАРЬ ЗАНЯТОСТИ — общим конвертом, одной записью на человека.
        Шлём только СВОИ дни: чужие в нашем хранилище лежат как копии, и
        отправлять их обратно значило бы спорить с их хозяином. */
     (function(){
+      if(!_gotPull) return;                   /* см. _gotPull */
       var rid = profRid();                    /* 'self:<серверный номер>' */
       if(!rid) return;
       var mine = arr(SLOT_KEY).filter(function(sl){
@@ -81603,11 +81710,13 @@ function pull(force){
           else if(row.kind === 'rev' && applyList(REV_KEY, 'id', row.rid, row.data)) touched++;
           else if(row.kind === 'disp' && applyList(DISP_KEY, 'id', row.rid, row.data)) touched++;
           else if(row.kind === 'slot' && applySlots(row.rid, row.data)) touched++;
+          else if(row.kind === 'mine' && applyMine(row.data)) touched++;
           else if(row.kind === 'prof' && applyProf(row.data)) touched++;
         }
       }catch(e){ E(e); }
     });
     saveVer(Number(j.ver) || lastVer());
+    _gotPull = true;                          /* ленту приняли — можно отправлять наборы */
     if(touched){
       try{ if(typeof window.bpSyncIncomingOffers === 'function') window.bpSyncIncomingOffers(); }catch(e){ E(e); }
       /* Списки заданий слушают событие storage, но своя перерисовка
@@ -81627,6 +81736,9 @@ function watched(key){
       || key === JOIN_KEY || key === REV_KEY || key === DISP_KEY
       || key === USERS_KEY                       /* правка профиля */
       || key === SLOT_KEY                        /* календарь занятости */
+      || key === 'bp_prefs' || key === 'bp_notif_muted'
+      || key.indexOf('bp_favs_') === 0           /* избранное */
+      || key.indexOf('bp_company') === 0         /* данные компании */
       || key.indexOf(MSG_PREFIX) === 0;
 }
 
@@ -84862,6 +84974,107 @@ try{
   }
 }catch(e){ E(e); }
 setTimeout(function(){ load(true); }, 2600);
+})();
+</script>
+
+<script id="bp-ident-fix">
+/* ══ ОДНА ЛИЧНОСТЬ НА ВСЕ УСТРОЙСТВА ════════════════════════════════
+   Две мелочи из того же корня, что и разъезжающиеся данные.
+
+   1. Ссылка-приглашение строилась от МЕСТНОГО номера человека, а он
+      равен Date.now() и на каждом устройстве свой. Человек звал друзей с
+      телефона, потом с ноутбука — и это были две разные ссылки, то есть
+      бонус за приглашение мог уйти в никуда. Строим от серверного
+      номера: он один на все устройства. Нет серверного — оставляем
+      прежнее поведение, чтобы ссылка вообще была.
+
+   2. Имён у человека было фактически два: то, что в таблице users с
+      регистрации (его нечем было поменять), и то, что он правит в
+      профиле. Рейтинг, тревоги владельцу и пульт оператора показывали
+      первое — то есть старое. Теперь при входе и после правки профиля
+      имя досылается на сервер ручкой /api/account/name.
+   Откат: удалить script#bp-ident-fix.                               */
+(function(){
+'use strict';
+if(window.__bpIdentFix) return; window.__bpIdentFix = 1;
+
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'identfix'); }catch(_){} }
+function me(){
+  try{ return (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null; }
+  catch(e){ return null; }
+}
+function srv(){ return window.bpSrv; }
+function ready(){
+  try{
+    var x = srv();
+    return !!(x && x.configured && x.configured() && typeof x.raw === 'function' && x.token && x.token());
+  }catch(e){ return false; }
+}
+
+/* ── 1. приглашение от серверного номера ─────────────────────────── */
+try{
+  var prev = window.bpInviteLink;
+  window.bpInviteLink = function(){
+    try{
+      var u = me();
+      var n = u && u.srvId;
+      if(n != null && typeof window.bpLinkCfg === 'function'){
+        var cfg = window.bpLinkCfg();
+        var tag = 'r_' + String(n);
+        return cfg.app
+          ? ('https://t.me/' + cfg.bot + '/' + cfg.app + '?startapp=' + tag)
+          : ('https://t.me/' + cfg.bot + '?start=' + tag);
+      }
+    }catch(e){ E(e); }
+    return (typeof prev === 'function') ? prev.apply(this, arguments) : '';
+  };
+}catch(e){ E(e); }
+
+/* ── 2. имя на сервере ───────────────────────────────────────────── */
+var _sent = '', _busy = false;
+function pushName(){
+  try{
+    if(_busy || !ready()) return;
+    var u = me();
+    var name = u ? String(u.name || '').trim() : '';
+    if(!name || name === _sent) return;
+    _busy = true;
+    srv().raw('POST', '/api/account/name', { name: name })
+      .then(function(){ _sent = name; })
+      .catch(function(){})
+      .then(function(){ _busy = false; });
+  }catch(e){ _busy = false; E(e); }
+}
+window.bpPushName = pushName;
+
+try{
+  var enter = window.enterApp;
+  if(typeof enter === 'function' && !enter.__bpIF){
+    var we = function(){
+      var r = enter.apply(this, arguments);
+      setTimeout(pushName, 1800);
+      return r;
+    };
+    we.__bpIF = 1;
+    window.enterApp = we;
+  }
+}catch(e){ E(e); }
+
+/* Профиль сохраняют разные экраны; ловим общий момент — запись списка
+   пользователей. Дороже одного запроса это не стоит: имя сравнивается с
+   уже отправленным. */
+try{
+  var save = window.saveUsers;
+  if(typeof save === 'function' && !save.__bpIF){
+    var ws = function(){
+      var r = save.apply(this, arguments);
+      setTimeout(pushName, 400);
+      return r;
+    };
+    ws.__bpIF = 1;
+    window.saveUsers = ws;
+  }
+}catch(e){ E(e); }
 })();
 </script>
 

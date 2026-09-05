@@ -259,6 +259,20 @@ try {
   const again = await api('POST', '/api/account/email', { email: 'bot2@t.ru', password: 'пароль-подлиннее' }, tokB);
   ok(again.status === 400, 'вторую смену почты закрываем', again.body);
 
+  /* ── имя одно везде ──
+     Профиль правил своё имя, а в таблице users оставалось прежнее — его
+     и показывали рейтинг, тревоги владельцу и пульт оператора. */
+  const nameNoAuth = await api('POST', '/api/account/name', { name: 'Кто-то' });
+  ok(nameNoAuth.status === 401, 'чужое имя менять нельзя');
+  const nameEmpty = await api('POST', '/api/account/name', { name: '   ' }, tokA);
+  ok(nameEmpty.status === 400, 'пустое имя не принимаем', nameEmpty.body);
+  const nameOk = await api('POST', '/api/account/name', { name: 'Новое Имя' }, tokA);
+  ok(nameOk.status === 200 && nameOk.body.name === 'Новое Имя', 'имя поправлено', nameOk.body);
+  const meName = await fetch(BASE + '/api/me', { headers: { Authorization: 'Bearer ' + tokA } }).then((r) => r.json());
+  ok(meName.user && meName.user.name === 'Новое Имя', 'сервер отдаёт новое имя', meName.user);
+  const nameLong = await api('POST', '/api/account/name', { name: 'я'.repeat(200) }, tokA);
+  ok(nameLong.status === 200 && nameLong.body.name.length === 120, 'длинное имя обрезается', nameLong.body.name.length);
+
   /* ── без токена бота вход честно отказывает ── */
   const PORT2 = PORT + 1;
   const dir2 = mkdtempSync(path.join(tmpdir(), 'bp-tglog2-'));

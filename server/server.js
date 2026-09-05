@@ -660,6 +660,11 @@ const q = {
      пароль — и это становится вторым способом входа в ТОТ ЖЕ аккаунт,
      а не вторым кошельком. */
   updEmail: db.prepare('UPDATE users SET email = ? WHERE id = ?'),
+  /* Имён у человека было фактически два: users.name с регистрации,
+     который менять было нечем, и имя из профиля, которое ездит конвертом
+     между устройствами. Рейтинг, тревоги владельцу и пульт оператора
+     показывали первое — то есть старое. Теперь профиль правит и его. */
+  updName: db.prepare('UPDATE users SET name = ? WHERE id = ?'),
   setAdmin: db.prepare('UPDATE users SET is_admin = ? WHERE id = ?'),
   opByKey: db.prepare('SELECT * FROM ops WHERE op_key = ?'),
   insOp: db.prepare('INSERT INTO ops (op_key, user_id, kind, result) VALUES (?,?,?,?)'),
@@ -2253,6 +2258,21 @@ const routes = {
         canTelegram: !!(BOT_TOKEN && TG_BOT_ID),
       },
     };
+  },
+
+  /* ── Имя ──
+     Правит его профиль. Отдельной ручкой, потому что имя лежит в таблице
+     users, а профиль ездит конвертами и до неё не доставал. */
+  'POST /api/account/name': async (req, body) => {
+    const u = auth(req);
+    if (!u) return { status: 401, body: { error: 'Нужен вход' } };
+    if (!rateLimit(req, 'accname', 30, 60000)) return tooOften;
+    const name = String(body.name || '').trim().slice(0, 120);
+    if (!name) return { status: 400, body: { error: 'Введите имя' } };
+    if (name === String(u.name || '')) return { status: 200, body: { ok: true, name } };
+    try { q.updName.run(name, u.id); }
+    catch (e) { return { status: 500, body: { error: 'Не вышло сохранить имя' } }; }
+    return { status: 200, body: { ok: true, name } };
   },
 
   /* ── Задать почту и пароль ──
