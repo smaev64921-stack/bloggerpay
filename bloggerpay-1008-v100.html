@@ -85078,5 +85078,364 @@ try{
 })();
 </script>
 
+<style id="bp-install-css">
+/* ══ УСТАНОВКА И САМООБНОВЛЕНИЕ ═════════════════════════════════════
+   Две вещи, которых не хватало установленному приложению.
+
+   1. Предложение установить. Браузер сам умеет ставить наш мини-апп на
+      домашний экран, но спрашивает об этом невнятной строчкой в меню,
+      которую никто не находит. Ловим момент и показываем нормальную
+      шторку — с иконкой, тремя причинами и одной кнопкой.
+
+   2. Обновление. Установленное приложение живёт неделями и легко
+      застревает на старой версии. Теперь оно проверяет обновление при
+      каждом возврате на экран и раз в четверть часа, а найдя — тихо
+      перезагружается. Если человек в этот момент печатает или открыта
+      шторка, ждём: перезагрузим, когда он свернёт приложение.
+   Откат: удалить style#bp-install-css и script#bp-install.          */
+html #bpInst{
+  position:fixed; inset:0; z-index:100050; display:flex; align-items:flex-end;
+  background:rgba(4,4,6,.6); backdrop-filter:blur(3px);
+  animation:bpInstFade .22s ease;
+}
+@keyframes bpInstFade{ from{ opacity:0 } to{ opacity:1 } }
+html #bpInst .bpi-box{
+  width:100%; box-sizing:border-box;
+  background:var(--card,#121218); border-radius:24px 24px 0 0;
+  border-top:1px solid var(--brd,rgba(255,255,255,.09));
+  padding:20px 18px calc(20px + env(safe-area-inset-bottom));
+  animation:bpInstUp .3s cubic-bezier(.2,.85,.25,1);
+}
+@keyframes bpInstUp{ from{ transform:translateY(30px) } to{ transform:none } }
+html #bpInst .bpi-top{ display:flex; align-items:center; gap:13px; margin-bottom:14px }
+html #bpInst .bpi-ico{
+  width:54px; height:54px; border-radius:16px; flex:0 0 auto; overflow:hidden;
+  background:var(--acc,#2f6ce0); display:grid; place-items:center;
+  box-shadow:0 8px 22px rgba(47,108,224,.35);
+}
+html #bpInst .bpi-ico img{ width:100%; height:100%; object-fit:cover; display:block }
+html #bpInst .bpi-h{ font-size:18px; font-weight:800; letter-spacing:-.02em; color:var(--t1) }
+html #bpInst .bpi-s{ font-size:13px; color:var(--t3); margin-top:2px }
+html #bpInst ul{ list-style:none; margin:0 0 16px; padding:0; display:flex; flex-direction:column; gap:9px }
+html #bpInst li{ display:flex; align-items:flex-start; gap:9px; font-size:13.5px; color:var(--t2); line-height:1.45 }
+html #bpInst li svg{ width:16px; height:16px; flex:0 0 auto; margin-top:1px; color:var(--green,#31C06A) }
+html #bpInst .bpi-btns{ display:flex; gap:9px }
+html #bpInst button{
+  height:48px; border-radius:14px; border:none; cursor:pointer;
+  font-family:inherit; font-size:15px; font-weight:700;
+}
+html #bpInst .bpi-no{ flex:0 0 auto; padding:0 18px; background:rgba(255,255,255,.06); color:var(--t2) }
+html #bpInst .bpi-go{ flex:1; background:var(--acc,#2f6ce0); color:#fff }
+html #bpInst .bpi-ios{
+  margin:0 0 14px; padding:12px 13px; border-radius:14px;
+  background:rgba(255,255,255,.05); border:1px solid var(--brd,rgba(255,255,255,.09));
+  font-size:13px; line-height:1.5; color:var(--t2);
+}
+html #bpInst .bpi-ios b{ color:var(--t1) }
+
+/* Полоска обновления — только когда перезагрузить прямо сейчас нельзя. */
+html #bpUpd{
+  position:fixed; left:12px; right:12px; bottom:calc(12px + env(safe-area-inset-bottom));
+  z-index:100045; display:flex; align-items:center; gap:10px;
+  padding:11px 12px; border-radius:15px;
+  background:rgba(28,30,36,.98); border:1px solid var(--brd2,rgba(255,255,255,.17));
+  box-shadow:0 14px 40px rgba(0,0,0,.5);
+  font-size:13px; color:var(--t2);
+  animation:bpInstUp .28s cubic-bezier(.2,.85,.25,1);
+}
+html #bpUpd b{ color:var(--t1); font-weight:700 }
+html #bpUpd button{
+  margin-left:auto; flex:0 0 auto; height:34px; padding:0 14px; border-radius:11px;
+  border:none; cursor:pointer; background:var(--acc,#2f6ce0); color:#fff;
+  font-family:inherit; font-size:13px; font-weight:700;
+}
+</style>
+
+<script id="bp-install">
+/* ══ УСТАНОВКА И САМООБНОВЛЕНИЕ ═════════════════════════════════════
+   Пояснение — в style#bp-install-css.
+
+   Про обновление подробнее. Главная страница отдаётся с Cache-Control:
+   no-store, а служебный работник настроен «сеть вперёд» — то есть любая
+   перезагрузка приносит свежую версию. Значит задача сводится к одному:
+   вовремя перезагрузиться. Делаем это, когда служебный работник сообщил
+   о новой версии, и только в спокойный момент: не во время набора текста
+   и не поверх открытой шторки. Иначе ждём, пока человек свернёт
+   приложение, и обновляемся там.
+
+   Защита от петли: перезагружаемся не чаще раза в минуту (отметка в
+   sessionStorage).
+   Откат: удалить script#bp-install.                                 */
+(function(){
+'use strict';
+if(window.__bpInstall) return; window.__bpInstall = 1;
+
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'install'); }catch(_){} }
+
+function standalone(){
+  try{
+    if(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+    if(window.navigator && window.navigator.standalone) return true;
+  }catch(e){}
+  return false;
+}
+function inTelegram(){
+  try{ return !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData); }
+  catch(e){ return false; }
+}
+function iOS(){
+  try{
+    var ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  }catch(e){ return false; }
+}
+function icon(){
+  try{
+    var l = document.querySelector('link[rel="apple-touch-icon"]') || document.querySelector('link[rel="icon"]');
+    return (l && l.href) || '';
+  }catch(e){ return ''; }
+}
+
+/* ── 1. ПРЕДЛОЖЕНИЕ УСТАНОВИТЬ ───────────────────────────────────── */
+var HIDE = 'bpInstallHide';          /* без префикса bp_ — мимо перехвата bpData */
+var WEEK = 7 * 24 * 3600 * 1000;
+function hidden(){
+  try{
+    var t = Number(localStorage.getItem(HIDE) || 0);
+    return t && (Date.now() - t) < WEEK;
+  }catch(e){ return false; }
+}
+function hideFor(){ try{ localStorage.setItem(HIDE, String(Date.now())); }catch(e){} }
+
+var deferred = null;
+try{
+  window.addEventListener('beforeinstallprompt', function(e){
+    /* Браузер собирался показать свою невнятную подсказку — перехватываем
+       и показываем свою, когда человек уже что-то увидел на экране. */
+    try{ e.preventDefault(); }catch(_){}
+    deferred = e;
+    setTimeout(offer, 2500);
+  });
+  window.addEventListener('appinstalled', function(){
+    deferred = null;
+    close();
+    try{ if(typeof showToast === 'function') showToast('BloggerPay установлен на устройство', 'ok'); }catch(e){}
+  });
+}catch(e){ E(e); }
+
+function close(){ var o = document.getElementById('bpInst'); if(o) o.remove(); }
+
+function offer(){
+  try{
+    if(document.getElementById('bpInst')) return;
+    if(standalone() || inTelegram() || hidden()) return;
+    /* На экране входа не мешаем: сначала пусть человек попадёт внутрь. */
+    var auth = document.getElementById('pg-auth');
+    if(auth && auth.classList.contains('on')) return;
+    if(!deferred && !iOS()) return;         /* браузер ставить не умеет */
+
+    var ico = icon();
+    var ov = document.createElement('div');
+    ov.id = 'bpInst';
+    ov.innerHTML = '<div class="bpi-box" role="dialog" aria-label="Установить приложение">'
+      + '<div class="bpi-top">'
+      + '<div class="bpi-ico">' + (ico ? '<img src="' + ico + '" alt="">' : '') + '</div>'
+      + '<div><div class="bpi-h">Установите BloggerPay</div>'
+      + '<div class="bpi-s">Приложение на экране телефона</div></div></div>'
+      + '<ul>'
+      + '<li>' + tick() + '<span>Открывается сразу, без адресной строки и вкладок</span></li>'
+      + '<li>' + tick() + '<span>Обновляется само — всегда свежая версия</span></li>'
+      + '<li>' + tick() + '<span>Сделки, кошелёк и переписка те же: аккаунт один</span></li>'
+      + '</ul>'
+      + (deferred ? '' :
+          '<div class="bpi-ios">Нажмите <b>Поделиться</b> внизу браузера, затем '
+        + '<b>«На экран „Домой“»</b>. Иконка появится рядом с остальными приложениями.</div>')
+      + '<div class="bpi-btns">'
+      + '<button type="button" class="bpi-no" id="bpiNo">Позже</button>'
+      + (deferred ? '<button type="button" class="bpi-go" id="bpiGo">Установить</button>' : '')
+      + '</div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if(e.target === ov){ hideFor(); close(); } });
+    var no = document.getElementById('bpiNo');
+    if(no) no.addEventListener('click', function(){ hideFor(); close(); });
+    var go = document.getElementById('bpiGo');
+    if(go) go.addEventListener('click', function(){
+      var d = deferred;
+      close();
+      if(!d) return;
+      try{
+        d.prompt();
+        d.userChoice.then(function(r){
+          deferred = null;
+          if(!r || r.outcome !== 'accepted') hideFor();
+        }).catch(function(){});
+      }catch(e){ E(e); }
+    });
+  }catch(e){ E(e); }
+}
+function tick(){
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" '
+    + 'stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+}
+/* Чтобы можно было позвать из меню, когда человек отложил. */
+window.bpOfferInstall = function(){ try{ localStorage.removeItem(HIDE); }catch(e){} offer(); };
+
+/* ── 2. САМООБНОВЛЕНИЕ ───────────────────────────────────────────── */
+var RELOAD = 'bpUpdAt';
+function tooSoon(){
+  try{
+    var t = Number(sessionStorage.getItem(RELOAD) || 0);
+    return t && (Date.now() - t) < 60000;
+  }catch(e){ return false; }
+}
+function busy(){
+  try{
+    var a = document.activeElement;
+    if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
+    if(a && a.isContentEditable) return true;
+    /* Открытая шторка — тоже занятость: человек в середине действия. */
+    if(document.querySelector('.sheet.on, .ov.on, #alkSheet, #bpInst, .glg-ov')) return true;
+  }catch(e){}
+  return false;
+}
+function reload(){
+  try{ sessionStorage.setItem(RELOAD, String(Date.now())); }catch(e){}
+  try{ location.reload(); }catch(e){ E(e); }
+}
+function bar(){
+  try{
+    if(document.getElementById('bpUpd')) return;
+    var d = document.createElement('div');
+    d.id = 'bpUpd';
+    d.innerHTML = '<span><b>Вышло обновление</b> — применим, когда закончите</span>'
+      + '<button type="button">Обновить</button>';
+    document.body.appendChild(d);
+    d.querySelector('button').addEventListener('click', reload);
+  }catch(e){ E(e); }
+}
+var pending = false;
+function gotUpdate(){
+  if(pending) return;
+  pending = true;
+  if(tooSoon()) return;
+  if(!busy() || document.hidden) return reload();
+  bar();
+  /* Свернул приложение — обновляемся молча, к возвращению всё свежее. */
+  try{
+    document.addEventListener('visibilitychange', function once(){
+      if(document.hidden){
+        document.removeEventListener('visibilitychange', once);
+        reload();
+      }
+    });
+  }catch(e){ E(e); }
+}
+
+try{
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.ready.then(function(reg){
+      if(!reg) return;
+      /* Новая версия уже ждёт своей очереди — это и есть обновление. */
+      if(reg.waiting) gotUpdate();
+      reg.addEventListener('updatefound', function(){
+        var w = reg.installing;
+        if(!w) return;
+        w.addEventListener('statechange', function(){
+          if(w.state === 'installed' && navigator.serviceWorker.controller) gotUpdate();
+        });
+      });
+      var last = 0;
+      function check(){
+        if(Date.now() - last < 60000) return;
+        last = Date.now();
+        try{ reg.update(); }catch(e){}
+      }
+      /* Возврат на экран — самый частый момент, когда стоит проверить. */
+      document.addEventListener('visibilitychange', function(){ if(!document.hidden) check(); });
+      window.addEventListener('focus', check);
+      setInterval(check, 15 * 60 * 1000);
+      setTimeout(check, 8000);
+    }).catch(function(){});
+
+    navigator.serviceWorker.addEventListener('controllerchange', function(){
+      /* Служебный работник сменился — страница уже под новой версией. */
+      gotUpdate();
+    });
+  }
+}catch(e){ E(e); }
+
+/* ── настоящий манифест ──
+   Раньше манифест собирался в браузере и подключался ссылкой blob:, а
+   иконки были data:. Установить такое приложение браузер не предлагает —
+   ему нужны настоящие файлы по обычным адресам. Отдаём их с сервера, а
+   прежнюю ссылку убираем. Ставим несколько раз: слой иконок дорисовывает
+   свою версию позже, когда логотип загрузится. */
+function realManifest(){
+  try{
+    if(!/^https?:$/.test(location.protocol)) return;      /* из файла — нечего подключать */
+    var links = document.querySelectorAll('link[rel="manifest"]');
+    var have = false;
+    for(var i = 0; i < links.length; i++){
+      if((links[i].getAttribute('href') || '').indexOf('/manifest.webmanifest') === 0) have = true;
+      else links[i].remove();
+    }
+    if(have) return;
+    var l = document.createElement('link');
+    l.rel = 'manifest';
+    l.href = '/manifest.webmanifest';
+    document.head.appendChild(l);
+    /* Иконка вкладки и «на экран Домой» — тоже настоящими файлами. */
+    ['icon', 'apple-touch-icon'].forEach(function(rel){
+      var x = document.querySelector('link[rel="' + rel + '"]');
+      if(!x){ x = document.createElement('link'); x.rel = rel; document.head.appendChild(x); }
+      x.type = 'image/png';
+      x.href = '/icon-192.png';
+      x.setAttribute('sizes', rel === 'icon' ? '192x192' : '180x180');
+    });
+  }catch(e){ E(e); }
+}
+realManifest();
+setTimeout(realManifest, 1500);
+setTimeout(realManifest, 5000);
+
+/* ── версия на сервере ──
+   Служебный работник меняется только вместе со своим файлом, а мы правим
+   сам мини-апп — значит одного его мало. Спрашиваем у сервера отпечаток
+   файла приложения: при запуске запоминаем, дальше сверяем. Другой —
+   вышло обновление. Работает и в браузере, и в установленном
+   приложении, и не зависит от кэша служебного работника. */
+var _v = null;
+function askVersion(then){
+  try{
+    var x = window.bpSrv;
+    if(!x || !x.configured || !x.configured() || typeof x.raw !== 'function') return;
+    x.raw('GET', '/api/version')
+      .then(function(j){
+        var v = j && j.v;
+        if(!v) return;
+        if(_v == null){ _v = v; return; }      /* первый ответ — точка отсчёта */
+        if(v !== _v) then();
+      })
+      .catch(function(){});
+  }catch(e){ E(e); }
+}
+(function(){
+  var last = 0;
+  function check(){
+    if(Date.now() - last < 45000) return;
+    last = Date.now();
+    askVersion(gotUpdate);
+  }
+  setTimeout(function(){ askVersion(gotUpdate); }, 4000);   /* точка отсчёта */
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) check(); });
+  window.addEventListener('focus', check);
+  setInterval(check, 5 * 60 * 1000);
+})();
+
+/* Предложение установить показываем и без beforeinstallprompt (iOS). */
+setTimeout(offer, 6000);
+})();
+</script>
+
 </body>
 </html>

@@ -1858,6 +1858,24 @@ const routes = {
 
   'GET /api/health': async () => ({ status: 200, body: { ok: true, version: 'bp-server-1' } }),
 
+  /* ── Какая версия приложения лежит на сервере ──
+     Установленное приложение живёт неделями и легко застревает на старой
+     версии: служебный работник меняется только вместе со своим файлом, а
+     мы правим сам мини-апп. Поэтому отдельная метка — отпечаток файла
+     приложения. Приложение читает её при запуске и потом сверяет; стала
+     другой — значит вышло обновление, надо перезагрузиться.
+     Считаем по времени правки и размеру: читать пять мегабайт на каждый
+     вопрос незачем, а этой пары хватает, чтобы заметить выкладку. */
+  'GET /api/version': async () => {
+    let v = 'нет';
+    try {
+      const f = path.join(__dirname, '..', SITE['/'].name);
+      const st = fs.statSync(f);
+      v = String(st.mtimeMs) + '-' + String(st.size);
+    } catch (e) { /* файла нет — версии тоже */ }
+    return { status: 200, headers: { 'Cache-Control': 'no-store' }, body: { v } };
+  },
+
   /* ── Каталог блогеров ──
      GET открыт всем (каталог и так виден до входа), POST — только своей
      карточке. Чужую перезаписать нельзя даже с валидным токеном. */
@@ -4272,6 +4290,14 @@ const SITE = {
   '/terms.html': { name: 'terms.html', type: 'text/html; charset=utf-8' },
   '/sw.js': { name: 'sw.js', type: 'text/javascript; charset=utf-8' },
   '/logo.jpg': { name: 'logo.jpg', type: 'image/jpeg' },
+  /* Установка приложения на телефон. Манифест и иконки должны быть
+     НАСТОЯЩИМИ файлами: манифест, собранный в браузере через blob:, и
+     иконки в виде data: браузер для установки не принимает — предложение
+     «Установить приложение» просто не появлялось. */
+  '/manifest.webmanifest': { name: 'manifest.webmanifest', type: 'application/manifest+json; charset=utf-8' },
+  '/icon-192.png': { name: 'icon-192.png', type: 'image/png' },
+  '/icon-512.png': { name: 'icon-512.png', type: 'image/png' },
+  '/icon-512-maskable.png': { name: 'icon-512-maskable.png', type: 'image/png' },
 };
 function staticFile(pathname) {
   const rec = SITE[pathname];
