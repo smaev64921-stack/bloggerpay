@@ -85731,6 +85731,538 @@ window.bpEscrowBackNow = function(){ run(true); };
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+<style id="bp-push-css">
+/* ══ УВЕДОМЛЕНИЯ НА ТЕЛЕФОН ══════════════════════════════════════════
+   До сих пор приложение показывало события только пока оно открыто:
+   шторка сверху и центр уведомлений. Закрыл вкладку — и о новой заявке,
+   принятой работе или пришедших деньгах человек узнавал, когда сам
+   заходил. Разрешения у браузера никто не спрашивал.
+
+   Теперь спрашиваем — ОДНИМ окном, системным. Своей шторки перед ним
+   нет: два запроса подряд человек читает как заедание, а не как заботу
+   (владелец, 07.09.2026).
+
+   Раз окно одно и даётся оно единожды, всё решает МОМЕНТ:
+   · сразу после установки приложения;
+   · при запуске уже установленного;
+   · после первого настоящего события, когда просьба понятна сама.
+   И всегда есть переключатель в настройках.
+
+   Откат: удалить пару bp-push-css + bp-push.                         */
+
+/* Строка в настройках рисуется теми же классами, что и соседние. */
+html #pg-settings .st2-row.bp-push-row .st2-val{
+  font-size:12px; font-weight:700; color:var(--t3,#7d818c); white-space:nowrap;
+}
+html #pg-settings .st2-row.bp-push-row .st2-val.warn{ color:#fbbf55 }
+html #pg-settings .st2-row.bp-push-row .st2-val.ok{ color:#3ddc84 }
+
+/* Пояснение под строкой: почему выключено и что с этим делать. */
+html #pg-settings .bp-push-note{
+  margin:-2px 14px 10px; padding:9px 11px;
+  border-radius:12px;
+  background:rgba(246,168,35,.09);
+  border:1px solid rgba(246,168,35,.22);
+  font-size:11.5px; line-height:1.5; font-weight:600; color:#fbbf55;
+}
+html #pg-settings .bp-push-note b{ font-weight:800 }
+</style>
+
+<script id="bp-push">
+/* Пара к style#bp-push-css. Пояснение — там же. */
+(function(){
+'use strict';
+if(window.__bpPush) return; window.__bpPush = 1;
+
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'push'); }catch(_){} }
+function esc(v){ return (typeof bpEsc === 'function') ? bpEsc(v) : String(v == null ? '' : v); }
+function toast(m, k){ try{ showAuthToast(m, k || 'info'); }catch(e){} }
+
+var ASKED = 'bp_push_asked';        /* спрашивали ли своей шторкой */
+var PREF = 'bp_prefs';              /* общий склад переключателей приложения */
+
+/* ── Что вообще умеет это окно ──────────────────────────────────────
+   Уведомления требуют защищённого соединения и самого объекта
+   Notification. В вебвью Телеграма он бывает, но окно мини-аппа их не
+   показывает: там уведомления шлёт бот. Признаём это честно, а не
+   предлагаем кнопку, которая ничего не сделает. */
+function inTelegram(){
+  try{ var t = window.Telegram && window.Telegram.WebApp; return !!(t && t.initData); }
+  catch(e){ return false; }
+}
+function supported(){
+  try{
+    if(!('Notification' in window)) return false;
+    if(window.isSecureContext === false) return false;
+    return true;
+  }catch(e){ return false; }
+}
+function perm(){
+  if(!supported()) return 'unsupported';
+  try{ return String(Notification.permission || 'default'); }catch(e){ return 'unsupported'; }
+}
+window.bpPushState = perm;
+
+function prefs(){
+  var p = { push: true };
+  try{ p = Object.assign(p, JSON.parse(localStorage.getItem(PREF) || '{}')); }catch(e){}
+  return p;
+}
+function setPref(k, v){
+  var p = prefs(); p[k] = !!v;
+  try{ localStorage.setItem(PREF, JSON.stringify(p)); }catch(e){ E(e); }
+}
+/* Включено ли у нас — отдельно от разрешения браузера. Разрешение
+   отзывается только в настройках браузера, а выключить уведомления
+   человек должен уметь прямо здесь. */
+function on(){ return perm() === 'granted' && prefs().push !== false; }
+window.bpPushOn = on;
+
+/* ── Сам запрос ─────────────────────────────────────────────────────
+   Старые Safari отдают результат колбэком, новые — обещанием. И в
+   некоторых вебвью обещание не выполняется никогда: ставим срок, чтобы
+   интерфейс не залипал в «спрашиваем…». */
+function askNative(){
+  return new Promise(function(res){
+    if(!supported()) return res('unsupported');
+    var done = false;
+    var finish = function(r){ if(done) return; done = true; res(String(r || perm())); };
+    var timer = setTimeout(function(){ finish(perm()); }, 25000);
+    try{
+      var out = Notification.requestPermission(function(r){ clearTimeout(timer); finish(r); });
+      if(out && typeof out.then === 'function'){
+        out.then(function(r){ clearTimeout(timer); finish(r); },
+                 function(){ clearTimeout(timer); finish(perm()); });
+      }
+    }catch(e){ clearTimeout(timer); E(e); finish('unsupported'); }
+  });
+}
+
+/* ── Запрос разрешения: ОДНО окно ───────────────────────────────────
+   Здесь стояла своя шторка «Присылать уведомления?», а системное окно
+   браузера открывалось только после согласия в ней. Так советуют делать,
+   но на деле человек видел два запроса подряд и второй — уже после того,
+   как он один раз согласился. Владелец 07.09.2026 сказал прямо: нужен
+   один блок, который сразу и разрешает. Так и делаем: зовём системное
+   окно напрямую.
+
+   Что мы при этом теряем и почему это осознанно: системное окно браузер
+   даёт ОДИН раз. Нажал «Запретить» — вернуть можно только в настройках
+   браузера, и вторая попытка ничего не покажет. Поэтому важно, КОГДА
+   спрашивать: после установки, при запуске установленного приложения и
+   после первого настоящего события — то есть тогда, когда просьба
+   понятна без объяснений. Эти поводы ниже, в maybeAsk и askAfterInstall. */
+window.bpAskNotif = function(){
+  try{ localStorage.setItem(ASKED, '1'); }catch(e){}
+
+  if(!supported()){
+    toast(inTelegram()
+      ? 'В окне Телеграма уведомления показывает сам Телеграм — они придут от бота'
+      : 'Это окно браузера не умеет показывать уведомления', 'info');
+    paint();
+    return Promise.resolve('unsupported');
+  }
+  if(perm() === 'granted'){
+    setPref('push', true);
+    try{ subscribe(); }catch(e){ E(e); }
+    paint();
+    return Promise.resolve('granted');
+  }
+  if(perm() === 'denied'){
+    toast('Уведомления запрещены в настройках браузера — включить можно только там', 'err');
+    paint();
+    return Promise.resolve('denied');
+  }
+
+  return askNative().then(function(r){
+    if(r === 'granted'){
+      setPref('push', true);
+      toast('Готово — будем присылать важное', 'ok');
+      /* Сразу подписываемся у кассы: иначе уведомления работали бы,
+         только пока приложение открыто. */
+      try{ subscribe(); }catch(e){ E(e); }
+    }
+    else if(r === 'denied'){ toast('Хорошо, уведомления не присылаем', 'info'); }
+    paint();
+    return r;
+  }).catch(function(e){ E(e); paint(); return perm(); });
+};
+
+/* ── Показ системного уведомления ───────────────────────────────────
+   Через service worker, а не через new Notification: так уведомление
+   доживает до момента, когда вкладка уже выгружена. Если воркера нет —
+   обычным способом. Пока приложение на экране, ничего не шлём: событие
+   и так видно шторкой. */
+function push(title, body, tag){
+  try{
+    if(!on() || !document.hidden) return;
+    var opts = {
+      body: String(body || '').slice(0, 180),
+      tag: String(tag || 'bp'),
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      renotify: false,
+      data: { at: Date.now() }
+    };
+    var t = String(title || 'BloggerPay').slice(0, 80);
+    if(navigator.serviceWorker && navigator.serviceWorker.ready){
+      navigator.serviceWorker.ready.then(function(reg){
+        if(reg && reg.showNotification) reg.showNotification(t, opts);
+        else plain(t, opts);
+      }).catch(function(){ plain(t, opts); });
+      return;
+    }
+    plain(t, opts);
+  }catch(e){ E(e); }
+}
+function plain(t, opts){
+  try{ new Notification(t, opts); }catch(e){}
+}
+window.bpPushShow = push;
+
+/* ── Подписка на уведомления от сервера ─────────────────────────────
+   Всё, что выше, работает только пока страница открыта. Чтобы
+   уведомление дошло до ЗАКРЫТОГО приложения, его должен прислать
+   сервер — для этого браузер выдаёт «подписку», а мы отдаём её кассе.
+
+   Открытый ключ сервера спрашиваем у него же (/api/push/key): он один
+   на всю площадку и не секрет. Подписка привязана к этому ключу, поэтому
+   ключ на сервере создаётся один раз и не меняется. */
+var subBusy = false, sentMark = '';
+function srvOnline(){
+  try{ var s = window.bpSrv; return !!(s && s.configured && s.configured() && s.token && s.token()); }
+  catch(e){ return false; }
+}
+function b64ToBytes(s){
+  var pad = '='.repeat((4 - s.length % 4) % 4);
+  var raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  var out = new Uint8Array(raw.length);
+  for(var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+function subJson(s){
+  try{
+    var j = s.toJSON ? s.toJSON() : null;
+    if(j && j.keys) return { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth } };
+  }catch(e){}
+  return null;
+}
+
+function subscribe(){
+  try{
+    if(subBusy || !on() || !srvOnline()) return Promise.resolve(false);
+    if(!('serviceWorker' in navigator) || !('PushManager' in window)) return Promise.resolve(false);
+    subBusy = true;
+    return navigator.serviceWorker.ready.then(function(reg){
+      if(!reg || !reg.pushManager) return null;
+      return reg.pushManager.getSubscription().then(function(has){
+        if(has) return has;
+        return window.bpSrv.raw('GET', '/api/push/key').then(function(j){
+          var key = j && j.key;
+          if(!key) return null;
+          return reg.pushManager.subscribe({
+            userVisibleOnly: true,                 /* «тихий» push браузеры запрещают */
+            applicationServerKey: b64ToBytes(key)
+          });
+        });
+      });
+    }).then(function(s){
+      if(!s) { subBusy = false; return false; }
+      var j = subJson(s);
+      if(!j){ subBusy = false; return false; }
+      /* Ту же подписку тем же аккаунтом второй раз не отправляем: проверка
+         идёт раз в пять минут, и без этого она гоняла бы запрос впустую. */
+      var mark = j.endpoint + '|' + (window.bpSrv.token() || '').slice(0, 12);
+      if(sentMark === mark){ subBusy = false; return true; }
+      return window.bpSrv.raw('POST', '/api/push/subscribe', { sub: j }).then(function(){
+        sentMark = mark;
+        subBusy = false;
+        return true;
+      });
+    }).catch(function(e){ subBusy = false; E(e); return false; });
+  }catch(e){ subBusy = false; E(e); return Promise.resolve(false); }
+}
+window.bpPushSubscribe = subscribe;
+
+/* Отписка. Уносим и из браузера, и с сервера: строка на сервере без
+   живой подписки будет вечно получать отказ доставки. */
+function unsubscribe(){
+  try{
+    if(!('serviceWorker' in navigator)) return Promise.resolve(false);
+    return navigator.serviceWorker.ready.then(function(reg){
+      if(!reg || !reg.pushManager) return false;
+      return reg.pushManager.getSubscription().then(function(s){
+        if(!s) return false;
+        var ep = s.endpoint;
+        sentMark = '';
+        return s.unsubscribe().then(function(){
+          if(srvOnline()) return window.bpSrv.raw('POST', '/api/push/unsubscribe', { endpoint: ep }).catch(function(){});
+        }).then(function(){ return true; });
+      });
+    }).catch(function(e){ E(e); return false; });
+  }catch(e){ E(e); return Promise.resolve(false); }
+}
+window.bpPushUnsubscribe = unsubscribe;
+
+/* ── Ловим события приложения ───────────────────────────────────────
+   window.bpNotify — единственная воронка: через неё идут и шторка, и
+   запись в центр уведомлений. Подшиваемся сюда, а не к десятку мест. */
+var origNotify = window.bpNotify;
+if(typeof origNotify === 'function' && !origNotify.__bpPush){
+  window.bpNotify = function(type, title, desc, opts){
+    var r = origNotify.apply(this, arguments);
+    try{
+      if(!(opts && opts.silent)){
+        push(title, desc, String(type || '') + ':' + String(title || ''));
+        maybeAsk(type, title);
+      }
+    }catch(e){ E(e); }
+    return r;
+  };
+  window.bpNotify.__bpPush = true;
+}
+
+/* Спрашиваем ПОСЛЕ первого настоящего события: тогда просьба понятна.
+   Не при загрузке, не в пустом приложении и не поверх открытой шторки. */
+var askQueued = false;
+function maybeAsk(type, title){
+  try{
+    if(askQueued) return;
+    if(perm() !== 'default') return;
+    if(localStorage.getItem(ASKED) === '1') return;
+    if(!supported() || inTelegram()) return;
+    /* Служебные всплывашки (ошибки связи, подсказки) поводом не считаем. */
+    if(type === 'error' || type === 'connection' || type === 'info') return;
+    var me = null;
+    try{ me = (typeof currentUser !== 'undefined' && currentUser) || null; }catch(e){}
+    if(!me) return;
+    askQueued = true;
+    setTimeout(function(){
+      askQueued = false;
+      try{
+        if(document.hidden) return;
+        if(perm() !== 'default') return;
+        if(localStorage.getItem(ASKED) === '1') return;
+        /* Поверх открытой шторки не лезем: свой вопрос перекрыл бы чужой.
+           Полноэкранные слои приложения помечены классом on — по нему и
+           смотрим (bpConfirm, шторки сделок, центр уведомлений). */
+        if(document.querySelector('.bp-fullscreen-ov.on, .bpsheet.on, .bpn2-panel.open')) return;
+        window.bpAskNotif();
+      }catch(e){ E(e); }
+    }, 1600);
+  }catch(e){ E(e); }
+}
+
+/* ── Приложение поставили на телефон ────────────────────────────────
+   Установка — самый понятный момент для просьбы: человек только что сам
+   сказал, что хочет держать приложение под рукой. Раньше запрос ждал
+   первого события, а в свежепоставленном приложении событий ещё нет — и
+   не спрашивали вообще ничего.
+
+   Два случая: только что установили (appinstalled) и запуск уже
+   установленного приложения (display-mode: standalone). Во втором
+   спрашиваем один раз — дальше отметка bp_push_asked. */
+function standalone(){
+  try{
+    if(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+    if(window.matchMedia && window.matchMedia('(display-mode: window-controls-overlay)').matches) return true;
+    return !!window.navigator.standalone;    /* iOS: добавлено на экран «Домой» */
+  }catch(e){ return false; }
+}
+window.bpStandalone = standalone;
+
+function askAfterInstall(){
+  try{
+    if(perm() !== 'default') return;
+    if(localStorage.getItem(ASKED) === '1') return;
+    if(!supported() || inTelegram()) return;
+    if(document.hidden) return;
+    if(document.querySelector('.bp-fullscreen-ov.on, .bpsheet.on, #bpInst')) return;
+    window.bpAskNotif();
+  }catch(e){ E(e); }
+}
+
+try{
+  window.addEventListener('appinstalled', function(){
+    /* Даём окну установки закрыться, потом спрашиваем. */
+    setTimeout(function(){
+      askAfterInstall();
+    }, 1800);
+  });
+}catch(e){ E(e); }
+
+/* Запуск установленного приложения. Ждём, пока оно прорисуется, и не
+   лезем поверх экрана входа — сначала пусть человек попадёт внутрь. */
+if(standalone()){
+  setTimeout(function(){
+    try{
+      var auth = document.getElementById('pg-auth');
+      if(auth && auth.classList.contains('on')) return;
+      askAfterInstall();
+    }catch(e){ E(e); }
+  }, 3500);
+}
+
+/* ── Строка в настройках ────────────────────────────────────────────
+   Кладём в карточку «Уведомления», рядом с вибрацией. Переключатель
+   показывает НАСТОЯЩЕЕ состояние разрешения, а не только наш флажок:
+   иначе он врал бы после запрета в браузере. */
+var ICO = '<svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>'
+  + '<path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M19 3l2 2M5 3L3 5"/></svg>';
+
+function card(){
+  try{
+    var labels = document.querySelectorAll('#pg-settings .st2-lbl');
+    for(var i = 0; i < labels.length; i++){
+      if(String(labels[i].textContent || '').trim() === 'Уведомления'){
+        var c = labels[i].nextElementSibling;
+        if(c && c.classList.contains('st2-card')) return c;
+      }
+    }
+  }catch(e){ E(e); }
+  return null;
+}
+
+function mount(){
+  try{
+    var c = card();
+    if(!c || document.getElementById('bpPushRow')) return;
+    var row = document.createElement('div');
+    row.className = 'st2-row st2-row-sw bp-push-row';
+    row.id = 'bpPushRow';
+    row.setAttribute('role', 'button');
+    row.setAttribute('tabindex', '0');
+    row.innerHTML = '<span class="st2-ico red">' + ICO + '</span>'
+      + '<span class="st2-t"><span class="st2-n">Уведомления на телефон</span>'
+      + '<span class="st2-s" id="bpPushSub">Заявки, сделки и деньги — даже когда приложение закрыто</span></span>'
+      + '<span class="st2-val" id="bpPushVal"></span>'
+      + '<span class="st2-sw" data-pref="push" role="switch" aria-checked="false"></span>';
+    row.addEventListener('click', flip);
+    row.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); flip(); }
+    });
+    /* Сразу после «Центра уведомлений», до вибрации. */
+    var first = c.querySelector('.st2-row');
+    if(first && first.nextSibling) c.insertBefore(row, first.nextSibling);
+    else c.appendChild(row);
+    paint();
+  }catch(e){ E(e); }
+}
+
+function flip(){
+  var p = perm();
+  if(p === 'granted'){
+    /* Разрешение остаётся, гасим только у себя: отзывать его умеет
+       лишь сам браузер, и делать вид, что мы можем, нечестно. */
+    setPref('push', !on());
+    paint();
+    var live = on();
+    toast(live ? 'Уведомления включены' : 'Уведомления выключены', 'info');
+    /* Выключили — снимаем и подписку на сервере: иначе он продолжал бы
+       слать, а браузер молча выбрасывал. Включили — подписываемся снова. */
+    try{ live ? subscribe() : unsubscribe(); }catch(e){ E(e); }
+    return;
+  }
+  window.bpAskNotif();
+}
+
+function note(text){
+  try{
+    var old = document.getElementById('bpPushNote');
+    if(!text){ if(old) old.remove(); return; }
+    if(!old){
+      var c = card(); if(!c) return;
+      old = document.createElement('div');
+      old.className = 'bp-push-note';
+      old.id = 'bpPushNote';
+      if(c.nextSibling) c.parentNode.insertBefore(old, c.nextSibling);
+      else c.parentNode.appendChild(old);
+    }
+    old.innerHTML = text;
+  }catch(e){ E(e); }
+}
+
+function paint(){
+  try{
+    var row = document.getElementById('bpPushRow');
+    if(!row) return;
+    var sw = row.querySelector('.st2-sw');
+    var val = document.getElementById('bpPushVal');
+    var sub = document.getElementById('bpPushSub');
+    var p = perm(), live = on();
+
+    if(sw){
+      sw.classList.toggle('on', live);
+      sw.setAttribute('aria-checked', live ? 'true' : 'false');
+    }
+    if(val){ val.className = 'st2-val'; val.textContent = ''; }
+
+    if(p === 'unsupported' || inTelegram()){
+      if(val){ val.textContent = 'Недоступно'; val.classList.add('warn'); }
+      if(sub) sub.textContent = inTelegram()
+        ? 'В окне Телеграма их показывает сам Телеграм — придут от бота'
+        : 'Это окно браузера не умеет показывать уведомления';
+      note('');
+      return;
+    }
+    if(p === 'denied'){
+      if(val){ val.textContent = 'Запрещено'; val.classList.add('warn'); }
+      if(sub) sub.textContent = 'Разрешение отозвано в браузере';
+      note('Уведомления запрещены в настройках браузера, и вернуть их отсюда нельзя.'
+        + ' Откройте настройки сайта в браузере и разрешите уведомления для этого адреса —'
+        + ' переключатель здесь включится сам.');
+      return;
+    }
+    if(p === 'default'){
+      if(val){ val.textContent = 'Спросим'; }
+      if(sub) sub.textContent = 'Заявки, сделки и деньги — даже когда приложение закрыто';
+      note('');
+      return;
+    }
+    /* granted */
+    if(val){ val.textContent = live ? 'Включены' : 'Выключены'; if(live) val.classList.add('ok'); }
+    if(sub) sub.textContent = 'Заявки, сделки и деньги — даже когда приложение закрыто';
+    note('');
+  }catch(e){ E(e); }
+}
+window.bpPushPaint = paint;
+
+/* Настройки рисуются при переходе на экран — встраиваемся тогда же. */
+var og = window.goTo;
+if(typeof og === 'function' && !og.__bpPush){
+  window.goTo = function(page){
+    var r = og.apply(this, arguments);
+    if(String(page || '') === 'settings') setTimeout(function(){ mount(); paint(); }, 90);
+    return r;
+  };
+  window.goTo.__bpPush = true;
+}
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) paint(); });
+setTimeout(function(){ mount(); paint(); }, 1500);
+setInterval(function(){ if(!document.hidden){ mount(); paint(); } }, 5000);
+
+/* Подписку подновляем сами: она отваливается при смене аккаунта, чистке
+   данных браузера и по сроку. Проверка дешёвая — getSubscription из
+   памяти воркера, запрос к серверу идёт только когда подписки нет. */
+setTimeout(function(){ subscribe(); }, 6000);
+setInterval(function(){ if(!document.hidden) subscribe(); }, 300000);
+})();
+</script>
+
+
+
 <style id="bp-card6-css">
 /* ══ ПЛОЩАДКИ В КАРТОЧКЕ: ТРИ КАНАЛА ВИДНО СРАЗУ ═════════════════════
    Было: ряд круглых значков. Активный — яркий, остальные приглушены до
@@ -85755,6 +86287,19 @@ window.bpEscrowBackNow = function(){ run(true); };
    правила по .blc-pr перебьют наши. */
 html #catBloggerList .blc.bpc5 .bpc6-chans{
   display:flex; gap:6px; width:100%;
+}
+/* Единственный канал кладём В СТРОКУ, а не столбиком: столбик занимал
+   треть ширины, а рядом оставалась пустота — карточка читалась как
+   недорисованная. В строке слева площадка, справа подписчики и цена. */
+html #catBloggerList .blc.bpc5 .bpc6-chans[data-n="1"] .bpc6-ch{
+  flex-direction:row; align-items:center; gap:10px; padding:9px 12px;
+}
+html #catBloggerList .blc.bpc5 .bpc6-chans[data-n="1"] .bpc6-ch-top{ flex:0 0 auto }
+html #catBloggerList .blc.bpc5 .bpc6-chans[data-n="1"] .bpc6-subs{
+  margin-left:auto; font-size:16px;
+}
+html #catBloggerList .blc.bpc5 .bpc6-chans[data-n="1"] .bpc6-price{
+  flex:0 0 auto; font-size:11px;
 }
 /* Старый ряд значков прячем, но НЕ удаляем: по нему работают фильтр
    площадок и переключатель каналов. */
@@ -85950,8 +86495,12 @@ function build(el){
     var card = cardOf(el.getAttribute('data-cardid'));
     if(!card) return;
     var items = iconsOf(el, card);
-    /* Один канал сравнивать не с чем — оставляем прежний вид. */
-    if(items.length < 2){
+    /* Рисуем рельс и для ОДНОГО канала. Сначала он появлялся только от
+       двух — «сравнивать не с чем», — и у блогера с единственной
+       площадкой карточка не менялась вовсе: тот же тусклый кружок без
+       имени, без подписчиков и без цены. Одна плитка отвечает на те же
+       два вопроса, что и три: где аудитория и сколько стоит. */
+    if(!items.length){
       var old = el.querySelector('.bpc6-chans');
       if(old) old.remove();
       el.classList.remove('bpc6');
@@ -86062,6 +86611,7 @@ function build(el){
         + '</button>';
     });
     row.innerHTML = html;
+    row.setAttribute('data-n', String(items.length));
     el.classList.add('bpc6');
 
     /* Число подписчиков теперь стоит в самом канале — в полосе под ним
@@ -86188,533 +86738,6 @@ setTimeout(later, 2600);
 setInterval(function(){ if(!document.hidden){ watch(); later(); } }, 4000);
 
 window.bpCard6Now = function(){ sweep(); };
-})();
-</script>
-
-
-
-
-
-
-
-
-
-<style id="bp-push-css">
-/* ══ УВЕДОМЛЕНИЯ НА ТЕЛЕФОН ══════════════════════════════════════════
-   До сих пор приложение показывало события только пока оно открыто:
-   шторка сверху и центр уведомлений. Закрыл вкладку — и о новой заявке,
-   принятой работе или пришедших деньгах человек узнавал, когда сам
-   заходил. Разрешения у браузера никто не спрашивал.
-
-   Теперь спрашиваем — но по правилам, а не при первом открытии:
-   · сначала СВОЯ шторка с объяснением, что именно будет приходить;
-   · системное окно браузера показываем только после согласия в ней.
-     Это окно даётся один раз: показать его «в лоб» на загрузке значит
-     почти наверняка получить отказ навсегда;
-   · спрашиваем не раньше, чем случилось первое настоящее событие, —
-     тогда просьба понятна;
-   · и всегда доступен переключатель в настройках.
-
-   Откат: удалить пару bp-push-css + bp-push.                         */
-
-/* Строка в настройках рисуется теми же классами, что и соседние. */
-html #pg-settings .st2-row.bp-push-row .st2-val{
-  font-size:12px; font-weight:700; color:var(--t3,#7d818c); white-space:nowrap;
-}
-html #pg-settings .st2-row.bp-push-row .st2-val.warn{ color:#fbbf55 }
-html #pg-settings .st2-row.bp-push-row .st2-val.ok{ color:#3ddc84 }
-
-/* Пояснение под строкой: почему выключено и что с этим делать. */
-html #pg-settings .bp-push-note{
-  margin:-2px 14px 10px; padding:9px 11px;
-  border-radius:12px;
-  background:rgba(246,168,35,.09);
-  border:1px solid rgba(246,168,35,.22);
-  font-size:11.5px; line-height:1.5; font-weight:600; color:#fbbf55;
-}
-html #pg-settings .bp-push-note b{ font-weight:800 }
-</style>
-
-<script id="bp-push">
-/* Пара к style#bp-push-css. Пояснение — там же. */
-(function(){
-'use strict';
-if(window.__bpPush) return; window.__bpPush = 1;
-
-function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'push'); }catch(_){} }
-function esc(v){ return (typeof bpEsc === 'function') ? bpEsc(v) : String(v == null ? '' : v); }
-function toast(m, k){ try{ showAuthToast(m, k || 'info'); }catch(e){} }
-
-var ASKED = 'bp_push_asked';        /* спрашивали ли своей шторкой */
-var PREF = 'bp_prefs';              /* общий склад переключателей приложения */
-
-/* ── Что вообще умеет это окно ──────────────────────────────────────
-   Уведомления требуют защищённого соединения и самого объекта
-   Notification. В вебвью Телеграма он бывает, но окно мини-аппа их не
-   показывает: там уведомления шлёт бот. Признаём это честно, а не
-   предлагаем кнопку, которая ничего не сделает. */
-function inTelegram(){
-  try{ var t = window.Telegram && window.Telegram.WebApp; return !!(t && t.initData); }
-  catch(e){ return false; }
-}
-function supported(){
-  try{
-    if(!('Notification' in window)) return false;
-    if(window.isSecureContext === false) return false;
-    return true;
-  }catch(e){ return false; }
-}
-function perm(){
-  if(!supported()) return 'unsupported';
-  try{ return String(Notification.permission || 'default'); }catch(e){ return 'unsupported'; }
-}
-window.bpPushState = perm;
-
-function prefs(){
-  var p = { push: true };
-  try{ p = Object.assign(p, JSON.parse(localStorage.getItem(PREF) || '{}')); }catch(e){}
-  return p;
-}
-function setPref(k, v){
-  var p = prefs(); p[k] = !!v;
-  try{ localStorage.setItem(PREF, JSON.stringify(p)); }catch(e){ E(e); }
-}
-/* Включено ли у нас — отдельно от разрешения браузера. Разрешение
-   отзывается только в настройках браузера, а выключить уведомления
-   человек должен уметь прямо здесь. */
-function on(){ return perm() === 'granted' && prefs().push !== false; }
-window.bpPushOn = on;
-
-/* ── Сам запрос ─────────────────────────────────────────────────────
-   Старые Safari отдают результат колбэком, новые — обещанием. И в
-   некоторых вебвью обещание не выполняется никогда: ставим срок, чтобы
-   интерфейс не залипал в «спрашиваем…». */
-function askNative(){
-  return new Promise(function(res){
-    if(!supported()) return res('unsupported');
-    var done = false;
-    var finish = function(r){ if(done) return; done = true; res(String(r || perm())); };
-    var timer = setTimeout(function(){ finish(perm()); }, 25000);
-    try{
-      var out = Notification.requestPermission(function(r){ clearTimeout(timer); finish(r); });
-      if(out && typeof out.then === 'function'){
-        out.then(function(r){ clearTimeout(timer); finish(r); },
-                 function(){ clearTimeout(timer); finish(perm()); });
-      }
-    }catch(e){ clearTimeout(timer); E(e); finish('unsupported'); }
-  });
-}
-
-/* ── Своя шторка перед системным окном ──────────────────────────────
-   Системное окно браузер даёт ОДИН раз: отказ в нём закрывает вопрос
-   навсегда, и вернуть разрешение можно только в настройках браузера.
-   Поэтому сначала объясняем своими словами, а системное окно показываем
-   только тому, кто уже согласился. */
-window.bpAskNotif = function(why){
-  try{ localStorage.setItem(ASKED, '1'); }catch(e){}
-
-  if(!supported()){
-    toast(inTelegram()
-      ? 'В окне Телеграма уведомления показывает сам Телеграм — они придут от бота'
-      : 'Это окно браузера не умеет показывать уведомления', 'info');
-    paint();
-    return Promise.resolve('unsupported');
-  }
-  if(perm() === 'granted'){ setPref('push', true); paint(); return Promise.resolve('granted'); }
-  if(perm() === 'denied'){
-    toast('Уведомления запрещены в настройках браузера — включить можно только там', 'err');
-    paint();
-    return Promise.resolve('denied');
-  }
-
-  var text = (why ? why + '\n\n' : '')
-    + 'Пришлём, когда появится новая заявка, изменится сделка или придут деньги.'
-    + ' Ничего рекламного. Выключить можно в настройках в любой момент.';
-
-  var pre = (typeof window.bpConfirm === 'function')
-    ? window.bpConfirm({ title: 'Присылать уведомления?', text: text, yes: 'Разрешить', danger: false })
-    : Promise.resolve(true);
-
-  return Promise.resolve(pre).then(function(ok){
-    if(!ok){ paint(); return 'default'; }
-    return askNative().then(function(r){
-      if(r === 'granted'){
-        setPref('push', true);
-        toast('Готово — будем присылать важное', 'ok');
-        /* Сразу подписываемся у кассы: иначе уведомления работали бы,
-           только пока приложение открыто. */
-        try{ subscribe(); }catch(e){ E(e); }
-      }
-      else if(r === 'denied'){ toast('Хорошо, уведомления не присылаем', 'info'); }
-      paint();
-      return r;
-    });
-  }).catch(function(e){ E(e); paint(); return perm(); });
-};
-
-/* ── Показ системного уведомления ───────────────────────────────────
-   Через service worker, а не через new Notification: так уведомление
-   доживает до момента, когда вкладка уже выгружена. Если воркера нет —
-   обычным способом. Пока приложение на экране, ничего не шлём: событие
-   и так видно шторкой. */
-function push(title, body, tag){
-  try{
-    if(!on() || !document.hidden) return;
-    var opts = {
-      body: String(body || '').slice(0, 180),
-      tag: String(tag || 'bp'),
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      renotify: false,
-      data: { at: Date.now() }
-    };
-    var t = String(title || 'BloggerPay').slice(0, 80);
-    if(navigator.serviceWorker && navigator.serviceWorker.ready){
-      navigator.serviceWorker.ready.then(function(reg){
-        if(reg && reg.showNotification) reg.showNotification(t, opts);
-        else plain(t, opts);
-      }).catch(function(){ plain(t, opts); });
-      return;
-    }
-    plain(t, opts);
-  }catch(e){ E(e); }
-}
-function plain(t, opts){
-  try{ new Notification(t, opts); }catch(e){}
-}
-window.bpPushShow = push;
-
-/* ── Подписка на уведомления от сервера ─────────────────────────────
-   Всё, что выше, работает только пока страница открыта. Чтобы
-   уведомление дошло до ЗАКРЫТОГО приложения, его должен прислать
-   сервер — для этого браузер выдаёт «подписку», а мы отдаём её кассе.
-
-   Открытый ключ сервера спрашиваем у него же (/api/push/key): он один
-   на всю площадку и не секрет. Подписка привязана к этому ключу, поэтому
-   ключ на сервере создаётся один раз и не меняется. */
-var subBusy = false, sentMark = '';
-function srvOnline(){
-  try{ var s = window.bpSrv; return !!(s && s.configured && s.configured() && s.token && s.token()); }
-  catch(e){ return false; }
-}
-function b64ToBytes(s){
-  var pad = '='.repeat((4 - s.length % 4) % 4);
-  var raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
-  var out = new Uint8Array(raw.length);
-  for(var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
-}
-function subJson(s){
-  try{
-    var j = s.toJSON ? s.toJSON() : null;
-    if(j && j.keys) return { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth } };
-  }catch(e){}
-  return null;
-}
-
-function subscribe(){
-  try{
-    if(subBusy || !on() || !srvOnline()) return Promise.resolve(false);
-    if(!('serviceWorker' in navigator) || !('PushManager' in window)) return Promise.resolve(false);
-    subBusy = true;
-    return navigator.serviceWorker.ready.then(function(reg){
-      if(!reg || !reg.pushManager) return null;
-      return reg.pushManager.getSubscription().then(function(has){
-        if(has) return has;
-        return window.bpSrv.raw('GET', '/api/push/key').then(function(j){
-          var key = j && j.key;
-          if(!key) return null;
-          return reg.pushManager.subscribe({
-            userVisibleOnly: true,                 /* «тихий» push браузеры запрещают */
-            applicationServerKey: b64ToBytes(key)
-          });
-        });
-      });
-    }).then(function(s){
-      if(!s) { subBusy = false; return false; }
-      var j = subJson(s);
-      if(!j){ subBusy = false; return false; }
-      /* Ту же подписку тем же аккаунтом второй раз не отправляем: проверка
-         идёт раз в пять минут, и без этого она гоняла бы запрос впустую. */
-      var mark = j.endpoint + '|' + (window.bpSrv.token() || '').slice(0, 12);
-      if(sentMark === mark){ subBusy = false; return true; }
-      return window.bpSrv.raw('POST', '/api/push/subscribe', { sub: j }).then(function(){
-        sentMark = mark;
-        subBusy = false;
-        return true;
-      });
-    }).catch(function(e){ subBusy = false; E(e); return false; });
-  }catch(e){ subBusy = false; E(e); return Promise.resolve(false); }
-}
-window.bpPushSubscribe = subscribe;
-
-/* Отписка. Уносим и из браузера, и с сервера: строка на сервере без
-   живой подписки будет вечно получать отказ доставки. */
-function unsubscribe(){
-  try{
-    if(!('serviceWorker' in navigator)) return Promise.resolve(false);
-    return navigator.serviceWorker.ready.then(function(reg){
-      if(!reg || !reg.pushManager) return false;
-      return reg.pushManager.getSubscription().then(function(s){
-        if(!s) return false;
-        var ep = s.endpoint;
-        sentMark = '';
-        return s.unsubscribe().then(function(){
-          if(srvOnline()) return window.bpSrv.raw('POST', '/api/push/unsubscribe', { endpoint: ep }).catch(function(){});
-        }).then(function(){ return true; });
-      });
-    }).catch(function(e){ E(e); return false; });
-  }catch(e){ E(e); return Promise.resolve(false); }
-}
-window.bpPushUnsubscribe = unsubscribe;
-
-/* ── Ловим события приложения ───────────────────────────────────────
-   window.bpNotify — единственная воронка: через неё идут и шторка, и
-   запись в центр уведомлений. Подшиваемся сюда, а не к десятку мест. */
-var origNotify = window.bpNotify;
-if(typeof origNotify === 'function' && !origNotify.__bpPush){
-  window.bpNotify = function(type, title, desc, opts){
-    var r = origNotify.apply(this, arguments);
-    try{
-      if(!(opts && opts.silent)){
-        push(title, desc, String(type || '') + ':' + String(title || ''));
-        maybeAsk(type, title);
-      }
-    }catch(e){ E(e); }
-    return r;
-  };
-  window.bpNotify.__bpPush = true;
-}
-
-/* Спрашиваем ПОСЛЕ первого настоящего события: тогда просьба понятна.
-   Не при загрузке, не в пустом приложении и не поверх открытой шторки. */
-var askQueued = false;
-function maybeAsk(type, title){
-  try{
-    if(askQueued) return;
-    if(perm() !== 'default') return;
-    if(localStorage.getItem(ASKED) === '1') return;
-    if(!supported() || inTelegram()) return;
-    /* Служебные всплывашки (ошибки связи, подсказки) поводом не считаем. */
-    if(type === 'error' || type === 'connection' || type === 'info') return;
-    var me = null;
-    try{ me = (typeof currentUser !== 'undefined' && currentUser) || null; }catch(e){}
-    if(!me) return;
-    askQueued = true;
-    setTimeout(function(){
-      askQueued = false;
-      try{
-        if(document.hidden) return;
-        if(perm() !== 'default') return;
-        if(localStorage.getItem(ASKED) === '1') return;
-        /* Поверх открытой шторки не лезем: свой вопрос перекрыл бы чужой.
-           Полноэкранные слои приложения помечены классом on — по нему и
-           смотрим (bpConfirm, шторки сделок, центр уведомлений). */
-        if(document.querySelector('.bp-fullscreen-ov.on, .bpsheet.on, .bpn2-panel.open')) return;
-        /* Называем событие, ради которого спрашиваем: «включите
-           уведомления» без повода читается как выпрашивание. */
-        var t = String(title || '').trim();
-        window.bpAskNotif(t
-          ? 'Только что пришло: «' + t + '». Такое легко пропустить, когда приложение закрыто.'
-          : 'Такие события легко пропустить, когда приложение закрыто.');
-      }catch(e){ E(e); }
-    }, 1600);
-  }catch(e){ E(e); }
-}
-
-/* ── Приложение поставили на телефон ────────────────────────────────
-   Установка — самый понятный момент для просьбы: человек только что сам
-   сказал, что хочет держать приложение под рукой. Раньше запрос ждал
-   первого события, а в свежепоставленном приложении событий ещё нет — и
-   не спрашивали вообще ничего.
-
-   Два случая: только что установили (appinstalled) и запуск уже
-   установленного приложения (display-mode: standalone). Во втором
-   спрашиваем один раз — дальше отметка bp_push_asked. */
-function standalone(){
-  try{
-    if(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
-    if(window.matchMedia && window.matchMedia('(display-mode: window-controls-overlay)').matches) return true;
-    return !!window.navigator.standalone;    /* iOS: добавлено на экран «Домой» */
-  }catch(e){ return false; }
-}
-window.bpStandalone = standalone;
-
-function askAfterInstall(why){
-  try{
-    if(perm() !== 'default') return;
-    if(localStorage.getItem(ASKED) === '1') return;
-    if(!supported() || inTelegram()) return;
-    if(document.hidden) return;
-    if(document.querySelector('.bp-fullscreen-ov.on, .bpsheet.on, #bpInst')) return;
-    window.bpAskNotif(why);
-  }catch(e){ E(e); }
-}
-
-try{
-  window.addEventListener('appinstalled', function(){
-    /* Даём окну установки закрыться, потом спрашиваем. */
-    setTimeout(function(){
-      askAfterInstall('Приложение теперь на вашем телефоне.');
-    }, 1800);
-  });
-}catch(e){ E(e); }
-
-/* Запуск установленного приложения. Ждём, пока оно прорисуется, и не
-   лезем поверх экрана входа — сначала пусть человек попадёт внутрь. */
-if(standalone()){
-  setTimeout(function(){
-    try{
-      var auth = document.getElementById('pg-auth');
-      if(auth && auth.classList.contains('on')) return;
-      askAfterInstall('Приложение стоит на телефоне — пусть оно и сообщает о важном.');
-    }catch(e){ E(e); }
-  }, 3500);
-}
-
-/* ── Строка в настройках ────────────────────────────────────────────
-   Кладём в карточку «Уведомления», рядом с вибрацией. Переключатель
-   показывает НАСТОЯЩЕЕ состояние разрешения, а не только наш флажок:
-   иначе он врал бы после запрета в браузере. */
-var ICO = '<svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>'
-  + '<path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M19 3l2 2M5 3L3 5"/></svg>';
-
-function card(){
-  try{
-    var labels = document.querySelectorAll('#pg-settings .st2-lbl');
-    for(var i = 0; i < labels.length; i++){
-      if(String(labels[i].textContent || '').trim() === 'Уведомления'){
-        var c = labels[i].nextElementSibling;
-        if(c && c.classList.contains('st2-card')) return c;
-      }
-    }
-  }catch(e){ E(e); }
-  return null;
-}
-
-function mount(){
-  try{
-    var c = card();
-    if(!c || document.getElementById('bpPushRow')) return;
-    var row = document.createElement('div');
-    row.className = 'st2-row st2-row-sw bp-push-row';
-    row.id = 'bpPushRow';
-    row.setAttribute('role', 'button');
-    row.setAttribute('tabindex', '0');
-    row.innerHTML = '<span class="st2-ico red">' + ICO + '</span>'
-      + '<span class="st2-t"><span class="st2-n">Уведомления на телефон</span>'
-      + '<span class="st2-s" id="bpPushSub">Заявки, сделки и деньги — даже когда приложение закрыто</span></span>'
-      + '<span class="st2-val" id="bpPushVal"></span>'
-      + '<span class="st2-sw" data-pref="push" role="switch" aria-checked="false"></span>';
-    row.addEventListener('click', flip);
-    row.addEventListener('keydown', function(e){
-      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); flip(); }
-    });
-    /* Сразу после «Центра уведомлений», до вибрации. */
-    var first = c.querySelector('.st2-row');
-    if(first && first.nextSibling) c.insertBefore(row, first.nextSibling);
-    else c.appendChild(row);
-    paint();
-  }catch(e){ E(e); }
-}
-
-function flip(){
-  var p = perm();
-  if(p === 'granted'){
-    /* Разрешение остаётся, гасим только у себя: отзывать его умеет
-       лишь сам браузер, и делать вид, что мы можем, нечестно. */
-    setPref('push', !on());
-    paint();
-    var live = on();
-    toast(live ? 'Уведомления включены' : 'Уведомления выключены', 'info');
-    /* Выключили — снимаем и подписку на сервере: иначе он продолжал бы
-       слать, а браузер молча выбрасывал. Включили — подписываемся снова. */
-    try{ live ? subscribe() : unsubscribe(); }catch(e){ E(e); }
-    return;
-  }
-  window.bpAskNotif();
-}
-
-function note(text){
-  try{
-    var old = document.getElementById('bpPushNote');
-    if(!text){ if(old) old.remove(); return; }
-    if(!old){
-      var c = card(); if(!c) return;
-      old = document.createElement('div');
-      old.className = 'bp-push-note';
-      old.id = 'bpPushNote';
-      if(c.nextSibling) c.parentNode.insertBefore(old, c.nextSibling);
-      else c.parentNode.appendChild(old);
-    }
-    old.innerHTML = text;
-  }catch(e){ E(e); }
-}
-
-function paint(){
-  try{
-    var row = document.getElementById('bpPushRow');
-    if(!row) return;
-    var sw = row.querySelector('.st2-sw');
-    var val = document.getElementById('bpPushVal');
-    var sub = document.getElementById('bpPushSub');
-    var p = perm(), live = on();
-
-    if(sw){
-      sw.classList.toggle('on', live);
-      sw.setAttribute('aria-checked', live ? 'true' : 'false');
-    }
-    if(val){ val.className = 'st2-val'; val.textContent = ''; }
-
-    if(p === 'unsupported' || inTelegram()){
-      if(val){ val.textContent = 'Недоступно'; val.classList.add('warn'); }
-      if(sub) sub.textContent = inTelegram()
-        ? 'В окне Телеграма их показывает сам Телеграм — придут от бота'
-        : 'Это окно браузера не умеет показывать уведомления';
-      note('');
-      return;
-    }
-    if(p === 'denied'){
-      if(val){ val.textContent = 'Запрещено'; val.classList.add('warn'); }
-      if(sub) sub.textContent = 'Разрешение отозвано в браузере';
-      note('Уведомления запрещены в настройках браузера, и вернуть их отсюда нельзя.'
-        + ' Откройте настройки сайта в браузере и разрешите уведомления для этого адреса —'
-        + ' переключатель здесь включится сам.');
-      return;
-    }
-    if(p === 'default'){
-      if(val){ val.textContent = 'Спросим'; }
-      if(sub) sub.textContent = 'Заявки, сделки и деньги — даже когда приложение закрыто';
-      note('');
-      return;
-    }
-    /* granted */
-    if(val){ val.textContent = live ? 'Включены' : 'Выключены'; if(live) val.classList.add('ok'); }
-    if(sub) sub.textContent = 'Заявки, сделки и деньги — даже когда приложение закрыто';
-    note('');
-  }catch(e){ E(e); }
-}
-window.bpPushPaint = paint;
-
-/* Настройки рисуются при переходе на экран — встраиваемся тогда же. */
-var og = window.goTo;
-if(typeof og === 'function' && !og.__bpPush){
-  window.goTo = function(page){
-    var r = og.apply(this, arguments);
-    if(String(page || '') === 'settings') setTimeout(function(){ mount(); paint(); }, 90);
-    return r;
-  };
-  window.goTo.__bpPush = true;
-}
-document.addEventListener('visibilitychange', function(){ if(!document.hidden) paint(); });
-setTimeout(function(){ mount(); paint(); }, 1500);
-setInterval(function(){ if(!document.hidden){ mount(); paint(); } }, 5000);
-
-/* Подписку подновляем сами: она отваливается при смене аккаунта, чистке
-   данных браузера и по сроку. Проверка дешёвая — getSubscription из
-   памяти воркера, запрос к серверу идёт только когда подписки нет. */
-setTimeout(function(){ subscribe(); }, 6000);
-setInterval(function(){ if(!document.hidden) subscribe(); }, 300000);
 })();
 </script>
 
