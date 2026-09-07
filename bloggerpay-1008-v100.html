@@ -10808,6 +10808,21 @@ html.bp-tg #tabLogin,html.bp-tg #tabReg{opacity:.9}
   };
   window.bpUrl = function(u){ return bpEsc(window.bpUrlRaw(u)); };
 
+  /* Для подстановки в атрибут style: цвет или градиент второй стороны.
+     Цвет аватарки приезжает конвертом вместе с заявкой, сделкой и
+     карточкой, а попадал прямо в style="background:...". Кавычка в
+     значении закрывала атрибут и дописывала свой обработчик, а точка с
+     запятой — чужие правила поверх наших. Пропускаем только то, из чего
+     бывает цвет: имя, #hex, rgb()/hsl()/…-gradient(). Всё остальное —
+     наш обычный зелёный. */
+  var COL_OK = /^[a-zA-Z0-9#(),.%\s-]+$/;
+  window.bpCol = function(v, fallback){
+    var s = String(v == null ? '' : v).trim();
+    var def = fallback || 'linear-gradient(135deg,#3ddc84,#2bb96b)';
+    if (!s || s.length > 200 || !COL_OK.test(s)) return def;
+    return s;
+  };
+
   /* Для подстановки внутрь inline-обработчика: onclick="fn('${bpJs(x)}')".
      Сначала экранируем как строку JS, потом как HTML — иначе кавычка в имени
      выходит из строки и превращается в исполняемый код. */
@@ -11660,7 +11675,12 @@ window.BP_LOGO="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccq
         <span class="fchip-ic" style="background:#FF0000"><img loading="lazy" class="soc-img" src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/youtube.svg" alt=""></span>
         YouTube
       </button>
-      <button class="fchip" data-fc="ig" onclick="setCatPlatform('ig',this)">
+      <!-- Instagram убран из мастера карты (реклама там запрещена), и
+           фильтр по нему всегда давал пустой каталог. Разметку оставляем
+           скрытой: ранее опубликованные карточки со ссылкой на Instagram
+           открываются, и если площадку когда-нибудь вернут — вернуть
+           фильтр будет одной правкой. -->
+      <button class="fchip" data-fc="ig" hidden style="display:none" onclick="setCatPlatform('ig',this)">
         <span class="fchip-ic" style="background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)"><img loading="lazy" class="soc-img" src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/instagram.svg" alt=""></span>
         Instagram
       </button>
@@ -14093,7 +14113,9 @@ function showVerifyPicker() {
   <!-- ═══════ ШАГ 1: ПЛАТФОРМЫ ═══════ -->
   <div class="abc-body" id="abc-step1">
     <div class="abc-section-title">Выберите платформы</div>
-    <div class="abc-section-sub">TikTok подключается входом в аккаунт — ссылку и подписчиков сообщит сама площадка. Для остальных площадок укажите ссылку на канал.</div>
+    <!-- Текст переписывает fixHints в слое bp-abc-tt: пока вход через
+         TikTok не подключён, обещать его нельзя — там обычная ссылка. -->
+    <div class="abc-section-sub" id="abc-step1-sub">TikTok подключается входом в аккаунт — ссылку и подписчиков сообщит сама площадка. Для остальных площадок укажите ссылку на канал.</div>
 
     <!-- Highlight banner: your card will be shown at the top -->
     <div class="abc-top-banner">
@@ -20205,7 +20227,7 @@ function openOrderTZPreview() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8ff0b8" stroke-width="2.2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           <span style="font-size:12px;font-weight:800;color:var(--t1)">Описание</span>
         </div>
-        <div style="font-size:14px;color:var(--t1);line-height:1.7;white-space:pre-wrap;word-break:break-word">${taskStr}</div>
+        <div style="font-size:14px;color:var(--t1);line-height:1.7;white-space:pre-wrap;word-break:break-word">${bpEsc(taskStr)}</div>
         ${linkStr ? `<a href="${bpUrl(linkStr)}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;margin-top:13px;background:rgba(255,255,255,0.055);border:1px solid rgba(255,255,255,0.11);border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--acc2);text-decoration:none">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
           Ссылка на продукт
@@ -21461,7 +21483,7 @@ function renderChatsList(filter) {
         <div style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,0.044),transparent);pointer-events:none;border-radius:inherit"></div>
         <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,#3ddc84,#2bb96b);border-radius:0 2px 2px 0"></div>
         <div class="chat-ava" style="position:relative">
-          <div style="width:100%;height:100%;border-radius:50%;background:${req.color};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;border:2px solid rgba(255,255,255,0.14)">${req.initials}</div>
+          <div style="width:100%;height:100%;border-radius:50%;background:${bpCol(req.color)};display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff;border:2px solid rgba(255,255,255,0.14)">${req.initials}</div>
           <!-- pulse ring -->
           <div style="position:absolute;inset:-3px;border-radius:50%;border:2px solid rgba(255,255,255,0.14);animation:orPulse 2s ease-in-out infinite"></div>
         </div>
@@ -21803,7 +21825,7 @@ function renderChatMessages(messages) {
     return `<span class="bm-ticks bm-ticks-sent">${mTickSent}</span>`;
   }
   function _bubbleMeta(m){
-    return `<span class="cd-bubble-meta"><span class="bm-time">${m.time}</span>${_bubbleTicks(m)}</span>`;
+    return `<span class="cd-bubble-meta"><span class="bm-time">${bpEsc(m.time)}</span>${_bubbleTicks(m)}</span>`;
   }
 
   let html = `<div class="cd-date-sep">Сегодня</div>`;
@@ -21842,7 +21864,7 @@ function renderChatMessages(messages) {
         " onmousedown="this.style.background='rgba(255,255,255,.05)'" onmouseup="this.style.background='rgba(255,255,255,.025)'" onmouseleave="this.style.background='rgba(255,255,255,.025)'" role="button" tabindex="0">
           <span style="color:rgba(255,255,255,.32);flex-shrink:0;display:flex">${svgIco}</span>
           <span style="font-size:11.5px;font-weight:500;color:rgba(255,255,255,.42);line-height:1.3">${bpEsc(m.text)}</span>
-          <span style="font-size:9.5px;color:rgba(255,255,255,.22);flex-shrink:0">${m.time}</span>
+          <span style="font-size:9.5px;color:rgba(255,255,255,.22);flex-shrink:0">${bpEsc(m.time)}</span>
         </div>
       </div>`;
       return;
@@ -21863,7 +21885,7 @@ function renderChatMessages(messages) {
       if(isLast) tickHtml = isRead ? doubleTickRead : doubleTick;
     }
 
-    const metaHtml = isLastInGroup ? `<div class="cd-meta"><span class="cd-msg-time">${m.time}</span>${tickHtml}</div>` : '';
+    const metaHtml = isLastInGroup ? `<div class="cd-meta"><span class="cd-msg-time">${bpEsc(m.time)}</span>${tickHtml}</div>` : '';
 
     if(m.file) {
       // ── FILE / IMAGE BUBBLE ──
@@ -23369,16 +23391,27 @@ function abcContinue() {
          считает превью на шаге 3 (abcFillPreviewIdentity). Раньше сюда
          попадали цифры одной, первой площадки, и каталог показывал
          меньше, чем человек видел перед публикацией. */
-      let _sumSubs = 0, _sumReach = 0, _erSum = 0, _erCnt = 0;
+      /* ОСНОВНАЯ ПЛОЩАДКА — та, где больше всего подписчиков. Её цифры
+         и запоминаем: подписчики, охват и ER одной площадки — величины,
+         которые можно проверить по ссылке. Раньше здесь стояла сумма
+         подписчиков и среднее ER по площадкам; и то и другое обещало
+         аудиторию, которой нет: в трёх каналах сидит один и тот же
+         человек, а средний ER считается от разных знаменателей.
+         Разбивка по каналам не потерялась — она в platData, и карточка
+         в каталоге показывает её по каждой площадке отдельно. */
+      let _mainPid = '', _mainSubs = -1;
       enabledPids.forEach(pid => {
         const _pp = abcPlatforms[pid]; if(!_pp) return;
-        _sumSubs += Number(_pp.subs) || 0;
-        _sumReach += Number(_pp.reach) || 0;
-        if(_pp.er){ _erSum += parseFloat(_pp.er) || 0; _erCnt++; }
+        const s = Number(_pp.subs) || 0;
+        if(s > _mainSubs){ _mainSubs = s; _mainPid = pid; }
       });
-      const subsVal = _sumSubs ? abcFmtNum(_sumSubs) : '—';
-      const reachVal = _sumReach ? abcFmtNum(_sumReach) : '—';
-      const erVal = _erCnt ? (_erSum / _erCnt).toFixed(1) + '%' : '—';
+      const _main = (_mainPid && abcPlatforms[_mainPid]) || null;
+      const _mSubs = _main ? (Number(_main.subs) || 0) : 0;
+      const _mReach = _main ? (Number(_main.reach) || 0) : 0;
+      const _mEr = _main ? (parseFloat(_main.er) || 0) : 0;
+      const subsVal = _mSubs ? abcFmtNum(_mSubs) : '—';
+      const reachVal = _mReach ? abcFmtNum(_mReach) : '—';
+      const erVal = _mEr ? _mEr.toFixed(1) + '%' : '—';
 
       // Уникальный ID карты
       const cardId = 'mycard_' + Date.now();
@@ -23387,11 +23420,16 @@ function abcContinue() {
       let cpvVal = '—';
       const _allPrices = [];
       let _totalReach = 0;
-      Object.keys(abcPlatforms).forEach(pid => {
-        const _p = abcPlatforms[pid];
+      /* Считаем по ОСНОВНОЙ площадке: и цены, и охват с одного канала.
+         Раньше цикл шёл по всем abcPlatforms без проверки enabled — в
+         среднюю цену попадали форматы площадок, которых в карте нет, а
+         охват при этом суммировался только по включённым. Числитель и
+         знаменатель были про разные множества площадок. */
+      (_mainPid ? [_mainPid] : enabledPids).forEach(pid => {
+        const _p = abcPlatforms[pid]; if(!_p || !_p.enabled) return;
         const _list = abcGetIntegrations(pid);
         _list.forEach(item => { const pr = parseFloat(item.price); if(pr > 0) _allPrices.push(pr); });
-        if(_p.enabled && _p.verified && _p.reach > 0) _totalReach += _p.reach;
+        if(_p.reach > 0) _totalReach += _p.reach;
       });
       if(_allPrices.length > 0) {
         const _avg = _allPrices.reduce((a,b)=>a+b,0)/_allPrices.length;
@@ -24461,7 +24499,7 @@ function _showAvaActionsSheet(bp, userId) {
   ov.style.cssText = 'position:fixed;inset:0;z-index:280;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);display:flex;align-items:flex-end;justify-content:center';
   ov.onclick = function(e){ if(e.target === ov) ov.remove(); };
   var avaHtml = bp.img
-    ? '<img src="' + bp.img + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="">'
+    ? '<img src="' + bpUrl(bp.img) + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="">'
     : '<div style="width:100%;height:100%;border-radius:50%;background:' + (bp.color || 'linear-gradient(135deg,#3ddc84,#2bb96b)') + ';display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#fff">' + (bp.initials || (bp.name || 'Б')[0].toUpperCase()) + '</div>';
   ov.innerHTML = '<div style="width:100%;max-width:420px;background:linear-gradient(160deg,#0d0d0d,#141416);border-top-left-radius:24px;border-top-right-radius:24px;padding:18px 18px max(22px,env(safe-area-inset-bottom))"  onclick="event.stopPropagation()" role="button" tabindex="0">'
     + '<div style="width:40px;height:4px;border-radius:2px;background:rgba(255,255,255,.15);margin:0 auto 16px"></div>'
@@ -27914,7 +27952,7 @@ function openDealDetail(dealId) {
     </div>
     <div style="flex:1;min-width:0">
       <div style="font-size:13px;font-weight:700;color:var(--t1)">Техническое задание</div>
-      <div style="font-size:11px;color:var(--t3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">${tzText}</div>
+      <div style="font-size:11px;color:var(--t3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">${bpEsc(tzText)}</div>
     </div>
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
   </div>` : ''}
@@ -30602,10 +30640,10 @@ function openTZOverlay(dealId) {
         <span class="tz-section-title">Описание задания</span>
       </div>
       <div class="tz-section-body">
-        <div style="font-size:14.5px;color:var(--t1);line-height:1.75;white-space:pre-wrap">${tzText}</div>
+        <div style="font-size:14.5px;color:var(--t1);line-height:1.75;white-space:pre-wrap">${bpEsc(tzText)}</div>
         ${whatText ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.05)">
           <div style="font-size:10px;color:rgba(255,255,255,.35);font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Что рекламируем</div>
-          <div style="font-size:13px;color:rgba(255,255,255,.7);line-height:1.6">${whatText}</div>
+          <div style="font-size:13px;color:rgba(255,255,255,.7);line-height:1.6">${bpEsc(whatText)}</div>
         </div>` : ''}
         ${linkText ? `<a href="${bpUrl(linkText)}" target="_blank" style="display:inline-flex;align-items:center;gap:6px;margin-top:12px;background:rgba(255,255,255,0.055);border:1px solid rgba(255,255,255,0.11);border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--acc2);text-decoration:none;transition:background .15s" onmousedown="this.style.background='rgba(109,74,232,.28)'" onmouseup="this.style.background='rgba(109,74,232,.14)'">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
@@ -31702,7 +31740,7 @@ function renderCampaignsPage(){
   if(projects.length>1){
     const ap=projSel.dataset.active||'__all__';
     const pill=(val,lbl)=>{
-      const isA=ap===val;const safe=String(val).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+      const isA=ap===val;const safe=(typeof bpJs==='function')?bpJs(val):String(val).replace(/[\'"]/g,'').replace(/&/g,'&amp;');
       return `<button onclick="document.getElementById('campProjectSelector').dataset.active='${safe}';renderCampaignsPage()" style="flex-shrink:0;border:1.5px solid ${isA?'#3ddc84':'rgba(255,255,255,.1)'};background:${isA?'rgba(61,220,132,.15)':'transparent'};border-radius:20px;padding:7px 16px;font-size:12.5px;font-weight:700;color:${isA?'var(--acc2)':'var(--t2)'};cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .15s">${bpEsc(lbl)}</button>`;
     };
     projSel.innerHTML = pill('__all__','Все') + projects.map(p=>pill(p,p)).join('');
@@ -33823,7 +33861,7 @@ function renderOffersList() {
   list.innerHTML = offers.map(o => {
     const name = o.companyName || o.brand || 'Рекламодатель';
     const initial = (o.initials || name.charAt(0)).toUpperCase();
-    const color = o.color || 'linear-gradient(135deg,#3ddc84,#2bb96b)';
+    const color = bpCol(o.color);
     const budget = o.budget ? (o.budget + ' ₽') : '—';
     const format = o.format || 'Реклама';
     const deadline = o.deadline || '—';
@@ -34324,7 +34362,7 @@ window.bpRefreshBell = function(){
   if(dot){ if(n>0){ dot.style.display='flex'; dot.textContent = n>9?'9+':n; } else dot.style.display='none'; }
 };
 
-function bpEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function bpEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 function bpPlural(n,f1,f2,f5){ const m10=n%10, m100=n%100; if(m10===1&&m100!==11) return f1; if(m10>=2&&m10<=4&&(m100<10||m100>=20)) return f2; return f5; }
 const BPN_MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 function bpNotifDayLabel(iso){
@@ -35474,8 +35512,8 @@ function moneyShort(n){
   if(n >= 100000)  return Math.round(n/1000) + ' тыс';
   return money(n);
 }
-function esc(s){ return String(s==null?'':s).replace(/[<>&"]/g,function(c){
-  return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
+function esc(s){ return String(s==null?'':s).replace(/[<>&"']/g,function(c){
+  return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function stepNumOf(step){
   var s = String(step);
   if(s === 'cancelled') return 0;
@@ -35671,7 +35709,7 @@ function card(o){
 
   return '<div class="' + cls + '"  onclick="' + o.onclick + '" role="button" tabindex="0">'
     + '<div class="dp-head">'
-      + '<div class="dp-ava" style="background:' + (o.color || 'linear-gradient(135deg,#3ddc84,#2bb96b)') + '">' + esc(o.initials || '?') + '</div>'
+      + '<div class="dp-ava" style="background:' + bpCol(o.color) + '">' + esc(o.initials || '?') + '</div>'
       + '<div style="flex:1;min-width:0">'
         + '<div class="dp-name">' + esc(o.name) + '</div>'
         + '<div class="dp-sub"><b>' + esc(o.platform || '—') + '</b><i class="dp-dot"></i><i>№' + esc(o.num || '—') + '</i></div>'
@@ -37263,8 +37301,8 @@ function load(){
 function save(a){ try{ localStorage.setItem(KEY, JSON.stringify(a.slice(0, MAX))); }catch(e){BPERR(e,31596)} }
 function unread(){ return load().filter(function(n){ return !n.read; }).length; }
 function esc(s){
-  return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
-    return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];
+  return String(s == null ? '' : s).replace(/[<>&"']/g, function(c){
+    return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c];
   });
 }
 function ago(ts){
@@ -37816,8 +37854,8 @@ else setTimeout(boot, 0);
 'use strict';
 
 function esc(s){
-  return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
-    return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];
+  return String(s == null ? '' : s).replace(/[<>&"']/g, function(c){
+    return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c];
   });
 }
 function num(v){ var n = parseInt(String(v == null ? '' : v).replace(/[^\d]/g,''), 10); return isNaN(n) ? 0 : n; }
@@ -38106,7 +38144,7 @@ window.openVideoReviewModal = function(dealId){
               '<div class="vr-link-v">' + esc(link.label) + '</div>' +
             '</div>' +
             (link.ok
-              ? '<a class="vr-open" href="' + esc(link.href) + '" target="_blank" rel="noopener">Открыть' + I.ext + '</a>'
+              ? '<a class="vr-open" href="' + bpUrl(link.href) + '" target="_blank" rel="noopener">Открыть' + I.ext + '</a>'
               : '') +
           '</div>'
         : '') +
@@ -38218,8 +38256,8 @@ function reqOk(){ var k = kyc(); return !!(k && k.payout && k.payout.done); }
 function doneCount(){ return (phoneOk() ? 1 : 0) + (idOk() ? 1 : 0) + (reqOk() ? 1 : 0); }
 window.bpKycReady = function(){ return phoneOk() && idOk() && reqOk(); };
 
-function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
-  return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
+function esc(s){ return String(s == null ? '' : s).replace(/[<>&"']/g, function(c){
+  return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function maskPhone(p){
   var d = String(p || '').replace(/\D/g, '');
   if(d.length < 11) return p || '';
@@ -39322,8 +39360,8 @@ else setTimeout(boot, 0);
     return isNaN(f) ? 1 : Math.floor(f);
   }
   function num(v){ return Number(String(v==null?0:v).replace(/[^\d]/g,'')) || 0; }
-  function esc(x){ return String(x==null?'':x).replace(/[&<>"]/g, function(c){
-    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function esc(x){ return String(x==null?'':x).replace(/[&<>"']/g, function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
 
   /* ─── 1. Пересчёт метрик из реальных сделок ─── */
   window.bpRecalcCampaigns = function(){
@@ -39619,8 +39657,8 @@ else setTimeout(boot, 0);
   function joins(){ try{ return JSON.parse(localStorage.getItem(JOIN_KEY)||'[]'); }catch(e){ return []; } }
   function saveJoins(a){ try{ localStorage.setItem(JOIN_KEY, JSON.stringify(a)); }catch(e){BPERR(e,34841)} }
   function me(){ try{ return (typeof currentUser!=='undefined' && currentUser) ? currentUser : null; }catch(e){ return null; } }
-  function esc(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){
-    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+  function esc(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
   function num(v){ return Number(String(v==null?0:v).replace(/[^\d.]/g,'')) || 0; }
   function money(v){ return num(v).toLocaleString('ru') + ' ₽'; }
   function dt(v){ try{ return new Date(v).toLocaleDateString('ru'); }catch(e){ return ''; } }
@@ -40451,7 +40489,7 @@ else setTimeout(boot, 0);
                   + ' (принято раньше: '+done+')</div>'
                 : '')
               + (j.workUrl
-                ? '<a class="tk-part-l" href="'+esc(j.workUrl)+'" target="_blank" rel="noopener">'+esc(j.workUrl)+'</a>'
+                ? '<a class="tk-part-l" href="'+bpUrl(j.workUrl)+'" target="_blank" rel="noopener">'+esc(j.workUrl)+'</a>'
                   + '<div class="tk-part-m">Просмотров: '+num(j.views).toLocaleString('ru')
                   + ' · к выплате <b>'+money(j.payout)+'</b></div>'
                   + (j.workNote? '<div class="tk-part-note">'+esc(j.workNote)+'</div>' : '')
@@ -40667,7 +40705,7 @@ else setTimeout(boot, 0);
                 + (rows.length ? '<div class="tk-mt-grid">'+rows.join('')+'</div>' : '')
                 + (j.workUrl
                   ? '<div class="tk-mt-work">'
-                    +   '<a class="tk-part-l" href="'+esc(j.workUrl)+'" target="_blank" rel="noopener" '
+                    +   '<a class="tk-part-l" href="'+bpUrl(j.workUrl)+'" target="_blank" rel="noopener" '
                     +     'onclick="'+stop+'">'+esc(j.workUrl)+'</a>'
                     +   '<div class="tk-part-m">Просмотров: '+num(j.views).toLocaleString('ru')
                     +     ' · к выплате <b>'+money(j.payout)+'</b></div>'
@@ -45055,7 +45093,7 @@ window.bpArbLightbox = function(src){
   var lb = document.createElement('div');
   lb.className = 'bparb-lb';
   lb.setAttribute('onclick', 'this.remove()');
-  lb.innerHTML = '<img src="' + src + '" alt="Доказательство">';
+  lb.innerHTML = '<img src="' + bpUrl(src) + '" alt="Доказательство">';
   document.body.appendChild(lb);
   return lb;
 };
@@ -45296,7 +45334,7 @@ function attHtml(boxId){
   if(!_att.length) return '<div style="font-size:11.5px;color:var(--t3);padding:2px">Пока ничего не приложено</div>';
   return _att.map(function(f, i){
     return '<div class="bparb-file" style="position:relative" onclick="bpAttDrop(' + i + ',\'' + boxId + '\')" title="Убрать">'
-         +   '<img src="' + f.data + '" alt="">'
+         +   '<img src="' + bpUrl(f.data) + '" alt="">'
          +   '<div style="position:absolute;top:1px;right:1px;width:16px;height:16px;border-radius:50%;background:rgba(0,0,0,.75);'
          +     'color:#fff;font-size:11px;line-height:16px;text-align:center;font-weight:800">×</div>'
          + '</div>';
@@ -45667,7 +45705,7 @@ function threadHtml(d){
          что есть в записи, полную подтягиваем при увеличении. */
       var src = (typeof window.bpShotSrc === 'function') ? window.bpShotSrc(f) : (f.thumb || f.data || '');
       return '<div class="bparb-file" onclick="bpArbZoomFile(\'' + esc(d.id) + '\',' + (t._i || 0) + ',' + fi + ')">'
-           +   '<img src="' + src + '" alt="Доказательство"></div>';
+           +   '<img src="' + bpUrl(src) + '" alt="Доказательство"></div>';
     }).join('');
     return '<div class="bparb-msg">'
          +   '<div class="bparb-ava ' + esc(t.role) + '">' + (isSys ? '!' : esc(ini)) + '</div>'
@@ -51163,7 +51201,7 @@ function shotsHtml(boxId){
   if(!_shots.length) return '<div style="font-size:11.5px;color:var(--t3);padding:2px">Скриншот пока не приложен</div>';
   return '<div class="bptm-shot">' + _shots.map(function(f, i){
     return '<div class="bptm-shot-i" onclick="bpTmShotDrop(' + i + ',\'' + boxId + '\')" title="Убрать">'
-         +   '<img src="' + shotSrc(f) + '" alt="">'
+         +   '<img src="' + bpUrl(shotSrc(f)) + '" alt="">'
          +   '<div class="bptm-shot-x">×</div></div>';
   }).join('') + '</div>';
 }
@@ -51616,7 +51654,7 @@ window.bpTmReSend = function(campId){
             if((j.shots2 || []).length)
               extra += '<div class="bptm-shot">' + j.shots2.map(function(f, si){
                 return '<div class="bptm-shot-i" onclick="bpTmZoomShot(\'' + esc(j.campId) + '\',\''
-                     + esc(j.userId) + '\',' + si + ',2)"><img src="' + shotSrc(f) + '" alt=""></div>';
+                     + esc(j.userId) + '\',' + si + ',2)"><img src="' + bpUrl(shotSrc(f)) + '" alt=""></div>';
               }).join('') + '</div>';
             else
               extra += warn('bad', 'Второй замер прислан без скриншота — сумма ничем не подтверждена.');
@@ -51640,7 +51678,7 @@ window.bpTmReSend = function(campId){
             extra += '<div class="bptm-shot">' + j.shots.map(function(f, si){
               /* показываем миниатюру, полную достаём из IndexedDB по клику */
               return '<div class="bptm-shot-i" onclick="bpTmZoomShot(\'' + esc(j.campId) + '\',\''
-                   + esc(j.userId) + '\',' + si + ')"><img src="' + shotSrc(f) + '" alt=""></div>';
+                   + esc(j.userId) + '\',' + si + ')"><img src="' + bpUrl(shotSrc(f)) + '" alt=""></div>';
             }).join('') + '</div>';
 
           var d = anyDispute(campId, j.userId);
@@ -51670,7 +51708,7 @@ window.bpTmZoom = function(src){
   var lb = document.createElement('div');
   lb.className = 'bparb-lb';
   lb.setAttribute('onclick', 'this.remove()');
-  lb.innerHTML = '<img src="' + src + '" alt="Скриншот">';
+  lb.innerHTML = '<img src="' + bpUrl(src) + '" alt="Скриншот">';
   document.body.appendChild(lb);
   return lb;
 };
@@ -54991,6 +55029,16 @@ else boot();
 /* Превью карты на шаге 3: пустые ряды не должны оставлять полос. */
 #abc-step3 .bls-sub:empty{display:none}
 #abc-step3 .blc-soc-zone:has(.blc-socs:empty){display:none}
+/* То же самое в каталоге: зона значков без значков — просто серая
+   полоса с рамкой. Она остаётся, когда bpRestyleCards не нашёл, что
+   разбирать (socsHtml пуст). Узел не удаляем: bpEnhanceCard берёт из
+   него запасной список площадок. */
+/* ДВА ОТДЕЛЬНЫХ ПРАВИЛА, а не одна группа через запятую. Браузер, не
+   знающий :has(), выбрасывает ВСЮ группу целиком — вместе с запасным
+   :empty, ради которого она и писалась. В вебвью Телеграма это ровно тот
+   случай, и полоса оставалась бы на экране. */
+#catBloggerList .blc-soc-zone:empty{display:none}
+#catBloggerList .blc-soc-zone:has(.blc-socs:empty){display:none}
 #abc-step3 .blc-cats:empty{display:none}
 </style>
 
@@ -59684,6 +59732,17 @@ function bpHandle(url){
   }catch(e){ return ''; }
 }
 
+/* «1.5K ₽» → 1500, «150 ₽» → 150. Нужна там, где строки цены за тысячу
+   сравнивают между собой: parseFloat отрезал бы суффикс и делал K
+   меньше сотен. */
+function bpCpvNum(s){
+  var t = String(s == null ? '' : s).replace(/\s/g, '').replace(',', '.');
+  var n = parseFloat(t);
+  if(!isFinite(n)) return Infinity;
+  if(/k/i.test(t)) n *= 1000;
+  else if(/m/i.test(t)) n *= 1000000;
+  return n;
+}
 function bpChanStats(store, pid){
   var p = store && store.platData && store.platData[pid];
   if(!p) return null;
@@ -59755,7 +59814,13 @@ function bpSetStat(cardEl, label, value){
     var l = cells[i].querySelector('.bls-lbl');
     if(!l || l.textContent.trim().toLowerCase() !== label) continue;
     var v = cells[i].querySelector('.bls-val');
-    if(!v || v.textContent.trim() === String(value)) return;
+    /* continue, а НЕ return: подпись ищем перебором ячеек, и выход из
+       функции на совпавшем значении бросал остальные ячейки строки
+       необновлёнными. Ловилось так: карточка открывалась на главном
+       канале, число подписчиков у него совпадало с уже написанным — и
+       просмотры с ER навсегда оставались от прошлого канала. */
+    if(!v) continue;
+    if(v.textContent.trim() === String(value)) continue;
     if(v.__bpTw){ cancelAnimationFrame(v.__bpTw); v.__bpTw = 0; }
     var to = bpStatParse(value);
     if(!to || _bpStatRM || !window.requestAnimationFrame){
@@ -59779,7 +59844,34 @@ function bpSetStat(cardEl, label, value){
     q.push({ el:v, from:start, to:to.raw, t:to, last:v.textContent });
     if(cardEl.__bpTwRun){ cancelAnimationFrame(cardEl.__bpTwRun); cardEl.__bpTwRun = 0; }
     var t0 = performance.now(), DUR = 520;
+    /* СТРАХОВКА ОТ ЗАСТРЯВШЕЙ АНИМАЦИИ.
+       Кадры могут не идти вовсе: вкладка не рисуется, экономия батареи,
+       тяжёлая страница. Тогда число так и остаётся от прошлой площадки —
+       под выбранным TikTok висят подписчики Telegram. На витрине, где
+       выбирают, кому платить, это прямо неверное число.
+       Ждём коротко и смотрим, шли ли кадры: шли — не мешаем анимации и
+       ждём дальше; не шли — дописываем конечные значения молча. */
+    cardEl.__bpTwSeen = 0;
+    if(cardEl.__bpTwSafe) clearTimeout(cardEl.__bpTwSafe);
+    var safe = function(){
+      cardEl.__bpTwSafe = 0;
+      var rest = cardEl.__bpTwQ || [];
+      if(!rest.length) return;
+      if(cardEl.__bpTwSeen){                 /* кадры идут — анимация доедет сама */
+        cardEl.__bpTwSeen = 0;
+        cardEl.__bpTwSafe = setTimeout(safe, 260);
+        return;
+      }
+      for(var j = 0; j < rest.length; j++){
+        var s2 = bpStatFmt(rest[j].to, rest[j].t);
+        if(s2 !== rest[j].last){ rest[j].el.textContent = s2; rest[j].last = s2; }
+      }
+      cardEl.__bpTwQ = [];
+      if(cardEl.__bpTwRun){ cancelAnimationFrame(cardEl.__bpTwRun); cardEl.__bpTwRun = 0; }
+    };
+    cardEl.__bpTwSafe = setTimeout(safe, 260);
     var tick = function(now){
+      cardEl.__bpTwSeen = 1;               /* кадр был — страховке ждать дальше */
       var p = (now - t0) / DUR; if(p > 1) p = 1;
       var e = 1 - Math.pow(1 - p, 3);
       var list = cardEl.__bpTwQ || [];
@@ -59882,7 +59974,11 @@ function bpEnhanceCard(cardEl, storeOverride){
       var s = items[m].stats;
       if(s.rawSubs > bs) bs = s.rawSubs;
       if(s.rawEr   > be) be = s.rawEr;
-      if(s.cpv !== '—' && (bc === null || parseFloat(s.cpv) < parseFloat(bc))) bc = s.cpv;
+      /* Сравнивать строки напрямую нельзя: bpFmtCPV отдаёт «1.5K ₽»,
+         когда охвата нет, и parseFloat даёт 1.5 — такой канал побеждал
+         настоящие 150 ₽ и уезжал в фильтр как самый дешёвый.
+         bpCpvNum разворачивает K и M обратно в число. */
+      if(s.cpv !== '—' && (bc === null || bpCpvNum(s.cpv) < bpCpvNum(bc))) bc = s.cpv;
     }
     cardEl.dataset.bpBestSubs = bs ? bpFmtNum(bs) : '—';
     cardEl.dataset.bpBestEr   = be ? be.toFixed(1) + '%' : '—';
@@ -63484,8 +63580,8 @@ var filter = 'all', isOpen = false, undoTimer = null, undoRec = null;
 function E(e){ try{ if(typeof BPERR === 'function') BPERR(e); }catch(_){} }
 function $(id){ return document.getElementById(id); }
 function esc(s){
-  return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
-    return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c];
+  return String(s == null ? '' : s).replace(/[<>&"']/g, function(c){
+    return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c];
   });
 }
 function plural(n, a, b, c){
@@ -64605,7 +64701,7 @@ window.__bpWallet2 = 1;
 
 function E(e){ try{ if(typeof BPERR === 'function') BPERR(e); }catch(_){} }
 function $(id){ return document.getElementById(id); }
-function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){ return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
+function esc(s){ return String(s == null ? '' : s).replace(/[<>&"']/g, function(c){ return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]; }); }
 var NB = ' ';
 var MIN_TOPUP = 1000, MAX_TOPUP = 1000000, MIN_WD = 1000, FEE = 0.04;
 
@@ -67501,7 +67597,7 @@ window.bpaWorkCard = function(campId, uid){
     +(j.rejectReason?'<div class="bpx-row"><span>Причина отказа</span><b class="r" style="font-weight:600">'+esc(j.rejectReason)+'</b></div>':'')
     +'</div>'
     +(j.workUrl?'<div class="bpx-note" style="margin:0 0 8px;overflow-wrap:anywhere">'
-      +'<a href="'+esc(j.workUrl)+'" target="_blank" rel="noopener" style="color:var(--acc2)">'+esc(j.workUrl)+'</a></div>':'')
+      +'<a href="'+bpUrl(j.workUrl)+'" target="_blank" rel="noopener" style="color:var(--acc2)">'+esc(j.workUrl)+'</a></div>':'')
     +(flags?'<div style="margin-bottom:6px">'+flags+'</div>':'')
     +(shots?'<div class="bpa-shotrow">'+shots+'</div>':'<div class="bpx-note">Скриншотов нет.</div>')
     +'<div id="bpaRejBox"></div>'
@@ -69055,7 +69151,7 @@ window.bpPromoShot = function(inp){
           cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
           _shots.push(cv.toDataURL('image/jpeg',.78));
           var box=document.getElementById('bppShots');
-          if(box) box.innerHTML=_shots.map(function(s){ return '<img src="'+s+'" alt="">'; }).join('');
+          if(box) box.innerHTML=_shots.map(function(s){ return '<img src="'+bpUrl(s)+'" alt="">'; }).join('');
         }catch(e){ E(e); }
       };
       img.src=String(r.result||'');
@@ -69190,7 +69286,7 @@ window.bpaPromoCard = function(id){
   F.warn.forEach(function(t){ fl+='<div class="bpvv-flag">'+esc(t)+'</div>'; });
   if(!fl) fl='<div class="bpvv-flag ok">Автопроверки пройдены</div>';
   var shots=(s.shots&&s.shots.length)
-    ?'<div class="bpp-shots">'+s.shots.map(function(x){ return '<img src="'+x+'" alt="">'; }).join('')+'</div>':'';
+    ?'<div class="bpp-shots">'+s.shots.map(function(x){ return '<img src="'+bpUrl(x)+'" alt="">'; }).join('')+'</div>':'';
   var pay=payoutOf(s);
   var c=CFG();
   var over = c.budget>0 && (c.spent+pay)>c.budget;
@@ -69816,7 +69912,7 @@ function sheet(cardId, dataUrl){
   ov.innerHTML='<div class="tk-sheet"><div class="tk-sheet-hd"><span>Фото карточки</span>'
     +'<button class="tk-x" onclick="document.getElementById(\'bpPhotoSheet\').remove()">×</button></div>'
     +'<div class="tk-sheet-body">'
-    +'<img class="bpph-prev" src="'+dataUrl+'" alt="">'
+    +'<img class="bpph-prev" src="'+bpUrl(dataUrl)+'" alt="">'
     +'<div class="bpx-note" style="margin:0">Фото обрезано в квадрат и сжато — оно станет аватаром карточки в каталоге.</div>'
     +'</div><div class="tk-sheet-foot">'
     +'<button class="tk-btn-ghost" onclick="bpCardPhoto(\''+q(cardId)+'\')">Другое фото</button>'
@@ -74424,7 +74520,7 @@ window.bpVidPromo = function(){
     var photo = '';
     try{ var im = document.querySelector('#pfPromoBanner .pfpb-img'); if(im) photo = im.src || ''; }catch(e){}
     var b = [];
-    if(photo) b.push(an('<img class="vp-photo" src="' + photo + '" alt="">', 0));
+    if(photo) b.push(an('<img class="vp-photo" src="' + bpUrl(photo) + '" alt="">', 0));
     if(!C.on) b.push(an('<div class="vp-warn">' + I.warn + '<span>Программа сейчас на паузе. Баннер можно скачать уже сейчас — сдача видео откроется, когда владелец запустит программу.</span></div>', 1));
     b.push(an('<div class="vp-hero"><div class="vp-hero-v">' + fm(C.rate) + '<small> ₽</small></div>'
       + '<div class="vp-hero-k">за каждую 1 000 просмотров видео,<br>в котором виден наш баннер</div></div>', 1));
@@ -74763,7 +74859,7 @@ function paintShots(){
   var box = document.getElementById('vpShots');
   if(!box) return;
   box.innerHTML = _shots.map(function(s, i){
-    return '<span class="vp-shot"><img src="' + s + '" alt=""><i onclick="bpVpShotDel(' + i + ')" role="button" aria-label="Убрать">×</i></span>';
+    return '<span class="vp-shot"><img src="' + bpUrl(s) + '" alt=""><i onclick="bpVpShotDel(' + i + ')" role="button" aria-label="Убрать">×</i></span>';
   }).join('');
 }
 window.bpVpShotDel = function(i){ _shots.splice(i, 1); paintShots(); };
@@ -76086,9 +76182,25 @@ function paint(rows, pids){
   var byPlat = {};
   rows.forEach(function(r){ if(r && r.platform) byPlat[r.platform] = r; });
 
+  /* Площадку строки берём из НЕЁ САМОЙ, а не из соседнего списка по
+     номеру. Списки собирают разные функции с разными условиями отбора
+     (socialsOf идёт по всем картам человека и дедуплицирует по паре
+     ссылка+площадка, platsOf — по enabled и наличию ссылки), поэтому они
+     расходятся и длиной, и порядком. При расхождении зелёное «проверено»
+     и подписчики с площадки вставали к ЧУЖОЙ строке — рекламодатель
+     видел проверку у канала, который никто не проверял. */
+  var CLS2PID = { syt:'youtube', stg:'telegram', stt:'tiktok', sig:'instagram' };
+  function pidOfRow(el, i){
+    try{
+      var ic = el.querySelector('.blc-soc');
+      if(ic) for(var k in CLS2PID) if(ic.classList.contains(k)) return CLS2PID[k];
+    }catch(e){}
+    return pids[i];
+  }
+
   var els = document.querySelectorAll('#blpBody .blp-soc');
-  for(var i = 0; i < els.length && i < pids.length; i++){
-    var el = els[i], pid = pids[i], row = byPlat[pid];
+  for(var i = 0; i < els.length; i++){
+    var el = els[i], pid = pidOfRow(els[i], i), row = pid ? byPlat[pid] : null;
     var badge = el.querySelector('.blp-ver');
     var meter = el.querySelector('.blp-soc-m');
 
@@ -76572,7 +76684,7 @@ body.bp-kf-on #bw2WdCta{ display:none!important }
 'use strict';
 if(window.__bpKycFirst) return; window.__bpKycFirst = 1;
 function E(e){ try{ if(typeof BPERR === 'function') BPERR(e); }catch(_){} }
-function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){ return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
+function esc(s){ return String(s == null ? '' : s).replace(/[<>&"']/g, function(c){ return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
 var SV = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"';
 var I = {
@@ -77208,8 +77320,8 @@ if(window.__bpAKyc) return; window.__bpAKyc = 1;
 function E(e){ try{ if(typeof BPERR === 'function') BPERR(e); }catch(_){} }
 function srv(){ return window.bpSrv; }
 function toast(m, k){ try{ showAuthToast(m, k || 'info'); }catch(e){} }
-function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
-  return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
+function esc(s){ return String(s == null ? '' : s).replace(/[<>&"']/g, function(c){
+  return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
 var SV = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"';
 var I = {
@@ -77791,8 +77903,8 @@ setTimeout(function(){ reprobe(); pullMoney(true); pullKyc(true); }, 3000);
 'use strict';
 if(window.bpPrompt) return;
 
-function esc(s){ return String(s == null ? '' : s).replace(/[<>&"]/g, function(c){
-  return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]; }); }
+function esc(s){ return String(s == null ? '' : s).replace(/[<>&"']/g, function(c){
+  return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
 /* Вопрос строкой. Возвращает обещание: строка или null, если отменили. */
 window.bpPrompt = function(opts){
@@ -78008,8 +78120,14 @@ window.bpSafeSocs = function(html){
   if(!h) return '';
   h = h.replace(/<\s*script[\s\S]*?<\s*\/\s*script\s*>/gi, '')
        .replace(/<\s*(iframe|object|embed|svg|math|link|meta|style)[\s\S]*?>/gi, '')
-       .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-       .replace(/(href|src)\s*=\s*("|')\s*(javascript|vbscript|data):[^"']*\2/gi, '$1=$2$2');
+       /* Атрибуты разделяет не только пробел, но и косая черта:
+          <img/src=x/onerror=alert(1)> проходил старое правило целым.
+          Ставим пробел, а не пустоту, чтобы соседние атрибуты не
+          слиплись в один. */
+       .replace(/[\s/]on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, ' ')
+       .replace(/(href|src)\s*=\s*("|')\s*(javascript|vbscript|data):[^"']*\2/gi, '$1=$2$2')
+       /* То же самое, когда значение без кавычек. */
+       .replace(/(href|src)\s*=\s*(javascript|vbscript|data):[^\s>]*/gi, '$1=""');
   return h;
 };
 })();
@@ -79222,7 +79340,19 @@ window.bpAbcAfterVerify = function(pid){
 
 function paint(pid){ try{ abcRenderUrlArea(pid); }catch(e){ E(e); } }
 
-/* ── Своя отрисовка области ссылки ── */
+/* ── Довесок к полю ссылки TikTok ──────────────────────────────────
+   РАНЬШЕ здесь был блок, который ЗАМЕНЯЛ собой поле ссылки: TikTok
+   добавлялся только входом через площадку. Пока владелец сервиса этот
+   вход не подключил (а он упирается в проверку приложения на стороне
+   самого TikTok), третью соцсеть нельзя было поставить на карту в
+   принципе — блок честно предлагал «добавьте пока YouTube или Telegram».
+   Так карта на три площадки не собиралась никогда.
+
+   Теперь TikTok устроен как YouTube: поле ссылки есть всегда, а вход
+   через площадку идёт рядом и остаётся предпочтительным путём. Ссылка
+   даёт карточку «со слов блогера», вход — отметку «подтверждён входом»
+   и цифры от самой площадки; когда вход заработает, он подставит их сам
+   поверх введённых руками (см. apply и sync ниже). */
 function blockTikTok(){
   var off = CFG && CFG.tiktok && CFG.tiktok.configured === false;
   if(waiting.tiktok){
@@ -79233,13 +79363,18 @@ function blockTikTok(){
       '<button type="button" class="attv-cancel" onclick="bpAbcVerifyCancel(\'tiktok\')">Отменить</button>' +
     '</div>';
   }
-  return '<div class="attv">' +
-    '<div class="attv-t">Подключите аккаунт TikTok</div>' +
-    '<div class="attv-s">Ссылку и число подписчиков возьмём из самого TikTok — вписывать руками не нужно. Рекламодатель увидит <b>подтверждён входом</b>, а не «со слов блогера».</div>' +
-    (off
-      ? '<div class="attv-off">Вход через TikTok сейчас не подключён на стороне сервиса. Добавьте пока YouTube или Telegram — TikTok появится, как только площадка выдаст доступ.</div>'
-      : '<button type="button" class="attv-go" onclick="bpAbcVerify(\'tiktok\')">' + TT.icon + 'Войти через TikTok</button>') +
-  '</div>';
+  /* Вход не подключён — поле ссылки выше уже даёт всё, что нужно.
+     Одной строкой объясняем, почему у канала будет «со слов блогера». */
+  if(off){
+    return '<div class="attv-off" style="margin-top:9px">Вход через TikTok сейчас не подключён на стороне сервиса,'
+      + ' поэтому канал будет отмечен «со слов блогера». Как только площадка выдаст доступ,'
+      + ' подписчики подтянутся из TikTok сами.</div>';
+  }
+  return '<div class="attv-yt-or">или</div>' +
+    '<button type="button" class="attv-go" style="margin-top:7px" onclick="bpAbcVerify(\'tiktok\')">'
+    + TT.icon + 'Войти через TikTok</button>' +
+    '<div class="attv-s" style="margin-top:7px">После входа ссылку и число подписчиков возьмём из самого TikTok,'
+    + ' а рекламодатель увидит <b>подтверждён входом</b> вместо «со слов блогера».</div>';
 }
 function blockYouTubeExtra(){
   if(CFG && CFG.youtube && CFG.youtube.configured === false) return '';
@@ -79328,42 +79463,45 @@ if(typeof origRender === 'function'){
       }catch(e){ E(e); }
       return r2;
     }
-    /* TikTok без подтверждения: поля для ссылки нет вовсе */
-    var area2 = document.getElementById('abc-url-area-tiktok');
-    if(!area2) return;
-    var row2 = document.getElementById('abc-row-tiktok');
-    if(p.loading){ return origRender.apply(this, arguments); }
-    /* Пока строку не раскрыли — она свёрнута, как и у соседей */
-    if(!p.open && !waiting.tiktok){
-      area2.innerHTML = '';
-      if(row2) row2.classList.remove('abc-open');
+    /* TikTok — как YouTube: обычное поле ссылки, а вход через площадку
+       довеском под ним. Раньше здесь своя разметка ЗАМЕНЯЛА поле, и без
+       подключённого входа TikTok на карту не попадал вовсе. */
+    if(waiting.tiktok){
+      var area2 = document.getElementById('abc-url-area-tiktok');
+      var row2 = document.getElementById('abc-row-tiktok');
+      if(!area2) return;
+      if(row2) row2.classList.add('abc-open');
+      area2.innerHTML = blockTikTok();
       return;
     }
-    if(row2) row2.classList.add('abc-open');
-    area2.innerHTML = blockTikTok();
+    var r3 = origRender.apply(this, arguments);
+    try{
+      var area3 = document.getElementById('abc-url-area-tiktok');
+      if(area3 && p.open && !p.loading) area3.insertAdjacentHTML('beforeend', blockTikTok());
+    }catch(e){ E(e); }
+    return r3;
   };
 }
 
-/* «Добавить ссылку на канал» у TikTok ведёт на вход, а не на поле */
-var origOpen = window.abcOpenInput;
-if(typeof origOpen === 'function'){
-  window.abcOpenInput = function(pid){
-    if(pid === 'tiktok'){
-      var p = P(pid);
-      if(p && p.verified && p.url) return;
-      p.open = true;                       /* область раскрыта — покажем свой блок */
-      try{ abcRenderUrlArea('tiktok'); }catch(e){ E(e); }
-      return;
-    }
-    return origOpen.apply(this, arguments);
-  };
-}
-
-/* Подпись под названием площадки: у TikTok ссылку не вставляют */
+/* Подпись под названием площадки. Пока вход через TikTok не подключён,
+   обещать «подключить аккаунт» нечестно — там теперь обычная ссылка. */
 function fixHints(){
   try{
+    var off = CFG && CFG.tiktok && CFG.tiktok.configured === false;
     var t = document.querySelector('#abc-row-tiktok .abc-hint-tx');
-    if(t && t.textContent !== 'Подключить аккаунт TikTok') t.textContent = 'Подключить аккаунт TikTok';
+    if(t){
+      var want = off ? 'Добавить ссылку на канал' : 'Подключить аккаунт TikTok';
+      if(t.textContent !== want) t.textContent = want;
+    }
+    /* Подзаголовок шага обещал «TikTok подключается входом в аккаунт».
+       Пока вход не подключён, это неправда: там такое же поле ссылки. */
+    var sub = document.getElementById('abc-step1-sub');
+    if(sub){
+      var s = off
+        ? 'Укажите ссылку на канал — по одной на каждую площадку. Подписчиков, просмотры и ER вписываете сами: рекламодатель увидит, что цифры с ваших слов.'
+        : 'TikTok подключается входом в аккаунт — ссылку и подписчиков сообщит сама площадка. Для остальных площадок укажите ссылку на канал.';
+      if(sub.textContent !== s) sub.textContent = s;
+    }
   }catch(e){}
 }
 
@@ -79382,7 +79520,12 @@ function sync(){
       paint(pend.p);
     }
   }catch(e){}
-  pullCfg();
+  /* Подпись у TikTok зависит от того, подключён ли вход через площадку,
+     а это знает только ответ /api/verify/config — он приходит позже
+     первого прохода. Поэтому подпись переставляем ещё раз, когда ответ
+     дошёл: иначе строка навсегда обещала «подключить аккаунт» там, где
+     на деле обычное поле ссылки. */
+  pullCfg().then(function(){ try{ fixHints(); }catch(e){} });
   pullChannels(true).then(function(map){
     if(!map) return;
     ['tiktok', 'youtube'].forEach(function(pid){
@@ -84382,7 +84525,12 @@ function paintDeal(el){
       } else {
         var pick = String(el.__fmt || ''), cur = null;
         for(var i = 0; i < fs.length; i++) if(fs[i].id === pick) cur = fs[i];
-        var one = !!cur;
+        /* «от» имеет смысл, только когда цен несколько. У площадки с
+           единственным форматом цена одна и точная — писать «от 9 000 ₽»
+           значит обещать, что бывает дешевле. Заодно называем формат:
+           ряд чипов при одной цене не рисуется (см. ниже), и без имени
+           непонятно, за что эти деньги. */
+        var one = !!cur || fs.length === 1;
         if(!cur) cur = fs[0];
         var cpm = cpmOf(cur.price, reach);
         var med = medians()[pid] || 0;
@@ -84391,7 +84539,17 @@ function paintDeal(el){
         if(one) line.push(esc(cur.name));
         if(cpm) line.push('CPM ' + money(cpm) + ' ₽');
         if(win >= 12) line.push('<span class="bpc5-deal-badge">−' + win + '% к медиане</span>');
-        price.innerHTML = '<b>' + (one ? '' : 'от ') + money(cur.price) + ' ₽</b>'
+        /* Пока формат не выбран, здесь стояло «от N ₽» — ровно то же
+           число, что и в карточке площадки над полосой. Показываем вилку:
+           она отвечает на следующий вопрос рекламодателя — «а сколько
+           стоит дороже всего». Вилки нет, когда цена одна. */
+        var top = fs[fs.length - 1];
+        var range = !one && top && top.price > cur.price;
+        /* «от» и вилка вместе не читаются: вилка уже говорит и нижнюю
+           границу, и верхнюю. «от» остаётся только когда цена одна, а
+           формат не выбран — например, форматов несколько с одной ценой. */
+        price.innerHTML = '<b>' + (one || range ? '' : 'от ') + money(cur.price)
+          + (range ? ' – ' + money(top.price) : '') + ' ₽</b>'
           + (line.length ? '<small>' + line.join(' · ') + '</small>' : '');
       }
     }
@@ -85239,7 +85397,7 @@ function offer(){
     ov.id = 'bpInst';
     ov.innerHTML = '<div class="bpi-box" role="dialog" aria-label="Установить приложение">'
       + '<div class="bpi-top">'
-      + '<div class="bpi-ico">' + (ico ? '<img src="' + ico + '" alt="">' : '') + '</div>'
+      + '<div class="bpi-ico">' + (ico ? '<img src="' + bpUrl(ico) + '" alt="">' : '') + '</div>'
       + '<div><div class="bpi-h">Установите BloggerPay</div>'
       + '<div class="bpi-s">Приложение на экране телефона</div></div></div>'
       + '<ul>'
@@ -85434,6 +85592,1129 @@ function askVersion(then){
 
 /* Предложение установить показываем и без beforeinstallprompt (iOS). */
 setTimeout(offer, 6000);
+})();
+</script>
+
+<script id="bp-escrow-back">
+/* ══ РАЗМОРОЗКА ДОХОДИТ ДО КАССЫ ═════════════════════════════════════
+   Заявку отклоняет блогер — на СВОЁМ устройстве. Там escrowRelease
+   (слой bp-negotiation) двигает местные числа, но кассе о возврате не
+   говорит никто: bpMoney.release объявлен и не вызывается ни из одного
+   места файла — проверено грепом. А на устройство рекламодателя отказ
+   только приезжает конвертом: applyReq кладёт запись в список и
+   разморозку не запускает вовсе.
+
+   Итог был такой: блогер отказался — у рекламодателя деньги остаются в
+   заморозке на сервере НАВСЕГДА. В браузере они могли показаться
+   вернувшимися, а на кассе — нет; при следующем заходе с другого
+   устройства баланс приезжал с сервера, и деньги пропадали из виду.
+
+   Здесь этот хвост и закрывается. Возврат просит ПЛАТЕЛЬЩИК — только он
+   вправе, — поэтому слой работает на устройстве рекламодателя: находит
+   свои заявки в конечном состоянии и просит кассу разморозить.
+
+   Повтор безопасен: у возврата постоянный ключ операции (ref:<сделка>),
+   второй раз сервер его не проведёт. Сервер же и решает, можно ли:
+   выплаченную сделку он не вернёт (409), спорную — тоже (409).
+
+   Откат: удалить этот блок.                                          */
+(function(){
+'use strict';
+if(window.__bpEscrowBack) return; window.__bpEscrowBack = 1;
+
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e); }catch(_){} }
+
+var REQ_KEY = 'bp_pending_requests_v1';
+var DONE_KEY = 'bp_escrow_back_done';
+/* Состояния, из которых сделка уже не оживёт: деньги пора вернуть. */
+var DEAD = { declined:1, rejected:1, cancelled:1, canceled:1, withdrawn:1, expired:1 };
+
+function done(){
+  try{ var a = JSON.parse(localStorage.getItem(DONE_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+  catch(e){ return []; }
+}
+function markDone(id){
+  try{
+    var a = done();
+    if(a.indexOf(id) < 0){ a.push(id); localStorage.setItem(DONE_KEY, JSON.stringify(a.slice(-400))); }
+  }catch(e){}
+}
+function me(){ try{ return (typeof currentUser !== 'undefined' && currentUser) || null; }catch(e){ return null; } }
+function reqs(){
+  try{ var a = JSON.parse(localStorage.getItem(REQ_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+  catch(e){ return []; }
+}
+
+var busy = false, last = 0;
+
+function run(force){
+  try{
+    if(busy) return;
+    var now = Date.now();
+    if(!force && now - last < 20000) return;
+    var M = window.bpMoney;
+    if(!M || typeof M.server !== 'function' || !M.server()) return;
+    var u = me(); if(!u) return;
+    last = now;
+
+    var seen = done();
+    var todo = reqs().filter(function(r){
+      if(!r) return false;
+      var did = String(r.dealId || r.id || '');
+      if(!did || seen.indexOf(did) >= 0) return false;
+      /* Возврат просит плательщик — на устройстве блогера касса откажет. */
+      if(String(r.fromAdvertiserId) !== String(u.id)) return false;
+      return !!DEAD[String(r.status || '').toLowerCase()];
+    });
+    if(!todo.length) return;
+
+    busy = true;
+    var i = 0;
+    var step = function(){
+      if(i >= todo.length){ busy = false; return; }
+      var r = todo[i++];
+      var did = String(r.dealId || r.id || '');
+      var after = function(){ setTimeout(step, 120); };
+      M.release(r, 'заявка не состоялась').then(function(){
+        markDone(did);
+        after();
+      }, function(err){
+        var s = err && err.status;
+        /* 404 — кассе такая сделка неизвестна (замораживали без неё);
+           403 — деньги не наши. Повторять нечего.
+           409 — уже закрыта ИЛИ идёт спор: во втором случае вернуться
+           сюда надо позже, поэтому отметку не ставим. */
+        if(s === 404 || s === 403) markDone(did);
+        after();
+      });
+    };
+    step();
+  }catch(e){ busy = false; E(e); }
+}
+
+/* Заходим на денежные экраны, возвращаемся во вкладку и раз в минуту.
+
+   Обёртку перехода ставим ОТЛОЖЕННО и подновляем: window.goTo в этом
+   файле переопределяют и после разбора страницы, и обёртка, поставленная
+   сразу, просто теряется вместе со старой версией (так уже вышло у
+   соседних слоёв — их меток на goTo нет). */
+function wrapGoTo(){
+  try{
+    var og = window.goTo;
+    if(typeof og !== 'function' || og.__bpEscrowBack) return;
+    window.goTo = function(page){
+      var out = og.apply(this, arguments);
+      var p = String(page || '');
+      if(p === 'balance' || p === 'home' || p === 'campaigns' || p === 'deals') setTimeout(function(){ run(false); }, 400);
+      return out;
+    };
+    window.goTo.__bpEscrowBack = true;
+  }catch(e){ E(e); }
+}
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) run(false); });
+setTimeout(function(){ wrapGoTo(); run(true); }, 5000);
+setInterval(function(){ wrapGoTo(); if(!document.hidden) run(false); }, 60000);
+
+window.bpEscrowBackNow = function(){ run(true); };
+})();
+</script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+<style id="bp-card6-css">
+/* ══ ПЛОЩАДКИ В КАРТОЧКЕ: ТРИ КАНАЛА ВИДНО СРАЗУ ═════════════════════
+   Было: ряд круглых значков. Активный — яркий, остальные приглушены до
+   .42 прозрачности. На экране это читалось не как «у блогера ещё два
+   канала», а как две сломанные точки: ни имени, ни цифр, ни намёка, что
+   на них можно нажать. Рекламодатель видел один канал из трёх и цену
+   только по нему — а решение он принимает, сравнивая.
+
+   Стало: ряд карточек-каналов. В каждой — значок площадки, её имя,
+   подписчики и цена «от». Нажатие переключает крупные цифры под ними,
+   форматы и цену — тем же кодом, что и раньше (bpEnhanceCard →
+   bpChSelect): свои узлы мы только рисуем, а клик передаём настоящему
+   значку. Сами значки остаются в разметке скрытыми: за них держатся
+   фильтр по площадке (bp-catfilter) и сборка переключателя.
+
+   Ничего не выдумываем: подписчики — из platData[pid].subs, цена —
+   минимум по integrations[pid]. Нет числа — строки нет.
+   Откат: удалить пару bp-card6-css + bp-card6.                       */
+
+/* Ряд каналов встаёт на место старого ряда значков, внутри панели
+   аудитории. Силу селектора берём ту же, что у bp-card5, иначе его
+   правила по .blc-pr перебьют наши. */
+html #catBloggerList .blc.bpc5 .bpc6-chans{
+  display:flex; gap:6px; width:100%;
+}
+/* Старый ряд значков прячем, но НЕ удаляем: по нему работают фильтр
+   площадок и переключатель каналов. */
+html #catBloggerList .blc.bpc5.bpc6 .blc-pr-socs{
+  position:absolute; width:1px; height:1px; overflow:hidden;
+  clip-path:inset(50%); pointer-events:none;
+}
+html #catBloggerList .blc.bpc5.bpc6 .blc-pr{ display:block; position:relative }
+
+html #catBloggerList .blc.bpc5 .bpc6-ch{
+  flex:1 1 0; min-width:0;
+  display:flex; flex-direction:column; gap:3px;
+  padding:8px 9px 9px;
+  border-radius:13px;
+  border:1px solid var(--brd,rgba(255,255,255,.07));
+  background:rgba(255,255,255,.028);
+  cursor:pointer; text-align:left;
+  font-family:inherit;
+  transition:background .16s, border-color .16s, transform .12s;
+  -webkit-tap-highlight-color:transparent;
+}
+html #catBloggerList .blc.bpc5 .bpc6-ch:active{ transform:scale(.975) }
+
+/* Выбранный канал: подсветка цветом самой площадки — так связь между
+   рядом и цифрами под ним видна без стрелок и подписей. */
+html #catBloggerList .blc.bpc5 .bpc6-ch.on{
+  border-color:rgba(var(--bpc6-rgb),.52);
+  background:rgba(var(--bpc6-rgb),.13);
+}
+
+html #catBloggerList .blc.bpc5 .bpc6-ch-top{
+  display:flex; align-items:center; gap:5px; min-width:0;
+}
+html #catBloggerList .blc.bpc5 .bpc6-ic{
+  width:15px; height:15px; border-radius:5px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  background:rgb(var(--bpc6-rgb));
+}
+html #catBloggerList .blc.bpc5 .bpc6-ic img{
+  width:10px; height:10px; display:block; filter:invert(1) brightness(1.15);
+}
+/* TikTok на чёрном значке белую иконку не показал бы. */
+html #catBloggerList .blc.bpc5 .bpc6-ch[data-p="tiktok"] .bpc6-ic{
+  background:#111; border:1px solid rgba(255,255,255,.18);
+}
+html #catBloggerList .blc.bpc5 .bpc6-name{
+  font-size:10px; font-weight:700; letter-spacing:.1px;
+  color:var(--t3,#7d818c); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+html #catBloggerList .blc.bpc5 .bpc6-ch.on .bpc6-name{ color:var(--t2,#b9bcc4) }
+
+html #catBloggerList .blc.bpc5 .bpc6-subs{
+  font-size:15px; font-weight:800; letter-spacing:-.3px; line-height:1.05;
+  color:var(--t2,#b9bcc4); font-variant-numeric:tabular-nums;
+}
+html #catBloggerList .blc.bpc5 .bpc6-ch.on .bpc6-subs{ color:var(--t1,#fff) }
+html #catBloggerList .blc.bpc5 .bpc6-subs small{
+  font-size:9.5px; font-weight:700; color:var(--t3,#7d818c); margin-left:3px;
+}
+html #catBloggerList .blc.bpc5 .bpc6-price{
+  font-size:10px; font-weight:700; color:var(--t3,#7d818c);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  font-variant-numeric:tabular-nums;
+}
+html #catBloggerList .blc.bpc5 .bpc6-ch.on .bpc6-price{ color:rgba(var(--bpc6-rgb),.95) }
+/* Цены нет — не оставляем пустую строку и не пишем прочерк. */
+html #catBloggerList .blc.bpc5 .bpc6-price:empty{ display:none }
+
+/* Подписчики теперь стоят в каждом канале, и в полосе под ними то же
+   число повторялось третий раз. Ячейку прячем — но НЕ удаляем: по её
+   тексту работают фильтр «от N подписчиков», сортировка и подстановка
+   числа в кампанию (там берут первый .bls-val в порядке разметки). */
+html #catBloggerList .blc.bpc5.bpc6 .blc-strip .bls.bpc6-hide{ display:none!important }
+
+/* Форматы прокручиваются вбок, но обрыв у края читался как обрезка.
+   Подсказываем краем: последний чип уходит в затухание. */
+html #catBloggerList .blc.bpc5.bpc6 .bpc5-fmt{
+  -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 22px),transparent 100%);
+  mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 22px),transparent 100%);
+}
+
+/* Узкий экран: три карточки по 100 пикселей. Имя площадки прячем —
+   значок узнают и так, а подписчики с ценой важнее. */
+@media (max-width:359px){
+  html #catBloggerList .blc.bpc5 .bpc6-name{ display:none }
+  html #catBloggerList .blc.bpc5 .bpc6-ch{ padding:7px 7px 8px }
+}
+
+@media (prefers-reduced-motion:reduce){
+  html #catBloggerList .blc.bpc5 .bpc6-ch{ transition:none }
+  html #catBloggerList .blc.bpc5 .bpc6-ch:active{ transform:none }
+}
+</style>
+
+<script id="bp-card6">
+/* Пара к style#bp-card6-css. Пояснение — там же. */
+(function(){
+'use strict';
+if(window.__bpCard6) return; window.__bpCard6 = 1;
+
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'card6'); }catch(_){} }
+function esc(v){ return (typeof bpEsc === 'function') ? bpEsc(v) : String(v == null ? '' : v); }
+
+/* Цвета площадок — те же, что у значков в bp-card5. */
+var PLAT = {
+  youtube:  { name:'YouTube',   rgb:'255,59,48',   ic:'youtube'  },
+  telegram: { name:'Telegram',  rgb:'49,166,232',  ic:'telegram' },
+  tiktok:   { name:'TikTok',    rgb:'37,244,238',  ic:'tiktok'   },
+  instagram:{ name:'Instagram', rgb:'225,48,108',  ic:'instagram'},
+};
+/* Значки в разметке зовутся то ic-yt, то syt — их переименовывали слои. */
+var BY_CLASS = { 'ic-yt':'youtube', 'ic-tg':'telegram', 'ic-tt':'tiktok', 'ic-ig':'instagram',
+                 'syt':'youtube', 'stg':'telegram', 'stt':'tiktok', 'sig':'instagram' };
+var ICON = 'https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/';
+
+function cards(){
+  try{ var a = JSON.parse(localStorage.getItem('bp_my_cards') || '[]'); return Array.isArray(a) ? a : []; }
+  catch(e){ return []; }
+}
+function cardOf(id){
+  var all = cards();
+  for(var i = 0; i < all.length; i++) if(String(all[i] && all[i].id) === String(id)) return all[i];
+  return null;
+}
+function num(v){
+  var n = Number(String(v == null ? '' : v).replace(/[^\d.,-]/g, '').replace(',', '.'));
+  return isFinite(n) ? n : 0;
+}
+/* Короткая запись числа — как в мастере карты (abcFmtNum). */
+function short(n){
+  n = Math.round(num(n));
+  if(n >= 1000000) return String((n / 1e6).toFixed(1)).replace('.0', '') + 'M';
+  if(n >= 10000)   return String(Math.round(n / 1000)) + 'K';
+  if(n >= 1000)    return String((n / 1000).toFixed(1)).replace('.0', '') + 'K';
+  return String(n);
+}
+function money(n){ return Math.round(num(n)).toLocaleString('ru'); }
+
+/* Минимальная цена площадки. Нет цен — нет строки. */
+function minPrice(card, pid){
+  var list = (card && card.integrations && card.integrations[pid]) || [];
+  var best = 0;
+  if(Array.isArray(list)) list.forEach(function(it){
+    var p = num(it && it.price);
+    if(p > 0 && (!best || p < best)) best = p;
+  });
+  return best;
+}
+function subsOf(card, pid){
+  var p = (card && card.platData && card.platData[pid]) || null;
+  return p ? Math.round(num(p.subs)) : 0;
+}
+
+function reachOf(card, pid){
+  var p = (card && card.platData && card.platData[pid]) || null;
+  return p ? Math.round(num(p.reach)) : 0;
+}
+
+/* Значки площадок в карточке — по ним же работает переключатель.
+
+   ПОРЯДОК. Значки лежат в том порядке, в каком блогер включал площадки, —
+   он случайный. Свои плитки выстраиваем по величине канала, чтобы рельс
+   читался слева направо: главный канал, потом остальные. Сами значки при
+   этом НЕ трогаем: переключатель адресует их номером в разметке, и
+   перестановка узлов сдвинула бы выбор. Плитки обращаются к значку по
+   площадке, поэтому их порядок ни на что не влияет.
+
+   Главный канал считаем по ПРОСМОТРАМ, а не по подписчикам: покупают
+   показы, а подписчики разных площадок между собой несравнимы — в
+   Telegram и на YouTube это разные по ценности люди. Просмотров нет —
+   сравниваем по подписчикам, потом по порядку в карте. */
+function iconsOf(el, card){
+  var out = [];
+  el.querySelectorAll('.blc-pr-soc').forEach(function(ic){
+    var pid = '';
+    for(var k in BY_CLASS) if(ic.classList.contains(k)){ pid = BY_CLASS[k]; break; }
+    if(pid && PLAT[pid]) out.push({ pid: pid, el: ic });
+  });
+  if(!card) return out;
+  out.forEach(function(it, i){ it._i = i; });
+  out.sort(function(a, b){
+    var ra = reachOf(card, a.pid), rb = reachOf(card, b.pid);
+    if(ra !== rb) return rb - ra;
+    var sa = subsOf(card, a.pid), sb = subsOf(card, b.pid);
+    if(sa !== sb) return sb - sa;
+    return a._i - b._i;
+  });
+  return out;
+}
+
+function build(el){
+  try{
+    var card = cardOf(el.getAttribute('data-cardid'));
+    if(!card) return;
+    var items = iconsOf(el, card);
+    /* Один канал сравнивать не с чем — оставляем прежний вид. */
+    if(items.length < 2){
+      var old = el.querySelector('.bpc6-chans');
+      if(old) old.remove();
+      el.classList.remove('bpc6');
+      return;
+    }
+    var pr = el.querySelector('.blc-pr');
+    if(!pr) return;
+
+    /* КАРТОЧКА ОТКРЫВАЕТСЯ НА ГЛАВНОМ КАНАЛЕ.
+       Переключатель собирает каналы в порядке значков в разметке и
+       стартует с нулевого — то есть с той площадки, которую блогер
+       включил первой. Это случайность, а не главный канал.
+
+       Переставляем сами значки: тогда главный оказывается нулевым и
+       открывается сам, без искусственного нажатия. Нажатие «за
+       пользователя» здесь пробовалось и вышло хуже: выбор менялся, а
+       цифры оставались от прошлого канала — их дорисовывает анимация,
+       и она не успевала за пересборкой.
+
+       Порядок значков ни на что больше не влияет: фильтр площадок ищет
+       наличие значка, а не его место (applyCatFilters), наши плитки
+       обращаются к значку по площадке. После перестановки просим
+       переключатель пересобраться — иначе он держит старые номера. */
+    var socs = el.querySelector('.blc-pr-socs');
+    if(socs && !el.__bpc6Ord){
+      var cur = [];
+      socs.querySelectorAll('.blc-pr-soc').forEach(function(x){ cur.push(x); });
+      var want = items.map(function(it){ return it.el; });
+      var same = cur.length === want.length && cur.every(function(x, i){ return x === want[i]; });
+      if(!same && want.length === cur.length){
+        el.__bpc6Ord = 1;
+        want.forEach(function(x){ socs.appendChild(x); });
+        /* Метка перерисовки — сигнал переключателю пересобраться. */
+        el.dataset.bpRestyled = String((Number(el.dataset.bpRestyled) || 0) + 1);
+        try{ if(typeof window.bpEnhanceAllCards === 'function') window.bpEnhanceAllCards(); }catch(e){ E(e); }
+        el.__bpc6 = '';                   /* рельс соберём заново под новый порядок */
+      } else if(same){
+        el.__bpc6Ord = 1;
+      }
+    }
+
+    /* Переключатель успевает запомнить выбор ДО перестановки: он берёт
+       нулевой значок в прежнем порядке. Один раз поправляем — переводим
+       на главный канал, но только пока человек сам ничего не выбирал.
+       Счётчик попыток на случай, если выбор почему-то не меняется:
+       молча пробуем дважды и отступаем, а не щёлкаем без конца. */
+    if(!el.__bpc6User && items[0] && !items[0].el.classList.contains('bp-ch-on')){
+      var tries = Number(el.__bpc6Try || 0);
+      if(tries < 2 && el.querySelector('.blc-pr-soc.bp-ch-on')){
+        el.__bpc6Try = tries + 1;
+        items[0].el.click();
+        el.__bpc6 = '';                   /* рельс пересоберём под новый выбор */
+      }
+    }
+
+    /* Подпись меняется, только когда меняются данные или выбор: иначе
+       ряд пересобирался бы на каждом проходе наблюдателя и мигал. */
+    var sign = items.map(function(it){
+      return it.pid + ':' + subsOf(card, it.pid) + ':' + minPrice(card, it.pid)
+        + (it.el.classList.contains('bp-ch-on') ? '*' : '');
+    }).join('|');
+    if(el.__bpc6 === sign) return;
+    el.__bpc6 = sign;
+
+    var row = el.querySelector('.bpc6-chans');
+    if(!row){
+      row = document.createElement('div');
+      row.className = 'bpc6-chans';
+      /* Клик передаём настоящему значку: весь переключатель (цифры,
+         форматы, цена) уже висит на нём, дублировать логику незачем. */
+      row.addEventListener('click', function(ev){
+        var b = ev.target && ev.target.closest ? ev.target.closest('.bpc6-ch') : null;
+        if(!b) return;
+        ev.preventDefault(); ev.stopPropagation();
+        el.__bpc6User = 1;               /* дальше выбор человека, не наш */
+        var pid = b.getAttribute('data-p');
+        var list = iconsOf(el, card);
+        for(var i = 0; i < list.length; i++) if(list[i].pid === pid){ list[i].el.click(); break; }
+      });
+      row.addEventListener('keydown', function(ev){
+        if(ev.key !== 'Enter' && ev.key !== ' ') return;
+        var b = ev.target && ev.target.closest ? ev.target.closest('.bpc6-ch') : null;
+        if(!b) return;
+        ev.preventDefault();
+        b.click();
+      });
+      pr.appendChild(row);
+    }
+
+    var html = '';
+    items.forEach(function(it){
+      var p = PLAT[it.pid];
+      var on = it.el.classList.contains('bp-ch-on');
+      var subs = subsOf(card, it.pid);
+      var price = minPrice(card, it.pid);
+      html += '<button type="button" class="bpc6-ch' + (on ? ' on' : '') + '"'
+        + ' data-p="' + esc(it.pid) + '" style="--bpc6-rgb:' + p.rgb + '"'
+        + ' aria-pressed="' + (on ? 'true' : 'false') + '"'
+        + ' aria-label="' + esc(p.name) + (subs ? ', ' + short(subs) + ' подписчиков' : '') + '">'
+        +   '<span class="bpc6-ch-top">'
+        +     '<span class="bpc6-ic"><img loading="lazy" alt="" src="' + ICON + p.ic + '.svg"></span>'
+        +     '<span class="bpc6-name">' + esc(p.name) + '</span>'
+        +   '</span>'
+        /* Нет числа подписчиков — вместо выдуманного нуля показываем имя
+           площадки: у неё всё равно есть ссылка, и это честно. */
+        +   '<span class="bpc6-subs">' + (subs ? esc(short(subs)) + '<small>подп.</small>' : '—') + '</span>'
+        +   '<span class="bpc6-price">' + (price ? 'от ' + esc(money(price)) + ' ₽' : '') + '</span>'
+        + '</button>';
+    });
+    row.innerHTML = html;
+    el.classList.add('bpc6');
+
+    /* Число подписчиков теперь стоит в самом канале — в полосе под ним
+       оно повторялось. Прячем ячейку, оставляя её в разметке: по её
+       тексту работают фильтры и подстановка числа в кампанию. */
+    try{
+      el.querySelectorAll('.blc-strip .bls').forEach(function(cell){
+        var lbl = cell.querySelector('.bls-lbl');
+        var name = lbl ? String(lbl.textContent || '').trim().toLowerCase() : '';
+        if(name === 'подписчики') cell.classList.add('bpc6-hide');
+      });
+    }catch(e){ E(e); }
+  }catch(e){ E(e); }
+}
+
+/* СВЕРКА: на экране должны стоять цифры ВЫБРАННОГО канала.
+   Цифры в полосе дорисовывает анимация переключателя, и она проигрывает
+   не всегда: кадры могут не идти, а пересборка переключателя — прервать
+   её на полпути. Тогда под выбранным TikTok остаются подписчики YouTube.
+   Здесь мы это ловим и дописываем — теми же строками, которые посчитал
+   сам переключатель (sw.items[idx].stats), поэтому формат совпадает и
+   спора с анимацией не возникает. Пока анимация в работе, не мешаем. */
+function reconcile(el){
+  try{
+    var sw = el.__bpCh;
+    if(!sw || !sw.items || !sw.items[sw.idx]) return;
+    if(el.__bpTwQ && el.__bpTwQ.length) return;      /* анимация идёт — её очередь */
+    var st = sw.items[sw.idx].stats;
+    var want = { 'подписчики': st.subs, 'просмотры': st.reach, 'er': st.er, 'cpv': st.cpv };
+    el.querySelectorAll('.blc-strip .bls').forEach(function(cell){
+      var lbl = cell.querySelector('.bls-lbl');
+      var v = cell.querySelector('.bls-val');
+      if(!lbl || !v) return;
+      var name = String(lbl.textContent || '').trim().toLowerCase();
+      if(!(name in want)) return;
+      var s = String(want[name]);
+      if(v.textContent.trim() !== s) v.textContent = s;
+    });
+  }catch(e){ E(e); }
+}
+
+/* ── Разовая починка старых карт ───────────────────────────────────
+   До сентября 2026 мастер записывал в карту СУММУ подписчиков по всем
+   площадкам, суммарный охват и средний ER. Сумма подписчиков трёх
+   каналов — это один и тот же человек, посчитанный трижды; средний ER
+   не значит ничего. Новые карты пишут цифры основной площадки, а старые
+   так и возят сумму — и она вылезает в избранном, на странице блогера и
+   в сводке кампании, где нашего слоя нет.
+
+   Чиним только там, где ошибку МОЖНО ДОКАЗАТЬ: записанное число в
+   точности равно сумме по площадкам и при этом не равно ни одной из
+   них. Тогда это заведомо старая сумма, и мы заменяем её цифрами
+   основной площадки. Совпало с какой-то площадкой — не трогаем.
+   Чужие карты (они приезжают с сервера) не правим: это не наши данные. */
+function fixSums(){
+  try{
+    var all = cards();
+    var changed = 0;
+    all.forEach(function(card){
+      if(!card || card._foreign || card.__sumFixed) return;
+      var pd = card.platData || {};
+      var pids = Object.keys(pd);
+      if(pids.length < 2) return;
+      var sumS = 0, sumR = 0, erSum = 0, erN = 0, mainPid = '', mainS = -1;
+      pids.forEach(function(pid){
+        var s = Math.round(num(pd[pid] && pd[pid].subs));
+        var r = Math.round(num(pd[pid] && pd[pid].reach));
+        var e = num(pd[pid] && pd[pid].er);
+        sumS += s; sumR += r;
+        if(e){ erSum += e; erN++; }
+        if(s > mainS){ mainS = s; mainPid = pid; }
+      });
+      if(!mainPid) return;
+      var looksSum = sumS > 0 && String(card.subsVal || '') === short(sumS)
+        && short(sumS) !== short(Math.round(num(pd[mainPid].subs)));
+      if(!looksSum) return;
+      var m = pd[mainPid];
+      card.subsVal = short(Math.round(num(m.subs)));
+      card.reachVal = num(m.reach) ? short(Math.round(num(m.reach))) : '—';
+      card.erVal = num(m.er) ? (Math.round(num(m.er) * 10) / 10).toFixed(1) + '%' : '—';
+      card.__sumFixed = 1;
+      changed++;
+    });
+    if(changed){
+      localStorage.setItem('bp_my_cards', JSON.stringify(all));
+      /* Перерисовываем список: в разметке лежат старые строки. */
+      try{ if(typeof window.loadMyCards === 'function') window.loadMyCards(); }catch(e){}
+    }
+  }catch(e){ E(e); }
+}
+
+var fixedOnce = false;
+
+function sweep(){
+  try{
+    if(!fixedOnce){ fixedOnce = true; fixSums(); }
+    document.querySelectorAll('#catBloggerList .blc.bpc5[data-cardid]').forEach(function(el){
+      build(el);
+      reconcile(el);
+    });
+  }catch(e){ E(e); }
+}
+
+/* Значки появляются позже первого прохода и пересобираются чужими
+   слоями — поэтому смотрим за списком, а не собираем один раз. */
+var timer = null;
+function later(){ if(timer) return; timer = setTimeout(function(){ timer = 0; sweep(); }, 140); }
+
+function watch(){
+  try{
+    var list = document.getElementById('catBloggerList');
+    if(!list || list.__bpc6w) return;
+    list.__bpc6w = 1;
+    new MutationObserver(later).observe(list, { childList:true, subtree:true, attributes:true,
+      attributeFilter:['class', 'data-cardid'] });
+    later();
+  }catch(e){ E(e); }
+}
+
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch);
+else watch();
+setTimeout(watch, 1200);
+setTimeout(later, 2600);
+setInterval(function(){ if(!document.hidden){ watch(); later(); } }, 4000);
+
+window.bpCard6Now = function(){ sweep(); };
+})();
+</script>
+
+
+
+
+
+
+
+
+
+<style id="bp-push-css">
+/* ══ УВЕДОМЛЕНИЯ НА ТЕЛЕФОН ══════════════════════════════════════════
+   До сих пор приложение показывало события только пока оно открыто:
+   шторка сверху и центр уведомлений. Закрыл вкладку — и о новой заявке,
+   принятой работе или пришедших деньгах человек узнавал, когда сам
+   заходил. Разрешения у браузера никто не спрашивал.
+
+   Теперь спрашиваем — но по правилам, а не при первом открытии:
+   · сначала СВОЯ шторка с объяснением, что именно будет приходить;
+   · системное окно браузера показываем только после согласия в ней.
+     Это окно даётся один раз: показать его «в лоб» на загрузке значит
+     почти наверняка получить отказ навсегда;
+   · спрашиваем не раньше, чем случилось первое настоящее событие, —
+     тогда просьба понятна;
+   · и всегда доступен переключатель в настройках.
+
+   Откат: удалить пару bp-push-css + bp-push.                         */
+
+/* Строка в настройках рисуется теми же классами, что и соседние. */
+html #pg-settings .st2-row.bp-push-row .st2-val{
+  font-size:12px; font-weight:700; color:var(--t3,#7d818c); white-space:nowrap;
+}
+html #pg-settings .st2-row.bp-push-row .st2-val.warn{ color:#fbbf55 }
+html #pg-settings .st2-row.bp-push-row .st2-val.ok{ color:#3ddc84 }
+
+/* Пояснение под строкой: почему выключено и что с этим делать. */
+html #pg-settings .bp-push-note{
+  margin:-2px 14px 10px; padding:9px 11px;
+  border-radius:12px;
+  background:rgba(246,168,35,.09);
+  border:1px solid rgba(246,168,35,.22);
+  font-size:11.5px; line-height:1.5; font-weight:600; color:#fbbf55;
+}
+html #pg-settings .bp-push-note b{ font-weight:800 }
+</style>
+
+<script id="bp-push">
+/* Пара к style#bp-push-css. Пояснение — там же. */
+(function(){
+'use strict';
+if(window.__bpPush) return; window.__bpPush = 1;
+
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'push'); }catch(_){} }
+function esc(v){ return (typeof bpEsc === 'function') ? bpEsc(v) : String(v == null ? '' : v); }
+function toast(m, k){ try{ showAuthToast(m, k || 'info'); }catch(e){} }
+
+var ASKED = 'bp_push_asked';        /* спрашивали ли своей шторкой */
+var PREF = 'bp_prefs';              /* общий склад переключателей приложения */
+
+/* ── Что вообще умеет это окно ──────────────────────────────────────
+   Уведомления требуют защищённого соединения и самого объекта
+   Notification. В вебвью Телеграма он бывает, но окно мини-аппа их не
+   показывает: там уведомления шлёт бот. Признаём это честно, а не
+   предлагаем кнопку, которая ничего не сделает. */
+function inTelegram(){
+  try{ var t = window.Telegram && window.Telegram.WebApp; return !!(t && t.initData); }
+  catch(e){ return false; }
+}
+function supported(){
+  try{
+    if(!('Notification' in window)) return false;
+    if(window.isSecureContext === false) return false;
+    return true;
+  }catch(e){ return false; }
+}
+function perm(){
+  if(!supported()) return 'unsupported';
+  try{ return String(Notification.permission || 'default'); }catch(e){ return 'unsupported'; }
+}
+window.bpPushState = perm;
+
+function prefs(){
+  var p = { push: true };
+  try{ p = Object.assign(p, JSON.parse(localStorage.getItem(PREF) || '{}')); }catch(e){}
+  return p;
+}
+function setPref(k, v){
+  var p = prefs(); p[k] = !!v;
+  try{ localStorage.setItem(PREF, JSON.stringify(p)); }catch(e){ E(e); }
+}
+/* Включено ли у нас — отдельно от разрешения браузера. Разрешение
+   отзывается только в настройках браузера, а выключить уведомления
+   человек должен уметь прямо здесь. */
+function on(){ return perm() === 'granted' && prefs().push !== false; }
+window.bpPushOn = on;
+
+/* ── Сам запрос ─────────────────────────────────────────────────────
+   Старые Safari отдают результат колбэком, новые — обещанием. И в
+   некоторых вебвью обещание не выполняется никогда: ставим срок, чтобы
+   интерфейс не залипал в «спрашиваем…». */
+function askNative(){
+  return new Promise(function(res){
+    if(!supported()) return res('unsupported');
+    var done = false;
+    var finish = function(r){ if(done) return; done = true; res(String(r || perm())); };
+    var timer = setTimeout(function(){ finish(perm()); }, 25000);
+    try{
+      var out = Notification.requestPermission(function(r){ clearTimeout(timer); finish(r); });
+      if(out && typeof out.then === 'function'){
+        out.then(function(r){ clearTimeout(timer); finish(r); },
+                 function(){ clearTimeout(timer); finish(perm()); });
+      }
+    }catch(e){ clearTimeout(timer); E(e); finish('unsupported'); }
+  });
+}
+
+/* ── Своя шторка перед системным окном ──────────────────────────────
+   Системное окно браузер даёт ОДИН раз: отказ в нём закрывает вопрос
+   навсегда, и вернуть разрешение можно только в настройках браузера.
+   Поэтому сначала объясняем своими словами, а системное окно показываем
+   только тому, кто уже согласился. */
+window.bpAskNotif = function(why){
+  try{ localStorage.setItem(ASKED, '1'); }catch(e){}
+
+  if(!supported()){
+    toast(inTelegram()
+      ? 'В окне Телеграма уведомления показывает сам Телеграм — они придут от бота'
+      : 'Это окно браузера не умеет показывать уведомления', 'info');
+    paint();
+    return Promise.resolve('unsupported');
+  }
+  if(perm() === 'granted'){ setPref('push', true); paint(); return Promise.resolve('granted'); }
+  if(perm() === 'denied'){
+    toast('Уведомления запрещены в настройках браузера — включить можно только там', 'err');
+    paint();
+    return Promise.resolve('denied');
+  }
+
+  var text = (why ? why + '\n\n' : '')
+    + 'Пришлём, когда появится новая заявка, изменится сделка или придут деньги.'
+    + ' Ничего рекламного. Выключить можно в настройках в любой момент.';
+
+  var pre = (typeof window.bpConfirm === 'function')
+    ? window.bpConfirm({ title: 'Присылать уведомления?', text: text, yes: 'Разрешить', danger: false })
+    : Promise.resolve(true);
+
+  return Promise.resolve(pre).then(function(ok){
+    if(!ok){ paint(); return 'default'; }
+    return askNative().then(function(r){
+      if(r === 'granted'){
+        setPref('push', true);
+        toast('Готово — будем присылать важное', 'ok');
+        /* Сразу подписываемся у кассы: иначе уведомления работали бы,
+           только пока приложение открыто. */
+        try{ subscribe(); }catch(e){ E(e); }
+      }
+      else if(r === 'denied'){ toast('Хорошо, уведомления не присылаем', 'info'); }
+      paint();
+      return r;
+    });
+  }).catch(function(e){ E(e); paint(); return perm(); });
+};
+
+/* ── Показ системного уведомления ───────────────────────────────────
+   Через service worker, а не через new Notification: так уведомление
+   доживает до момента, когда вкладка уже выгружена. Если воркера нет —
+   обычным способом. Пока приложение на экране, ничего не шлём: событие
+   и так видно шторкой. */
+function push(title, body, tag){
+  try{
+    if(!on() || !document.hidden) return;
+    var opts = {
+      body: String(body || '').slice(0, 180),
+      tag: String(tag || 'bp'),
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      renotify: false,
+      data: { at: Date.now() }
+    };
+    var t = String(title || 'BloggerPay').slice(0, 80);
+    if(navigator.serviceWorker && navigator.serviceWorker.ready){
+      navigator.serviceWorker.ready.then(function(reg){
+        if(reg && reg.showNotification) reg.showNotification(t, opts);
+        else plain(t, opts);
+      }).catch(function(){ plain(t, opts); });
+      return;
+    }
+    plain(t, opts);
+  }catch(e){ E(e); }
+}
+function plain(t, opts){
+  try{ new Notification(t, opts); }catch(e){}
+}
+window.bpPushShow = push;
+
+/* ── Подписка на уведомления от сервера ─────────────────────────────
+   Всё, что выше, работает только пока страница открыта. Чтобы
+   уведомление дошло до ЗАКРЫТОГО приложения, его должен прислать
+   сервер — для этого браузер выдаёт «подписку», а мы отдаём её кассе.
+
+   Открытый ключ сервера спрашиваем у него же (/api/push/key): он один
+   на всю площадку и не секрет. Подписка привязана к этому ключу, поэтому
+   ключ на сервере создаётся один раз и не меняется. */
+var subBusy = false, sentMark = '';
+function srvOnline(){
+  try{ var s = window.bpSrv; return !!(s && s.configured && s.configured() && s.token && s.token()); }
+  catch(e){ return false; }
+}
+function b64ToBytes(s){
+  var pad = '='.repeat((4 - s.length % 4) % 4);
+  var raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  var out = new Uint8Array(raw.length);
+  for(var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+function subJson(s){
+  try{
+    var j = s.toJSON ? s.toJSON() : null;
+    if(j && j.keys) return { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth } };
+  }catch(e){}
+  return null;
+}
+
+function subscribe(){
+  try{
+    if(subBusy || !on() || !srvOnline()) return Promise.resolve(false);
+    if(!('serviceWorker' in navigator) || !('PushManager' in window)) return Promise.resolve(false);
+    subBusy = true;
+    return navigator.serviceWorker.ready.then(function(reg){
+      if(!reg || !reg.pushManager) return null;
+      return reg.pushManager.getSubscription().then(function(has){
+        if(has) return has;
+        return window.bpSrv.raw('GET', '/api/push/key').then(function(j){
+          var key = j && j.key;
+          if(!key) return null;
+          return reg.pushManager.subscribe({
+            userVisibleOnly: true,                 /* «тихий» push браузеры запрещают */
+            applicationServerKey: b64ToBytes(key)
+          });
+        });
+      });
+    }).then(function(s){
+      if(!s) { subBusy = false; return false; }
+      var j = subJson(s);
+      if(!j){ subBusy = false; return false; }
+      /* Ту же подписку тем же аккаунтом второй раз не отправляем: проверка
+         идёт раз в пять минут, и без этого она гоняла бы запрос впустую. */
+      var mark = j.endpoint + '|' + (window.bpSrv.token() || '').slice(0, 12);
+      if(sentMark === mark){ subBusy = false; return true; }
+      return window.bpSrv.raw('POST', '/api/push/subscribe', { sub: j }).then(function(){
+        sentMark = mark;
+        subBusy = false;
+        return true;
+      });
+    }).catch(function(e){ subBusy = false; E(e); return false; });
+  }catch(e){ subBusy = false; E(e); return Promise.resolve(false); }
+}
+window.bpPushSubscribe = subscribe;
+
+/* Отписка. Уносим и из браузера, и с сервера: строка на сервере без
+   живой подписки будет вечно получать отказ доставки. */
+function unsubscribe(){
+  try{
+    if(!('serviceWorker' in navigator)) return Promise.resolve(false);
+    return navigator.serviceWorker.ready.then(function(reg){
+      if(!reg || !reg.pushManager) return false;
+      return reg.pushManager.getSubscription().then(function(s){
+        if(!s) return false;
+        var ep = s.endpoint;
+        sentMark = '';
+        return s.unsubscribe().then(function(){
+          if(srvOnline()) return window.bpSrv.raw('POST', '/api/push/unsubscribe', { endpoint: ep }).catch(function(){});
+        }).then(function(){ return true; });
+      });
+    }).catch(function(e){ E(e); return false; });
+  }catch(e){ E(e); return Promise.resolve(false); }
+}
+window.bpPushUnsubscribe = unsubscribe;
+
+/* ── Ловим события приложения ───────────────────────────────────────
+   window.bpNotify — единственная воронка: через неё идут и шторка, и
+   запись в центр уведомлений. Подшиваемся сюда, а не к десятку мест. */
+var origNotify = window.bpNotify;
+if(typeof origNotify === 'function' && !origNotify.__bpPush){
+  window.bpNotify = function(type, title, desc, opts){
+    var r = origNotify.apply(this, arguments);
+    try{
+      if(!(opts && opts.silent)){
+        push(title, desc, String(type || '') + ':' + String(title || ''));
+        maybeAsk(type, title);
+      }
+    }catch(e){ E(e); }
+    return r;
+  };
+  window.bpNotify.__bpPush = true;
+}
+
+/* Спрашиваем ПОСЛЕ первого настоящего события: тогда просьба понятна.
+   Не при загрузке, не в пустом приложении и не поверх открытой шторки. */
+var askQueued = false;
+function maybeAsk(type, title){
+  try{
+    if(askQueued) return;
+    if(perm() !== 'default') return;
+    if(localStorage.getItem(ASKED) === '1') return;
+    if(!supported() || inTelegram()) return;
+    /* Служебные всплывашки (ошибки связи, подсказки) поводом не считаем. */
+    if(type === 'error' || type === 'connection' || type === 'info') return;
+    var me = null;
+    try{ me = (typeof currentUser !== 'undefined' && currentUser) || null; }catch(e){}
+    if(!me) return;
+    askQueued = true;
+    setTimeout(function(){
+      askQueued = false;
+      try{
+        if(document.hidden) return;
+        if(perm() !== 'default') return;
+        if(localStorage.getItem(ASKED) === '1') return;
+        /* Поверх открытой шторки не лезем: свой вопрос перекрыл бы чужой.
+           Полноэкранные слои приложения помечены классом on — по нему и
+           смотрим (bpConfirm, шторки сделок, центр уведомлений). */
+        if(document.querySelector('.bp-fullscreen-ov.on, .bpsheet.on, .bpn2-panel.open')) return;
+        /* Называем событие, ради которого спрашиваем: «включите
+           уведомления» без повода читается как выпрашивание. */
+        var t = String(title || '').trim();
+        window.bpAskNotif(t
+          ? 'Только что пришло: «' + t + '». Такое легко пропустить, когда приложение закрыто.'
+          : 'Такие события легко пропустить, когда приложение закрыто.');
+      }catch(e){ E(e); }
+    }, 1600);
+  }catch(e){ E(e); }
+}
+
+/* ── Приложение поставили на телефон ────────────────────────────────
+   Установка — самый понятный момент для просьбы: человек только что сам
+   сказал, что хочет держать приложение под рукой. Раньше запрос ждал
+   первого события, а в свежепоставленном приложении событий ещё нет — и
+   не спрашивали вообще ничего.
+
+   Два случая: только что установили (appinstalled) и запуск уже
+   установленного приложения (display-mode: standalone). Во втором
+   спрашиваем один раз — дальше отметка bp_push_asked. */
+function standalone(){
+  try{
+    if(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+    if(window.matchMedia && window.matchMedia('(display-mode: window-controls-overlay)').matches) return true;
+    return !!window.navigator.standalone;    /* iOS: добавлено на экран «Домой» */
+  }catch(e){ return false; }
+}
+window.bpStandalone = standalone;
+
+function askAfterInstall(why){
+  try{
+    if(perm() !== 'default') return;
+    if(localStorage.getItem(ASKED) === '1') return;
+    if(!supported() || inTelegram()) return;
+    if(document.hidden) return;
+    if(document.querySelector('.bp-fullscreen-ov.on, .bpsheet.on, #bpInst')) return;
+    window.bpAskNotif(why);
+  }catch(e){ E(e); }
+}
+
+try{
+  window.addEventListener('appinstalled', function(){
+    /* Даём окну установки закрыться, потом спрашиваем. */
+    setTimeout(function(){
+      askAfterInstall('Приложение теперь на вашем телефоне.');
+    }, 1800);
+  });
+}catch(e){ E(e); }
+
+/* Запуск установленного приложения. Ждём, пока оно прорисуется, и не
+   лезем поверх экрана входа — сначала пусть человек попадёт внутрь. */
+if(standalone()){
+  setTimeout(function(){
+    try{
+      var auth = document.getElementById('pg-auth');
+      if(auth && auth.classList.contains('on')) return;
+      askAfterInstall('Приложение стоит на телефоне — пусть оно и сообщает о важном.');
+    }catch(e){ E(e); }
+  }, 3500);
+}
+
+/* ── Строка в настройках ────────────────────────────────────────────
+   Кладём в карточку «Уведомления», рядом с вибрацией. Переключатель
+   показывает НАСТОЯЩЕЕ состояние разрешения, а не только наш флажок:
+   иначе он врал бы после запрета в браузере. */
+var ICO = '<svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>'
+  + '<path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M19 3l2 2M5 3L3 5"/></svg>';
+
+function card(){
+  try{
+    var labels = document.querySelectorAll('#pg-settings .st2-lbl');
+    for(var i = 0; i < labels.length; i++){
+      if(String(labels[i].textContent || '').trim() === 'Уведомления'){
+        var c = labels[i].nextElementSibling;
+        if(c && c.classList.contains('st2-card')) return c;
+      }
+    }
+  }catch(e){ E(e); }
+  return null;
+}
+
+function mount(){
+  try{
+    var c = card();
+    if(!c || document.getElementById('bpPushRow')) return;
+    var row = document.createElement('div');
+    row.className = 'st2-row st2-row-sw bp-push-row';
+    row.id = 'bpPushRow';
+    row.setAttribute('role', 'button');
+    row.setAttribute('tabindex', '0');
+    row.innerHTML = '<span class="st2-ico red">' + ICO + '</span>'
+      + '<span class="st2-t"><span class="st2-n">Уведомления на телефон</span>'
+      + '<span class="st2-s" id="bpPushSub">Заявки, сделки и деньги — даже когда приложение закрыто</span></span>'
+      + '<span class="st2-val" id="bpPushVal"></span>'
+      + '<span class="st2-sw" data-pref="push" role="switch" aria-checked="false"></span>';
+    row.addEventListener('click', flip);
+    row.addEventListener('keydown', function(e){
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); flip(); }
+    });
+    /* Сразу после «Центра уведомлений», до вибрации. */
+    var first = c.querySelector('.st2-row');
+    if(first && first.nextSibling) c.insertBefore(row, first.nextSibling);
+    else c.appendChild(row);
+    paint();
+  }catch(e){ E(e); }
+}
+
+function flip(){
+  var p = perm();
+  if(p === 'granted'){
+    /* Разрешение остаётся, гасим только у себя: отзывать его умеет
+       лишь сам браузер, и делать вид, что мы можем, нечестно. */
+    setPref('push', !on());
+    paint();
+    var live = on();
+    toast(live ? 'Уведомления включены' : 'Уведомления выключены', 'info');
+    /* Выключили — снимаем и подписку на сервере: иначе он продолжал бы
+       слать, а браузер молча выбрасывал. Включили — подписываемся снова. */
+    try{ live ? subscribe() : unsubscribe(); }catch(e){ E(e); }
+    return;
+  }
+  window.bpAskNotif();
+}
+
+function note(text){
+  try{
+    var old = document.getElementById('bpPushNote');
+    if(!text){ if(old) old.remove(); return; }
+    if(!old){
+      var c = card(); if(!c) return;
+      old = document.createElement('div');
+      old.className = 'bp-push-note';
+      old.id = 'bpPushNote';
+      if(c.nextSibling) c.parentNode.insertBefore(old, c.nextSibling);
+      else c.parentNode.appendChild(old);
+    }
+    old.innerHTML = text;
+  }catch(e){ E(e); }
+}
+
+function paint(){
+  try{
+    var row = document.getElementById('bpPushRow');
+    if(!row) return;
+    var sw = row.querySelector('.st2-sw');
+    var val = document.getElementById('bpPushVal');
+    var sub = document.getElementById('bpPushSub');
+    var p = perm(), live = on();
+
+    if(sw){
+      sw.classList.toggle('on', live);
+      sw.setAttribute('aria-checked', live ? 'true' : 'false');
+    }
+    if(val){ val.className = 'st2-val'; val.textContent = ''; }
+
+    if(p === 'unsupported' || inTelegram()){
+      if(val){ val.textContent = 'Недоступно'; val.classList.add('warn'); }
+      if(sub) sub.textContent = inTelegram()
+        ? 'В окне Телеграма их показывает сам Телеграм — придут от бота'
+        : 'Это окно браузера не умеет показывать уведомления';
+      note('');
+      return;
+    }
+    if(p === 'denied'){
+      if(val){ val.textContent = 'Запрещено'; val.classList.add('warn'); }
+      if(sub) sub.textContent = 'Разрешение отозвано в браузере';
+      note('Уведомления запрещены в настройках браузера, и вернуть их отсюда нельзя.'
+        + ' Откройте настройки сайта в браузере и разрешите уведомления для этого адреса —'
+        + ' переключатель здесь включится сам.');
+      return;
+    }
+    if(p === 'default'){
+      if(val){ val.textContent = 'Спросим'; }
+      if(sub) sub.textContent = 'Заявки, сделки и деньги — даже когда приложение закрыто';
+      note('');
+      return;
+    }
+    /* granted */
+    if(val){ val.textContent = live ? 'Включены' : 'Выключены'; if(live) val.classList.add('ok'); }
+    if(sub) sub.textContent = 'Заявки, сделки и деньги — даже когда приложение закрыто';
+    note('');
+  }catch(e){ E(e); }
+}
+window.bpPushPaint = paint;
+
+/* Настройки рисуются при переходе на экран — встраиваемся тогда же. */
+var og = window.goTo;
+if(typeof og === 'function' && !og.__bpPush){
+  window.goTo = function(page){
+    var r = og.apply(this, arguments);
+    if(String(page || '') === 'settings') setTimeout(function(){ mount(); paint(); }, 90);
+    return r;
+  };
+  window.goTo.__bpPush = true;
+}
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) paint(); });
+setTimeout(function(){ mount(); paint(); }, 1500);
+setInterval(function(){ if(!document.hidden){ mount(); paint(); } }, 5000);
+
+/* Подписку подновляем сами: она отваливается при смене аккаунта, чистке
+   данных браузера и по сроку. Проверка дешёвая — getSubscription из
+   памяти воркера, запрос к серверу идёт только когда подписки нет. */
+setTimeout(function(){ subscribe(); }, 6000);
+setInterval(function(){ if(!document.hidden) subscribe(); }, 300000);
 })();
 </script>
 

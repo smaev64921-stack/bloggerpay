@@ -115,9 +115,19 @@ try {
   ok(out.status === 200 && !jar, 'выход гасит сессию', out.body);
   ok((await api('GET', '/api/admin/overview')).status === 403, 'после выхода дверь снова закрыта');
 
-  /* ── путь 3: владелец вошёл своей почтой — ключ не нужен вовсе ── */
-  const reg = await fetch(BASE + '/api/register', {
+  /* ── путь 3: владелец вошёл своей почтой — ключ не нужен вовсе ──
+     Но занять сам адрес владельца посторонний не может: аккаунт с этой
+     почтой получает права на всю площадку, а почту при регистрации никто
+     не подтверждает. Пока такого аккаунта в базе нет, его завёл бы кто
+     угодно — поэтому регистрация НА адрес владельца требует ключа. */
+  const grab = await fetch(BASE + '/api/register', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: OWNER, name: 'Чужой', role: 'blogger', password: 'парольЧ12345' }),
+  });
+  ok(grab.status === 403, 'адрес владельца без ключа не занять', { status: grab.status });
+
+  const reg = await fetch(BASE + '/api/register', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Admin-Key': KEY },
     body: JSON.stringify({ email: OWNER, name: 'Владелец', role: 'advertiser', password: 'парольВ12345' }),
   }).then((r) => r.json());
   const who = await api('GET', '/api/admin/whoami', null, { token: reg.token });

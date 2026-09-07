@@ -19,6 +19,9 @@ const SUITES = [
   'test-scenario.mjs', 'test-kyc.mjs', 'test-verify.mjs', 'test-pay.mjs',
   'test-partial.mjs', 'test-disputes.mjs', 'test-alerts.mjs', 'test-bot.mjs',
   'test-telegram.mjs', 'test-mail.mjs', 'test-return.mjs', 'test-forge.mjs', 'test-leaderboard.mjs', 'test-cards.mjs', 'test-admin-session.mjs', 'test-google-login.mjs', 'test-sync.mjs', 'test-chan-migrate.mjs', 'test-tg-login.mjs', 'test-quality.mjs',
+  'test-audit.mjs',                       /* заплаты после разбора 06.09.2026 */
+  'test-push.mjs',                        /* шифрование и подпись уведомлений */
+  'test-push-api.mjs',                    /* подписки и доставка по событиям */
   'test-guard.mjs',                       /* последним: блокирует адрес */
 ];
 

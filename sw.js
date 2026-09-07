@@ -18,7 +18,7 @@
    Обновление: меняем VERSION — старые кэши удаляются в activate.
    ══════════════════════════════════════════════════════════════════════ */
 
-var VERSION = 'bp-v106';
+var VERSION = 'bp-v107';
 var CACHE = 'bloggerpay-' + VERSION;
 
 /* Ничего не кладём заранее: имя главного файла меняется от версии к
@@ -42,6 +42,64 @@ self.addEventListener('activate', function (e) {
 
 self.addEventListener('message', function (e) {
   if (e && e.data === 'bp-skip-waiting') self.skipWaiting();
+});
+
+/* Уведомление от сервера.
+   Приходит, когда приложение закрыто, — этим web push и отличается от
+   всего, что умеет сама страница. Тело зашифровано ключами подписки,
+   расшифровывает его сам браузер, нам достаётся готовый JSON
+   (см. server/push.js). Показать что-то мы ОБЯЗАНЫ: браузеры не
+   разрешают «тихий» push и снимают разрешение у тех, кто молчит. */
+self.addEventListener('push', function (e) {
+  var d = { title: 'BloggerPay', body: '', url: '/' };
+  try {
+    if (e.data) {
+      var j = e.data.json();
+      if (j && typeof j === 'object') {
+        d.title = String(j.title || d.title);
+        d.body = String(j.body || '');
+        d.url = String(j.url || '/');
+      }
+    }
+  } catch (err) { /* пришло не JSON — покажем заголовок по умолчанию */ }
+
+  e.waitUntil(
+    self.registration.showNotification(d.title, {
+      body: d.body,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      tag: 'bp-srv',
+      renotify: true,
+      data: { url: d.url }
+    })
+  );
+});
+
+/* Нажатие на уведомление.
+   Уведомления показывает сама страница через registration.showNotification
+   (слой bp-push): они переживают закрытие вкладки, и вернуть человека
+   обратно должен воркер. Ищем уже открытое окно приложения и поднимаем
+   его; не нашли — открываем новое. Без этого нажатие просто гасит
+   уведомление и никуда не ведёт. */
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  var url = '/';
+  try { if (e.notification.data && e.notification.data.url) url = String(e.notification.data.url); } catch (err) {}
+  /* Открываем только свой адрес: url приходит из уведомления, а его
+     содержимое пришло по сети. Чужая ссылка отсюда открываться не должна. */
+  if (url.charAt(0) !== '/') url = '/';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then(function (list) {
+        for (var i = 0; i < list.length; i++) {
+          var c = list[i];
+          if (c.url.indexOf(self.location.origin) === 0 && 'focus' in c) return c.focus();
+        }
+        if (self.clients.openWindow) return self.clients.openWindow(url);
+        return null;
+      })
+      .catch(function () { return null; })
+  );
 });
 
 function offlinePage() {

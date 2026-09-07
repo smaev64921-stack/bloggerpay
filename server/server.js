@@ -158,7 +158,8 @@ if (MAIL_DEBUG && /^https?:\/\//i.test(PUBLIC_URL) && reachableOutside(PUBLIC_UR
 const SERVER_IS_PUBLIC = /^https?:/i.test(PUBLIC_URL) && reachableOutside(PUBLIC_URL);
 /* Кому доступно тестовое пополнение. На своей машине — всем, кто вошёл;
    на публичном сервере — только владельцу, если не сказано иначе. */
-const TEST_TOPUP_OPEN = String(ENV.TEST_TOPUP_OPEN || '') === '1' || !SERVER_IS_PUBLIC;
+const TEST_TOPUP_OPEN_SET = String(ENV.TEST_TOPUP_OPEN || '') === '1';
+const TEST_TOPUP_OPEN = TEST_TOPUP_OPEN_SET || !SERVER_IS_PUBLIC;
 if (TEST_TOPUP && !TEST_TOPUP_OPEN) {
   console.error('[BloggerPay] Тестовое пополнение оставлено только владельцу:'
     + ' сервер виден снаружи (' + PUBLIC_URL + '). Остальным пополнение отвечает,'
@@ -284,6 +285,11 @@ const OAUTH = {
     label: 'TikTok',
   },
 };
+/* Виды конвертов, которые приложение применяет к данным ТОГО, КТО ИХ
+   ПОЛУЧИЛ, не спрашивая отправителя: профиль (prof), личные настройки
+   и избранное (mine), свободные дни (slot). Такой конверт человек
+   пишет только сам себе — проверка в POST /api/sync/put. */
+const SELF_KINDS = new Set(['prof', 'mine', 'slot']);
 const FEE_PCT = 4;                       /* комиссия сервиса при выводе */
 const MAX_AMOUNT = 100_000_000;          /* больше — опечатка, не бюджет */
 const SESSION_DAYS = 30;
@@ -426,6 +432,23 @@ CREATE TABLE IF NOT EXISTS sync (
 );
 CREATE INDEX IF NOT EXISTS sync_a ON sync(a_id, ver);
 CREATE INDEX IF NOT EXISTS sync_b ON sync(b_id, ver);
+
+/* Подписки на уведомления. Одна строка — один браузер одного человека:
+   у него может быть телефон и ноутбук, и уведомление должно прийти на
+   оба. endpoint — адрес службы доставки браузера, он же ключ: повторная
+   подписка того же браузера должна обновлять строку, а не плодить.
+   p256dh и auth — ключи, которыми шифруется текст; без них сообщение
+   не собрать. Личных данных здесь нет. */
+CREATE TABLE IF NOT EXISTS push_subs (
+  endpoint   TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  p256dh     TEXT NOT NULL,
+  auth       TEXT NOT NULL,
+  ua         TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  seen_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS push_user ON push_subs(user_id);
 
 /* Ошибки у пользователей. Раньше они жили в памяти вкладки и стирались
    при перезагрузке: у человека белый экран, а владелец об этом никогда
@@ -860,6 +883,20 @@ const q = {
     WHERE deal_id = ? AND status = 'open'`),
   closeDisputesFor: db.prepare(`UPDATE disputes SET status = 'closed', closed_at = datetime('now')
     WHERE deal_id = ? AND status = 'open' AND payee_id = ?`),
+  /* Снятие спора ТЕМ, КТО ЕГО ОТКРЫЛ. Отдельные запросы, а не общий
+     UPDATE: тогда чужую строку нельзя закрыть даже по недосмотру. */
+  closeDisputesByOpener: db.prepare(`UPDATE disputes SET status = 'closed', closed_at = datetime('now')
+    WHERE deal_id = ? AND status = 'open' AND opened_by = ?`),
+  closeDisputesForByOpener: db.prepare(`UPDATE disputes SET status = 'closed', closed_at = datetime('now')
+    WHERE deal_id = ? AND status = 'open' AND payee_id = ? AND opened_by = ?`),
+  /* уведомления на телефон */
+  pushIns: db.prepare(`INSERT INTO push_subs (endpoint, user_id, p256dh, auth, ua) VALUES (?,?,?,?,?)
+    ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh,
+      auth = excluded.auth, ua = excluded.ua, seen_at = datetime('now')`),
+  pushOf: db.prepare('SELECT endpoint, p256dh, auth FROM push_subs WHERE user_id = ?'),
+  pushDel: db.prepare('DELETE FROM push_subs WHERE endpoint = ?'),
+  pushDelMine: db.prepare('DELETE FROM push_subs WHERE endpoint = ? AND user_id = ?'),
+  pushCount: db.prepare('SELECT COUNT(*) AS n FROM push_subs'),
   /* выплаты по кампаниям, чтобы рекламодатель видел расход на любом устройстве */
   myReleases: db.prepare(`SELECT op_key, result, created_at FROM ops
     WHERE user_id = ? AND kind = 'release' ORDER BY created_at DESC LIMIT 500`),
@@ -937,6 +974,10 @@ async function ykApi(method, path, body, idemKey) {
   if (!res.ok) {
     const e = new Error(j.description || ('ЮKassa: HTTP ' + res.status));
     e.httpStatus = 502;
+    /* Свой ответ кассы сохраняем отдельно: по нему вебхук отличает
+       внятный отказ («нет такого платежа») от сбоя связи, после
+       которого уведомление надо попросить повторить. */
+    e.ykStatus = res.status;
     throw e;
   }
   return j;
@@ -979,7 +1020,11 @@ function amountOk(x) {
    можно было занять заранее — тогда настоящая выплата не проводилась.
    Ключи пульта теперь строит сервер (sysKey), а эти приставки в теле
    запроса отклоняются. */
-const RESERVED_OP = /^\s*(sys:|bp-op-)/i;
+/* Приставка yk: — ключ зачисления платежа ЮKassa (moneyOp('yk:' + id)).
+   Без неё в этом списке человек мог заранее занять ключ своего будущего
+   платежа: касса потом отвечала «эта операция уже проведена», и деньги
+   не зачислялись вовсе. */
+const RESERVED_OP = /^\s*(sys:|bp-op-|yk:)/i;
 function userKey(raw) {
   const k = String(raw || '');
   return RESERVED_OP.test(k) ? '' : k;
@@ -1156,7 +1201,12 @@ function cookieOf(req, name) {
   return '';
 }
 function adminCookie(req, exp) {
-  const https = /^https:/i.test(String(ENV.PUBLIC_URL || ''))
+  /* Смотрим на ВЫЧИСЛЕННЫЙ адрес (PUBLIC_URL выше = externalBase(ENV) ||
+     …), а не на сырую настройку: у хостинга внешний адрес приходит в
+     DOMAIN, а ENV.PUBLIC_URL так и остаётся http://127.0.0.1:8090 —
+     и кука с доступом к пульту выплат уезжала без Secure по живому https. */
+  const https = /^https:/i.test(PUBLIC_URL)
+    || /^https:/i.test(String(ENV.PUBLIC_URL || ''))
     || String(req.headers['x-forwarded-proto'] || '') === 'https';
   return 'bp_admin=' + encodeURIComponent(exp + '.' + adminSign(exp))
     + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' + Math.floor(ADMIN_SESSION_MS / 1000)
@@ -1220,8 +1270,20 @@ function isAdmin(req) {
 }
 
 /* Почты владельцев из настроек: такие аккаунты получают права админа сами
-   при входе и регистрации — вводить ключ никому не нужно.
-   ADMIN_EMAIL=почта или почта1,почта2 */
+   при входе — вводить ключ не нужно.
+   ADMIN_EMAIL=почта или почта1,почта2
+
+   ОСТОРОЖНО, ЗДЕСЬ БЫЛА ДЫРА. Права давались всякому, у кого в аккаунте
+   стоит этот адрес, а почту при регистрации никто не подтверждает. Пока
+   аккаунта с адресом владельца в базе не было — свежая выкладка,
+   сброшенный том хостинга, вторая почта в списке — завести его мог кто
+   угодно и получить всю площадку: чужие балансы, фотографии паспортов,
+   реестр выплат, вход в любой аккаунт. Адрес владельца не секрет: он
+   стоит в политике конфиденциальности и в письмах.
+
+   Закрыто в POST /api/register: зарегистрироваться НА адрес владельца
+   можно только предъявив ключ (X-Admin-Key). Сам вход по почте остался
+   как был — владельцу по-прежнему ничего вводить не нужно. */
 const ADMIN_EMAILS = String(ENV.ADMIN_EMAIL || '')
   .split(/[,;\s]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
 function syncAdminFlag(user) {
@@ -1261,6 +1323,33 @@ function clientIp(req) {
   }
   return String((req.socket && req.socket.remoteAddress) || '');
 }
+/* Запрос пришёл с этой же машины. Нужно там, где внешний адрес сервера
+   определить не удалось и приходится решать по адресу собеседника. */
+function isLoopback(ip) {
+  const s = String(ip || '');
+  return s === '127.0.0.1' || s === '::1' || s === '::ffff:127.0.0.1' || /^127\./.test(s);
+}
+
+/* Кому сейчас доступно тестовое пополнение — то есть кнопка «нарисовать
+   себе денег». Владельцу — всегда, пока режим включён. Остальным —
+   только если это разрешили ЯВНО (TEST_TOPUP_OPEN=1) или если сервер
+   точно домашний.
+
+   Раньше правило было «не публичный — значит домашний», а публичным
+   сервер считался, только когда внешний адрес удалось вычислить из
+   PUBLIC_URL или DOMAIN. Не задал хостинг ни того, ни другого — и
+   боевой сервер раздавал печать денег каждому вошедшему. Предохранитель
+   отказывал в открытую. Теперь при неопределённом адресе верим только
+   запросам со своей машины: разработка и тесты работают как раньше,
+   а недонастроенный сервер снаружи денег не печатает. */
+function testTopupAllowed(req, u) {
+  if (!TEST_TOPUP) return false;
+  if (u && u.is_admin) return true;
+  if (TEST_TOPUP_OPEN_SET) return true;
+  if (SERVER_IS_PUBLIC) return false;
+  return isLoopback(clientIp(req));
+}
+
 function rateLimit(req, key, limit, windowMs) {
   if (RL_OFF) return true;
   const ip = clientIp(req);
@@ -1338,6 +1427,51 @@ const cardsCache = { at: 0, rows: null };
 
 /* Рейтинг пересчитывается не чаще раза в минуту: запрос групповой, а ручка открытая. */
 const lbCache = { at: 0, rows: null, total: 0 };
+
+/* ── УВЕДОМЛЕНИЯ НА ТЕЛЕФОН ──────────────────────────────────────────
+   Приложение показывает события, только пока оно открыто. Чтобы
+   уведомление дошло до ЗАКРЫТОГО приложения, отправить его должен
+   сервер — этим и занимается server/push.js.
+
+   Здесь только адресация: у человека может быть несколько браузеров,
+   шлём во все. Служба доставки отвечает 404 или 410, когда подписки
+   больше нет (приложение удалили, разрешение отозвали) — такую строку
+   убираем сразу, иначе она будет висеть вечно и жечь запросы.
+
+   Ничего не ждём и не роняем: уведомление не должно мешать действию,
+   ради которого посылается. */
+const pushLib = require('./push.js');
+const PUSH_SUBJECT = 'mailto:' + (ADMIN_EMAILS[0] || 'admin@bloggerpay.ru');
+/* Щель для проверок: расширяет список разрешённых служб доставки. На бою
+   её быть не должно — с ней сервер соглашается стучаться туда, куда
+   укажет строка в теле запроса. Молчать про такое нельзя. */
+if (String(ENV.PUSH_HOSTS_EXTRA || '').trim()) {
+  console.error('[BloggerPay] ВНИМАНИЕ: задан PUSH_HOSTS_EXTRA='
+    + String(ENV.PUSH_HOSTS_EXTRA).slice(0, 120)
+    + ' — сервер будет слать уведомления и на эти адреса. Это настройка для'
+    + ' проверок; на боевом сервере уберите её из .env.');
+}
+
+function pushTo(userId, title, body, url) {
+  try {
+    const uid = Number(userId);
+    if (!uid) return;
+    const rows = q.pushOf.all(uid);
+    if (!rows || !rows.length) return;
+    const payload = JSON.stringify({
+      title: String(title || 'BloggerPay').slice(0, 80),
+      body: String(body || '').slice(0, 180),
+      url: String(url || '/').slice(0, 200),
+    });
+    for (const r of rows) {
+      pushLib.sendOne(r, payload, { dbPath: DB_PATH, subject: PUSH_SUBJECT, env: ENV })
+        .then((res) => {
+          if (res && res.gone) { try { q.pushDel.run(r.endpoint); } catch (e) {} }
+        })
+        .catch(() => {});
+    }
+  } catch (e) { console.error('[push]', (e && e.message) || e); }
+}
 
 /* ── Тревога в Телеграм ──────────────────────────────────────────────
    Скрытая ошибка не должна ждать, пока владелец откроет пульт: каждая
@@ -1897,6 +2031,9 @@ const routes = {
      Кладёт только участник. Новый конверт: отправитель — a, адресат —
      b (to). Без адресата — общий (видят все вошедшие). Чужой конверт
      переписать нельзя, даже зная его номер. */
+  /* Виды, которые приложение применяет к данным получателя: профиль
+     (prof), личные настройки и избранное (mine), свободные дни (slot).
+     Такой конверт человек пишет только сам себе — см. проверку ниже. */
   'POST /api/sync/put': async (req, body) => {
     const u = auth(req);
     if (!u) return { status: 401, body: { error: 'Нужен вход' } };
@@ -1905,6 +2042,25 @@ const routes = {
     const rid = String(body.rid || '');
     if (!/^[a-z]{2,16}$/.test(kind)) return { status: 400, body: { error: 'Неверный вид записи' } };
     if (!/^[\w.:+-]{3,80}$/.test(rid)) return { status: 400, body: { error: 'Неверный номер записи' } };
+    /* ЛИЧНЫЙ КОНВЕРТ — «письмо себе». Приложение применяет виды prof,
+       mine и slot к данным ТОГО, КТО ИХ ПОЛУЧИЛ, не спрашивая, кто
+       прислал. Значит и завести такой конверт можно только на себя.
+       Проверено живьём: посторонний клал в ящик другого человека
+       {kind:'prof', rid:'self:<его номер>'} — и тот при следующей
+       синхронизации переписывал себе имя, роль и фото. Заняв чужое имя
+       записи первым, он же навсегда запирал человеку перенос профиля
+       между устройствами. Само приложение это правило и подразумевает
+       (profRid в мини-аппе): имя записи включает свой серверный номер,
+       адресата у письма себе нет. Теперь так и на сервере. */
+    if (SELF_KINDS.has(kind)) {
+      if (rid !== 'self:' + u.id) {
+        return { status: 403, body: { error: 'Личную запись можно вести только о себе' } };
+      }
+      if (body.to != null && String(body.to) !== '' && Number(body.to) !== u.id) {
+        return { status: 400, body: { error: 'У личной записи не бывает адресата' } };
+      }
+      body = Object.assign({}, body); delete body.to;
+    }
     if (body.data == null || typeof body.data !== 'object') return { status: 400, body: { error: 'Нет содержимого' } };
     const data = JSON.stringify(body.data);
     if (data.length > 400 * 1024) return { status: 413, body: { error: 'Запись слишком большая' } };
@@ -2080,6 +2236,16 @@ const routes = {
     }
     if (!name) return { status: 400, body: { error: 'Введите имя' } };
     if (pass.length < 8) return { status: 400, body: { error: 'Пароль — минимум 8 символов' } };
+    /* АДРЕС ВЛАДЕЛЬЦА ЗАНИМАЕТ ТОЛЬКО ВЛАДЕЛЕЦ.
+       Аккаунт с почтой из ADMIN_EMAIL получает права на всю площадку
+       (syncAdminFlag). Адрес этот не секрет — он стоит в политике и в
+       письмах, — а почту здесь никто не подтверждает. Значит, пока
+       такого аккаунта в базе нет, занять адрес мог посторонний и забрать
+       площадку себе: чужие балансы, паспорта, реестр выплат, вход в
+       любой аккаунт. Требуем ключ: у владельца он есть. */
+    if (ADMIN_EMAILS.includes(email) && !isAdmin(req)) {
+      return { status: 403, body: { error: 'Этот адрес принадлежит владельцу площадки — занять его можно только с ключом владельца' } };
+    }
     if (q.userByEmail.get(email)) return { status: 409, body: { error: 'Этот email уже зарегистрирован' } };
     const salt = crypto.randomBytes(16).toString('hex');
     const info = q.insUser.run(email, name, role, salt, scrypt(pass, salt));
@@ -2087,6 +2253,8 @@ const routes = {
     const token = newToken();
     const exp = new Date(Date.now() + SESSION_DAYS * 864e5).toISOString();
     q.insSession.run(token, uid, exp);
+    /* Сюда доходит только владелец: регистрация на его адрес выше
+       требует ключа. */
     const admin = ADMIN_EMAILS.includes(email) ? 1 : 0;
     if (admin) q.setAdmin.run(1, uid);
     return { status: 200, body: { token, user: { id: uid, email, name, role, isAdmin: !!admin } } };
@@ -2311,6 +2479,16 @@ const routes = {
       return { status: 400, body: { error: 'Этот адрес занят служебным входом по Телеграму' } };
     }
     if (pass.length < 8) return { status: 400, body: { error: 'Пароль — минимум 8 символов' } };
+    /* АДРЕС ВЛАДЕЛЬЦА ЗАНИМАЕТ ТОЛЬКО ВЛАДЕЛЕЦ.
+       Аккаунт с почтой из ADMIN_EMAIL получает права на всю площадку
+       (syncAdminFlag). Адрес этот не секрет — он стоит в политике и в
+       письмах, — а почту здесь никто не подтверждает. Значит, пока
+       такого аккаунта в базе нет, занять адрес мог посторонний и забрать
+       площадку себе: чужие балансы, паспорта, реестр выплат, вход в
+       любой аккаунт. Требуем ключ: у владельца он есть. */
+    if (ADMIN_EMAILS.includes(email) && !isAdmin(req)) {
+      return { status: 403, body: { error: 'Этот адрес принадлежит владельцу площадки — занять его можно только с ключом владельца' } };
+    }
     if (q.userByEmail.get(email)) return { status: 409, body: { error: 'Этот email уже зарегистрирован' } };
     const salt = crypto.randomBytes(16).toString('hex');
     try {
@@ -2556,7 +2734,7 @@ const routes = {
       return { status: 503, body: { error: 'Тестовое пополнение выключено — оплата идёт через кассу' } };
     }
     /* На публичном сервере деньги из воздуха доступны только владельцу. */
-    if (!TEST_TOPUP_OPEN && !u.is_admin) {
+    if (!testTopupAllowed(req, u)) {
       return { status: 403, body: { error: 'Пополнение пока недоступно — касса ещё не подключена' } };
     }
     const amount = body.amount;
@@ -2575,7 +2753,7 @@ const routes = {
 
   'GET /api/pay/config': async (req) => {
     const u = auth(req);
-    const test = TEST_TOPUP && (TEST_TOPUP_OPEN || !!(u && u.is_admin));
+    const test = testTopupAllowed(req, u);
     return {
       status: 200,
       body: { mode: YK_ON ? 'yookassa' : (test ? 'test' : 'off'), min: 1000 },
@@ -2612,6 +2790,10 @@ const routes = {
      «оплачен» — зачисляем прямо здесь: вебхук может быть ещё не
      настроен или потеряться, а деньги дойти обязаны. */
   'GET /api/pay/status': async (req, body, url) => {
+    /* Каждый такой запрос идёт к кассе. Без ограничителя один человек
+       превращал наш сервер в усилитель запросов к ЮKassa — ровно то,
+       от чего защищён соседний вебхук. */
+    if (!rateLimit(req, 'paystatus', 30, 60000)) return tooOften;
     const u = auth(req);
     if (!u) return { status: 401, body: { error: 'Нужен вход' } };
     const id = String(url.searchParams.get('id') || '').slice(0, 80);
@@ -2654,19 +2836,49 @@ const routes = {
       const id = String(body && body.object && body.object.id || '').slice(0, 80);
       if (YK_ON && id) {
         const p = await ykApi('GET', '/payments/' + encodeURIComponent(id), null, null);
-        if (p.status === 'succeeded') creditYkPayment(p);
-        else { try { q.updPay.run(p.status, id); } catch (e) {} }
+        if (p.status === 'succeeded') {
+          const r = creditYkPayment(p);
+          /* Зачислить не вышло — отвечаем ошибкой, чтобы касса повторила.
+             200 для неё значит «доставлено», и второго уведомления не
+             будет: оплаченные деньги не дошли бы до человека вовсе. */
+          if (!r.ok) return { status: 503, body: { error: 'Зачисление не прошло, повторите' } };
+        } else { try { q.updPay.run(p.status, id); } catch (e) {} }
       }
-    } catch (e) { console.error('[pay/webhook]', e.message || e); }
+    } catch (e) {
+      console.error('[pay/webhook]', e.message || e);
+      /* Касса ответила внятно («нет такого платежа», неверные ключи) —
+         повторять нечего, отвечаем 200. А вот сбой связи или поломка на
+         её стороне значит, что правду о платеже мы не узнали: просим
+         повторить уведомление, иначе оплаченные деньги не дойдут. */
+      const said = Number(e && e.ykStatus) || 0;
+      if (!(said >= 400 && said < 500)) {
+        return { status: 503, body: { error: 'Не удалось проверить платёж, повторите' } };
+      }
+    }
     return { status: 200, body: { ok: true } };
   },
 
   /* Заморозка под сделку: деньги уходят из available в hold плательщика. */
   'POST /api/deals/hold': async (req, body) => {
+    if (!rateLimit(req, 'deal', 60, 60000)) return tooOften;
     const u = auth(req);
     if (!u) return { status: 401, body: { error: 'Нужен вход' } };
     const amount = body.amount;
     const dealId = String(body.dealId || '').slice(0, 80);
+    /* ИМЯ СДЕЛКИ ПОД БЮДЖЕТ КАМПАНИИ ЗАНИМАЕТ ТОЛЬКО ЕЁ ХОЗЯИН.
+       Эскроу кампании называется camp:<номер>, а номер открыто отдаёт
+       витрина заданий (GET /api/tasks/public). Посторонний занимал это
+       имя заморозкой в один рубль — и рекламодатель больше не мог
+       запустить свою кампанию: сервер отвечал «сделка с таким id уже
+       есть». Проверено живьём. Кампания серверу известна: она лежит
+       конвертом kind='camp', где a_id — её хозяин. Его и спрашиваем. */
+    const asCamp = /^camp:(.+)$/.exec(dealId);
+    if (asCamp) {
+      const env = q.syncGet.get('camp', asCamp[1]);
+      if (env && env.a_id !== u.id) {
+        return { status: 403, body: { error: 'Это бюджет чужой кампании' } };
+      }
+    }
     if (!amountOk(amount)) return { status: 400, body: { error: 'Сумма — целое число от 1 до 100 000 000' } };
     if (!dealId) return { status: 400, body: { error: 'Нужен dealId' } };
     if (q.deal.get(dealId)) return { status: 409, body: { error: 'Сделка с таким id уже есть' } };
@@ -2691,6 +2903,7 @@ const routes = {
   /* Выплата по сделке: hold плательщика → available исполнителя.
      Комиссия сделки 0% — вся сумма исполнителю (правило продукта). */
   'POST /api/deals/release': async (req, body) => {
+    if (!rateLimit(req, 'deal', 60, 60000)) return tooOften;
     const u = auth(req);
     if (!u) return { status: 401, body: { error: 'Нужен вход' } };
     const dealId = String(body.dealId || '');
@@ -2780,18 +2993,38 @@ const routes = {
 
   'POST /api/deals/dispute/close': async (req, body) => {
     const u = auth(req);
-    if (!u) return { status: 401, body: { error: 'Нужен вход' } };
+    /* Оператор приходит сюда одним ключом, без входа в приложение — так
+       же, как в /api/deals/settle. Раз спор снимает только тот, кто его
+       повесил, оператор обязан иметь эту дверь: иначе пропавший человек
+       запирал бы чужие деньги навсегда. */
+    const asOperator = isAdmin(req);
+    if (!u && !asOperator) return { status: 401, body: { error: 'Нужен вход' } };
+    if (!rateLimit(req, 'dispute', 20, 60000)) return tooOften;
     const dealId = String(body.dealId || '').slice(0, 120);
     const d = q.deal.get(dealId);
     if (!d) return { status: 404, body: { error: 'Сделка не найдена' } };
     const payeeId = body.payeeId == null || body.payeeId === '' ? null : Number(body.payeeId);
-    const open = payeeId == null ? q.openDisputeAny.get(dealId) : q.openDisputeExact.get(dealId, payeeId, payeeId);
-    if (!open) return { status: 200, body: { ok: true, closed: 0 } };
-    const may = isAdmin(req) || d.payer_id === u.id || (open.opened_by != null && open.opened_by === u.id)
-      || (d.payee_id != null && d.payee_id === u.id);
-    if (!may) return { status: 403, body: { error: 'Закрыть спор может открывший, плательщик или оператор' } };
-    const info = payeeId == null ? q.closeDisputesAll.run(dealId) : q.closeDisputesFor.run(dealId, payeeId);
-    return { status: 200, body: { ok: true, closed: Number(info.changes || 0) } };
+    /* ЗАМОК СНИМАЕТ ТОЛЬКО ТОТ, КТО ЕГО ПОВЕСИЛ.
+       Раньше право давалось и плательщику — то есть ровно той стороне,
+       от которой спор и защищает. Проверено живьём: блогер сдал работу
+       и открыл спор, рекламодатель одним запросом снял его и вернул
+       себе весь эскроу. Оператор снимает любой спор; решение арбитра
+       (/api/deals/settle) снимает замок само. */
+    if (asOperator) {
+      const infoA = payeeId == null ? q.closeDisputesAll.run(dealId) : q.closeDisputesFor.run(dealId, payeeId);
+      return { status: 200, body: { ok: true, closed: Number(infoA.changes || 0) } };
+    }
+    const info = payeeId == null
+      ? q.closeDisputesByOpener.run(dealId, u.id)
+      : q.closeDisputesForByOpener.run(dealId, payeeId, u.id);
+    const closed = Number(info.changes || 0);
+    if (!closed) {
+      /* Не сняли ничего: либо спора нет вовсе — это не ошибка, клиент
+         повторяет снятие и не должен получать отказ, — либо он чужой. */
+      const other = payeeId == null ? q.openDisputeAny.get(dealId) : q.openDisputeExact.get(dealId, payeeId, payeeId);
+      if (other) return { status: 403, body: { error: 'Снять спор может только тот, кто его открыл, или оператор' } };
+    }
+    return { status: 200, body: { ok: true, closed } };
   },
 
   /* ── Мои выплаты по кампаниям ──
@@ -2810,6 +3043,7 @@ const routes = {
   },
 
   'POST /api/deals/refund': async (req, body) => {
+    if (!rateLimit(req, 'deal', 60, 60000)) return tooOften;
     const u = auth(req);
     if (!u) return { status: 401, body: { error: 'Нужен вход' } };
     const dealId = String(body.dealId || '');
@@ -2984,6 +3218,7 @@ const routes = {
 
   /* Отмена своей заявки — только пока оператор её не взял. */
   'POST /api/withdraw/cancel': async (req, body) => {
+    if (!rateLimit(req, 'wd', 10, 60000)) return tooOften;
     const u = auth(req);
     if (!u) return { status: 401, body: { error: 'Нужен вход' } };
     const w = q.wd.get(Number(body.withdrawalId));
@@ -3299,6 +3534,63 @@ const routes = {
 
   /* Приём ошибок от приложения. Без входа: ломается часто именно то,
      что мешает войти. Поэтому же ограничиваем размер и количество. */
+  /* ── Уведомления на телефон ──
+     Открытый ключ сервера: приложение подписывается им у своего
+     браузера. Не секрет — он и задуман открытым. */
+  'GET /api/push/key': async () => {
+    try {
+      return { status: 200, body: { key: pushLib.keys(DB_PATH).publicB64 } };
+    } catch (e) {
+      return { status: 503, body: { error: 'Уведомления не настроены' } };
+    }
+  },
+
+  'POST /api/push/subscribe': async (req, body) => {
+    const u = auth(req);
+    if (!u) return { status: 401, body: { error: 'Нужен вход' } };
+    if (!rateLimit(req, 'push', 20, 60000)) return tooOften;
+    const s = (body && body.sub) || {};
+    const endpoint = String(s.endpoint || '').slice(0, 700);
+    const keys = (s.keys && typeof s.keys === 'object') ? s.keys : {};
+    const p256dh = String(keys.p256dh || '').slice(0, 200);
+    const secret = String(keys.auth || '').slice(0, 60);
+    /* Адрес доставки задаёт браузер, но приходит он от клиента — значит
+       подставить туда можно что угодно, и сервер послушно постучится по
+       любому адресу. Пускаем только известные службы доставки и только
+       по https (список и разбор — в push.js). */
+    const whyBad = pushLib.endpointWhyBad(endpoint, ENV);
+    if (whyBad) {
+      /* Неизвестная служба — это либо чужая разведка, либо браузер, чей
+         адрес мы не внесли в список, и тогда его владелец молча остался
+         бы без уведомлений. Владельцу площадки лучше знать про оба. */
+      tgAlert('push:host:' + String(endpoint).slice(0, 60),
+        '🔕 Подписка на уведомления отклонена\n\n' + whyBad
+        + '\n\nАдрес: ' + String(endpoint).slice(0, 200)
+        + '\nЧеловек: ' + (u.email || u.id)
+        + '\n\nЕсли это настоящий браузер — добавьте хост в PUSH_HOSTS в server/push.js.', 'server');
+      return { status: 400, body: { error: 'Неизвестная служба доставки уведомлений' } };
+    }
+    if (!p256dh || !secret) return { status: 400, body: { error: 'Подписка без ключей' } };
+    try {
+      q.pushIns.run(endpoint, u.id, p256dh, secret,
+        String(req.headers['user-agent'] || '').slice(0, 200) || null);
+    } catch (e) {
+      return { status: 500, body: { error: 'Не удалось сохранить подписку' } };
+    }
+    return { status: 200, body: { ok: true } };
+  },
+
+  /* Отписка: своё удаляем всегда, чужое — никогда. */
+  'POST /api/push/unsubscribe': async (req, body) => {
+    const u = auth(req);
+    if (!u) return { status: 401, body: { error: 'Нужен вход' } };
+    const endpoint = String((body && body.endpoint) || '').slice(0, 700);
+    if (!endpoint) return { status: 400, body: { error: 'Нет адреса подписки' } };
+    let removed = 0;
+    try { removed = Number(q.pushDelMine.run(endpoint, u.id).changes) || 0; } catch (e) {}
+    return { status: 200, body: { ok: true, removed } };
+  },
+
   'POST /api/errors': async (req, body) => {
     if (!rateLimit(req, 'err', 30, 60000)) return tooOften;
     const list = Array.isArray(body.errors) ? body.errors.slice(0, 20) : [];
@@ -3368,6 +3660,9 @@ const routes = {
       add(w.user_id, 'hold', -w.amount, 'wd-paid', 'заявка ' + w.id);
       add(0, 'available', w.fee, 'fee', 'комиссия по заявке ' + w.id);
       q.updWd.run('paid', String(body.note || '').slice(0, 200) || null, w.id);
+      /* Человек ждёт эти деньги и обновляет экран вручную — скажем сами. */
+      pushTo(w.user_id, 'Деньги отправлены',
+        w.net.toLocaleString('ru') + ' ₽ ушли на ваши реквизиты', '/');
       return { ok: true, withdrawalId: w.id, status: 'paid', net: w.net, fee: w.fee };
     });
   },
@@ -3383,6 +3678,8 @@ const routes = {
       add(w.user_id, 'hold', -w.amount, 'wd-reject', 'заявка ' + w.id);
       add(w.user_id, 'available', w.amount, 'wd-reject', 'заявка ' + w.id);
       q.updWd.run('rejected', String(body.note || '').slice(0, 200) || 'отклонена оператором', w.id);
+      pushTo(w.user_id, 'Заявка на вывод отклонена',
+        w.amount.toLocaleString('ru') + ' ₽ вернулись на баланс', '/');
       return { ok: true, withdrawalId: w.id, status: 'rejected' };
     });
   },
@@ -3417,6 +3714,7 @@ const routes = {
       return { status: 409, body: { error: 'Заявка изменилась, пока вы смотрели — обновите список и проверьте заново' } };
     }
     q.updKyc.run('approved', null, k.id);
+    pushTo(k.user_id, 'Личность подтверждена', 'Вывод денег теперь открыт', '/');
     return { status: 200, body: { ok: true, requestId: k.id, status: 'approved' } };
   },
 
@@ -3430,6 +3728,8 @@ const routes = {
       return { status: 409, body: { error: 'Заявка изменилась, пока вы смотрели — обновите список и проверьте заново' } };
     }
     q.updKyc.run('rejected', String(body.note || '').slice(0, 200) || 'отклонена оператором', k.id);
+    pushTo(k.user_id, 'Проверка личности не пройдена',
+      String(body.note || '').slice(0, 120) || 'Откройте приложение и подайте заявку заново', '/');
     return { status: 200, body: { ok: true, requestId: k.id, status: 'rejected' } };
   },
 
@@ -4239,11 +4539,14 @@ function sendOperatorPage(res) {
   let html;
   try { html = fs.readFileSync(path.join(__dirname, 'operator.html')); }
   catch (e) { return send(res, 404, { error: 'operator.html рядом с сервером не найден' }); }
-  res.writeHead(200, {
+  /* Пульт выплат во фрейме не открывают вовсе: у него своя сессия и
+     кнопки «выплачено». Здесь можно и нужно запрещать жёстко. */
+  res.writeHead(200, Object.assign({}, PAGE_SECURITY, {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-store',
-    'X-Content-Type-Options': 'nosniff',
-  });
+    'Content-Security-Policy': "frame-ancestors 'none'",
+    'X-Frame-Options': 'DENY',
+  }));
   res.end(html);
 }
 
@@ -4307,19 +4610,52 @@ function staticFile(pathname) {
   if (sign) return { file: path.join(SITE_DIR, sign[1]), type: 'text/plain; charset=utf-8' };
   return null;
 }
-function sendFile(req, res, file, type) {
+/* Заголовки безопасности для страниц, которые отдаёт сам сервер.
+   На Netlify их ставит netlify.toml, но сайт раздаёт и этот сервер —
+   без них приложение с деньгами открывается во фрейме чужого сайта,
+   и поверх настоящей кнопки оплаты рисуется поддельная.
+
+   frame-ancestors: мини-апп Телеграм открывает во фрейме на своих
+   доменах — их и разрешаем. X-Frame-Options здесь не ставим: он не
+   умеет список доменов и сломал бы веб-версию Телеграма. */
+const FRAME_CSP = "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org https://telegram.org";
+const PAGE_SECURITY = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Content-Security-Policy': FRAME_CSP,
+};
+
+/* Файлы сайта держим в памяти.
+   Главная страница весит 5,3 МБ, и раньше КАЖДЫЙ заход читал её с диска
+   заново — синхронно, то есть на это время весь сервер (и касса вместе с
+   ним) стоял. Ни входа, ни ограничителя частоты перед раздачей нет, так
+   что десяток параллельных запросов от кого угодно клал приём платежей.
+   Теперь читаем один раз и следим за временем правки: обновили файл на
+   хостинге — отдача подхватит новый сам. */
+const fileCache = new Map();
+function readCached(file) {
+  let st;
+  try { st = fs.statSync(file); } catch (e) { fileCache.delete(file); return null; }
+  const stamp = String(st.mtimeMs) + ':' + String(st.size);
+  const hit = fileCache.get(file);
+  if (hit && hit.stamp === stamp) return hit.buf;
   let buf;
-  try { buf = fs.readFileSync(file); }
-  catch (e) { return send(res, 404, { error: 'Файл не найден: ' + path.basename(file) }); }
+  try { buf = fs.readFileSync(file); } catch (e) { fileCache.delete(file); return null; }
+  fileCache.set(file, { stamp, buf });
+  return buf;
+}
+
+function sendFile(req, res, file, type) {
+  const buf = readCached(file);
+  if (!buf) return send(res, 404, { error: 'Файл не найден: ' + path.basename(file) });
   /* Страницу приложения не кэшируем: иначе у людей застрянет старая
      версия с деньгами. Картинку — можно, она не меняется. */
   const fresh = /^image\//.test(type) ? 'public, max-age=86400' : 'no-store';
-  res.writeHead(200, {
+  res.writeHead(200, Object.assign({}, PAGE_SECURITY, {
     'Content-Type': type,
     'Cache-Control': fresh,
-    'X-Content-Type-Options': 'nosniff',
     'Content-Length': buf.length,
-  });
+  }));
   if (req.method === 'HEAD') return res.end();
   res.end(buf);
 }
