@@ -14321,7 +14321,7 @@ function showVerifyPicker() {
           <div class="bls-ico bi-am"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f6a823" stroke-width="2" stroke-linecap="round"><path d="M6 3h8a4 4 0 0 1 0 8H6V3z"/><path d="M6 11h10"/><path d="M6 15h10"/><path d="M6 11v8"/></svg></div>
           <div class="bls-lbl">CPM</div>
           <div class="bls-val" id="abc-prev-cpv">—</div>
-          <div class="bls-sub am">авто</div>
+          <!-- подпись пишет _updateCPVHint: «за 1 000 просмотров» или «нужен охват канала». Статичное «авто» стояло рядом с ней вторым ярлыком. -->
         </div>
       </div>
       <!-- нижние зоны — как у карточки в каталоге: строка с соцсетями и
@@ -86302,6 +86302,8 @@ setInterval(function(){ if(!document.hidden) subscribe(); }, 300000);
 
 
 
+
+
 <style id="bp-card6-css">
 /* ══ КАРТОЧКА БЛОГЕРА: ЯЗЫК МАКЕТА ══════════════════════════════════
    Владелец посмотрел прошлый вариант на телефоне и сказал: плохо. Он
@@ -86608,10 +86610,17 @@ var BY_CLASS = { 'ic-yt':'youtube', 'ic-tg':'telegram', 'ic-tt':'tiktok', 'ic-ig
                  'syt':'youtube', 'stg':'telegram', 'stt':'tiktok', 'sig':'instagram' };
 var ICON = 'https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/';
 
+var _cardsCache = null;
 function cards(){
-  try{ var a = JSON.parse(localStorage.getItem('bp_my_cards') || '[]'); return Array.isArray(a) ? a : []; }
-  catch(e){ return []; }
+  if(_cardsCache) return _cardsCache;
+  try{
+    var a = JSON.parse(localStorage.getItem('bp_my_cards') || '[]');
+    _cardsCache = Array.isArray(a) ? a : [];
+  }catch(e){ _cardsCache = []; }
+  return _cardsCache;
 }
+/* Кэш живёт РОВНО один проход: карточки правятся и в других вкладках. */
+function cardsFresh(){ _cardsCache = null; }
 function cardOf(id){
   var all = cards();
   for(var i = 0; i < all.length; i++) if(String(all[i] && all[i].id) === String(id)) return all[i];
@@ -86785,7 +86794,9 @@ function build(el){
         el.__bpc6Ord = 1;
       }
     }
-    if(!el.__bpc6User && items[0] && !items[0].el.classList.contains('bp-ch-on')){
+    var byFilter = false;
+    try{ byFilter = (typeof _catPlatform !== 'undefined') && _catPlatform && _catPlatform !== 'all'; }catch(e){}
+    if(!byFilter && !el.__bpc6User && items[0] && !items[0].el.classList.contains('bp-ch-on')){
       var tries = Number(el.__bpc6Try || 0);
       if(tries < 2 && el.querySelector('.blc-pr-soc.bp-ch-on')){
         el.__bpc6Try = tries + 1;
@@ -87032,6 +87043,7 @@ function fixSums(){
 
     if(changed){
       localStorage.setItem('bp_my_cards', JSON.stringify(all));
+      cardsFresh();
       try{ if(typeof window.loadMyCards === 'function') window.loadMyCards(); }catch(e){}
     }
   }catch(e){ E(e); }
@@ -87040,6 +87052,7 @@ function fixSums(){
 var fixedOnce = false;
 function sweep(){
   try{
+    cardsFresh();
     if(!fixedOnce){ fixedOnce = true; fixSums(); }
     document.querySelectorAll('#catBloggerList .blc.bpc5[data-cardid]').forEach(function(el){
       build(el);
