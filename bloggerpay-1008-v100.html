@@ -33191,6 +33191,12 @@ function updateFilterBadge(count) {
   else { badge.style.display = 'none'; }
 }
 
+/* Ключ сортировки по цене: null значит «неизвестно» — такие карточки
+   уезжают в конец списка, а не притворяются самыми дешёвыми. */
+function _priceKey(v) {
+  const n = _parseNum(String(v == null ? '' : v).replace('₽', ''));
+  return n > 0 ? n : null;
+}
 function _parseNum(str) {
   if(!str) return 0;
   const s = String(str).replace(/\s/g,'').replace(',','.');
@@ -33321,8 +33327,18 @@ function applyCatFilters() {
       case 'deals': return (parseInt(b.b.deals||b.b.revs||0)) - (parseInt(a.b.deals||a.b.revs||0));
       case 'er': return parseFloat(String(b.b.er||'').replace('%','')) - parseFloat(String(a.b.er||'').replace('%',''));
       case 'subs': return _parseNum(b.b.subs) - _parseNum(a.b.subs);
-      case 'price_asc': return _parseNum(String(a.b.price||'').replace('₽','')) - _parseNum(String(b.b.price||'').replace('₽',''));
-      case 'price_desc': return _parseNum(String(b.b.price||'').replace('₽','')) - _parseNum(String(a.b.price||'').replace('₽',''));
+      /* Цена за тысячу бывает неизвестна: у карточки не заполнен охват,
+         и в полосе стоит прочерк. Раньше прочерк считался нулём — и такая
+         карточка вставала ПЕРВОЙ в «Цена ↑», как самая дешёвая на бирже.
+         Неизвестное кладём в конец при обоих порядках. */
+      case 'price_asc':
+      case 'price_desc': {
+        const ka = _priceKey(a.b.price), kb = _priceKey(b.b.price);
+        if(ka === null && kb === null) return 0;
+        if(ka === null) return 1;
+        if(kb === null) return -1;
+        return sort === 'price_asc' ? ka - kb : kb - ka;
+      }
       default: return 0;
     }
   });
@@ -59745,12 +59761,15 @@ function bpChanStats(store, pid){
   var p = store && store.platData && store.platData[pid];
   if(!p) return null;
   var list = (store.integrations && store.integrations[pid]) || [];
-  var sum = 0, cnt = 0;
+  /* Берём САМЫЙ ДЕШЁВЫЙ формат, а не среднее по всем. Среднее — цена
+     размещения, которого нет в продаже; строка цены под карточкой
+     считает по тому же дешёвому формату, и два числа под одной подписью
+     «CPM» расходились ровно на этом. */
+  var low = 0;
   for(var i = 0; i < list.length; i++){
     var v = parseFloat(list[i] && list[i].price);
-    if(v > 0){ sum += v; cnt++; }
+    if(v > 0 && (!low || v < low)) low = v;
   }
-  var avg   = cnt ? sum / cnt : 0;
   var subs  = +p.subs  || 0;
   var reach = +p.reach || 0;
   var er    = parseFloat(p.er) || 0;
@@ -59758,7 +59777,7 @@ function bpChanStats(store, pid){
     subs:  subs  ? bpFmtNum(subs)  : '—',
     reach: reach ? bpFmtNum(reach) : '—',
     er:    er    ? er.toFixed(1) + '%' : '—',
-    cpv:   bpFmtCPV(avg, reach),
+    cpv:   bpFmtCPV(low, reach),
     rawSubs:subs, rawEr:er,
     handle: bpHandle(p.url)
   };
@@ -86281,6 +86300,8 @@ setInterval(function(){ if(!document.hidden) subscribe(); }, 300000);
 
 
 
+
+
 <style id="bp-card6-css">
 /* ══ КАРТОЧКА БЛОГЕРА: ЯЗЫК МАКЕТА ══════════════════════════════════
    Владелец посмотрел прошлый вариант на телефоне и сказал: плохо. Он
@@ -86432,6 +86453,10 @@ html #catBloggerList .blc.bpc5.bpc6 .blc-strip .bls{
 }
 /* Тонкие разделители между колонками — приём макета. */
 html #catBloggerList .blc.bpc5.bpc6 .blc-strip .bls + .bls::before{
+  /* display обязателен: слой bp-card5 гасит псевдоэлементы полосы
+     правилом .bls::before{display:none!important}, и без своего
+     объявления волоски не рисовались, сколько бы ни было специфичности. */
+  display:block!important;
   content:''; position:absolute; left:0;
   top:3px; bottom:3px; transform:none; width:1px; background:rgba(255,255,255,.08);
 }
@@ -86533,6 +86558,11 @@ html #catBloggerList .blc.bpc5.bpc6 .blc-owner-actions button{
   color:#8C919B!important; font-size:13px!important; font-weight:600!important;
 }
 
+/* Исходник цены за тысячу: слой ниже пишет его мелким шрифтом под ценой,
+   мы показываем это число в полосе чисел, а здесь прячем — но оставляем
+   в разметке, чтобы читать заново после каждой перерисовки. */
+html #catBloggerList .blc.bpc5.bpc6 .bpc6-cpm-src{ display:none!important }
+
 /* ── Цена ────────────────────────────────────────────────────────── */
 /* Дно цены и дно кнопки на одной линии — иначе двухстрочная подпись под
    ценой тянет кнопку вверх и строка распадается. */
@@ -86623,6 +86653,20 @@ function handleOf(url){
   if(m) return m[1];
   return '';
 }
+/* Строкой ниже стоит тот же ник — «@ZSqNm4Qan · TikTok» под именем
+   «@ZSqNm4Qan». Раз ник поднялся в имя, из подписи его убираем и
+   оставляем там одну площадку. Зовётся на КАЖДОМ проходе, потому что
+   подпись перерисовывается при переключении канала. */
+function hideNick(el, want){
+  try{
+    var nick = el.querySelector('.bpc5-sub .nick');
+    if(!nick) return;
+    var same = want && String(nick.textContent || '').trim() === want;
+    nick.hidden = !!same;
+    var dot = el.querySelector('.bpc5-sub .bpc5-dot');
+    if(dot) dot.hidden = !!same;
+  }catch(e){ E(e); }
+}
 function junkName(s){
   var t = String(s == null ? '' : s).replace(/[\s.·•_\-–—]+/g, '');
   return t.length < 2;
@@ -86631,7 +86675,17 @@ function fixName(el, card){
   try{
     var n = el.querySelector('.blc-name');
     if(!n) return;
-    if(!junkName(n.textContent)) return;
+    /* Подставленное имя запоминаем: подпись под именем перерисовывает
+       слой ниже при каждом переключении канала, и ник возвращался — а
+       fixName к тому времени видел уже нормальное имя и выходил сразу.
+       Поэтому скрытие дубля вынесено ОТДЕЛЬНО и работает всегда. */
+    var kept = el.getAttribute('data-bpc6-name') || '';
+    if(!junkName(n.textContent) && !kept){ hideNick(el, ''); return; }
+    if(kept){
+      if(n.textContent !== kept) n.textContent = kept;
+      hideNick(el, kept);
+      return;
+    }
     var best = '';
     var pids = (card && card.platforms) || [];
     for(var i = 0; i < pids.length && !best; i++){
@@ -86640,17 +86694,8 @@ function fixName(el, card){
     }
     var want = best || 'Блогер';
     if(n.textContent !== want) n.textContent = want;
-    /* Строкой ниже стоит тот же ник — «@ZSqNm4Qan · TikTok» под именем
-       «@ZSqNm4Qan». Раз ник поднялся в имя, из подписи его убираем и
-       оставляем там одну площадку. */
-    try{
-      var nick = el.querySelector('.bpc5-sub .nick');
-      if(nick && String(nick.textContent || '').trim() === want){
-        nick.hidden = true;
-        var dot = el.querySelector('.bpc5-sub .bpc5-dot');
-        if(dot) dot.hidden = true;
-      }
-    }catch(e2){ E(e2); }
+    try{ el.setAttribute('data-bpc6-name', want); }catch(e2){}
+    hideNick(el, want);
     /* Инициалы на аватаре из того же имени: «i» вместо букв — оттуда же. */
     /* Инициалы на аватаре считаются из того же имени, поэтому от «..»
        оставались те же две точки. Лежат они не текстом у .blc-ava, а во
@@ -86840,24 +86885,33 @@ function moveCpm(el){
     var val = cell.querySelector('.bls-val');
     if(!val) return;
 
-    var sm = el.querySelector('.bpc5-price small');
+    var price = el.querySelector('.bpc5-price');
+    if(!price) return;                       /* строку цены ещё не рисовали */
+    var sm = price.querySelector('small');
     var got = '';
     if(sm){
-      var parts = sm.innerHTML.split(' · ');
-      var keep = [];
-      parts.forEach(function(x){
-        var plain = x.replace(/<[^>]*>/g, '').trim();
-        if(/^CPM\s/.test(plain)) got = plain.slice(4).trim();
-        else keep.push(x);
-      });
-      if(keep.length !== parts.length){
-        if(keep.length) sm.innerHTML = keep.join(' · ');
-        else sm.remove();
+      var already = sm.querySelector('.bpc6-cpm-src');
+      if(already){
+        got = String(already.textContent || '').replace(/^CPM\s*/, '').trim();
+      } else {
+        var parts = sm.innerHTML.split(' · ');
+        var keep = [], hid = '';
+        parts.forEach(function(x){
+          var plain = x.replace(/<[^>]*>/g, '').trim();
+          if(/^CPM\s/.test(plain)){ got = plain.slice(4).trim(); hid = plain; }
+          else keep.push(x);
+        });
+        /* Прячем, а не удаляем: строку цены перерисовывает слой ниже, и
+           на следующем проходе число надо откуда-то взять снова. */
+        if(hid) sm.innerHTML = keep.join(' · ') + '<span class="bpc6-cpm-src">' + esc(hid) + '</span>';
       }
     }
-    /* Цены нет вовсе («обсудите в переписке») — и цены за тысячу нет. */
-    if(!got && el.querySelector('.bpc5-price .ask')) got = '—';
-    if(got && val.textContent.trim() !== got) val.textContent = got;
+    /* Цены за тысячу нет: либо цена вообще не названа («обсудите в
+       переписке»), либо у канала не заполнен охват — тогда старые карты
+       показывали в этой ячейке СРЕДНЮЮ ЦЕНУ ИНТЕГРАЦИИ, подписанную как
+       CPM. Прочерк честнее: величины просто нет. */
+    if(!got) got = '—';
+    if(val.textContent.trim() !== got) val.textContent = got;
   }catch(e){ E(e); }
 }
 
@@ -86912,6 +86966,26 @@ function reconcile(el){
   }catch(e){ E(e); }
 }
 
+/* Цена за тысячу для сохранённой карты. Старые карты писали сюда СРЕДНЮЮ
+   ЦЕНУ ИНТЕГРАЦИИ, когда охват не заполнен, — величину, которая к цене за
+   тысячу отношения не имеет. Считаем как везде: по самому дешёвому
+   формату основной площадки, а без охвата — прочерк. */
+function cpmOfCard(card, pid){
+  try{
+    var reach = reachOf(card, pid);
+    if(!(reach > 0)) return '—';
+    var list = (card.integrations && card.integrations[pid]) || [];
+    var low = 0;
+    for(var i = 0; i < list.length; i++){
+      var v = num(list[i] && list[i].price);
+      if(v > 0 && (!low || v < low)) low = v;
+    }
+    if(!low) return '—';
+    var c = (low / reach) * 1000;
+    return (c < 1 ? c.toFixed(2) : c < 100 ? c.toFixed(1) : Math.round(c).toLocaleString('ru')) + ' ₽';
+  }catch(e){ E(e); return '—'; }
+}
+
 /* ── Разовая починка старых карт: суммы вместо цифр площадки ── */
 function fixSums(){
   try{
@@ -86938,6 +87012,24 @@ function fixSums(){
       card.__sumFixed = 1;
       changed++;
     });
+    /* Цена за тысячу — отдельным проходом по ВСЕМ своим картам, а не
+       внутри починки сумм: та трогает только карты с двумя площадками и
+       только когда записанное число в точности равно сумме. Старая карта
+       с одной площадкой и без охвата мимо неё проходила, и в полосе
+       оставалась средняя цена интеграции под подписью CPM. */
+    all.forEach(function(card){
+      if(!card || card._foreign) return;
+      var pd = card.platData || {};
+      var best = '', bestSubs = -1;
+      Object.keys(pd).forEach(function(pid){
+        var sb = num(pd[pid] && pd[pid].subs);
+        if(sb > bestSubs){ bestSubs = sb; best = pid; }
+      });
+      if(!best) return;
+      var want = cpmOfCard(card, best);
+      if(String(card.cpvVal || '') !== want){ card.cpvVal = want; changed++; }
+    });
+
     if(changed){
       localStorage.setItem('bp_my_cards', JSON.stringify(all));
       try{ if(typeof window.loadMyCards === 'function') window.loadMyCards(); }catch(e){}
