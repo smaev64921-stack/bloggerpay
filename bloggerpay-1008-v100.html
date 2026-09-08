@@ -88721,7 +88721,9 @@ function publish(){
     try{ var dom = document.querySelector('.blc[data-cardid="' + cardData.id + '"]'); if(dom) dom.remove(); }catch(e){}
     try{ if(typeof renderMyCard === 'function') renderMyCard(cardData); }catch(e){ E(e); }
     try{ if(typeof loadMyCards === 'function') loadMyCards(); }catch(e){}
-    try{ if(typeof showAuthToast === 'function') showAuthToast(wasEdit ? 'Карта обновлена' : 'Карта опубликована', 'ok'); }catch(e){}
+    /* Тоста здесь нет намеренно: человек остаётся на экране, и об успехе
+       уже говорят зелёная плашка и кнопка. Тост ложился поверх шапки и
+       повторял то же самое третий раз. */
     /* Остаёмся на месте: подсказка зелёная, кнопка — отметка. Состояние
        держится, пока человек ничего не менял; таймера, который сам всё
        перерисовывает через шесть секунд, больше нет. */
