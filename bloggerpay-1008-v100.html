@@ -87094,5 +87094,1134 @@ window.bpCard6Now = function(){ sweep(); };
 })();
 </script>
 
+
+
+
+
+
+
+
+
+<style id="bp-abc2-css">
+/* ══ КАРТА БЛОГЕРА: РАЗДЕЛ СОБРАН ЗАНОВО ═══════════════════════════════
+   Владелец: «переделай до неузнаваемости, прям удобный и понятный».
+
+   ЧТО БЫЛО НЕ ТАК (разбор пятью агентами по коду, 118 выводов):
+   · заход «разместить карту» из профиля, меню и баннеров открывал ПУСТОЙ
+     мастер, хотя приложение писало «открыли вашу карточку для правки»:
+     ключ правки ставил один слой, а следующий по цепочке тут же его
+     стирал. Публикация из такого мастера заводила ВТОРУЮ карточку с
+     одной соцсетью — отсюда «раньше можно было больше одной соцсети»;
+   · три шага прятали друг от друга связанные вещи: канал на первом,
+     тематики на втором, а цена — внутри канала на третьем уровне
+     вложенности. До одной площадки с ценой — шесть нажатий, до трёх
+     площадок с двумя форматами — около тридцати трёх;
+   · подпись «Добавить ссылку на канал» стояла в заголовке строки ВСЕГДА,
+     и заполненная площадка выглядела пустой;
+   · превью показывало сумму подписчиков всех каналов, а сохранялись
+     цифры основной площадки — человек публиковал не то, что видел;
+   · ссылка сохранялась без https://, и сервер выбрасывал всю площадку;
+   · кнопка не была закреплена: заполнил цену — и ищи, куда нажать.
+
+   ЧТО ТЕПЕРЬ. Одна страница, единица работы — КАНАЛ. Сверху живая
+   карточка ровно в том виде, в каком её увидит рекламодатель. Ниже
+   список каналов: свернул — видно всё главное, развернул — ссылка,
+   цифры и цены в одном месте. Потом «о канале» и закреплённая кнопка,
+   которая всегда говорит, чего не хватает.
+
+   Откат: удалить пару bp-abc2-css + bp-abc2 — вернётся мастер из трёх
+   шагов, он никуда не делся, только спрятан.                          */
+
+/* Старый мастер прячем, но не удаляем: на него завязаны сторонние слои
+   (вход через площадку, палитра, наблюдатель высоты). */
+html #pg-add-blogger-card #abc-step1,
+html #pg-add-blogger-card #abc-step2,
+html #pg-add-blogger-card #abc-step3,
+html #pg-add-blogger-card .abc-stepper,
+html #pg-add-blogger-card .abc-footer{ display:none!important }
+html #pg-add-blogger-card #abc-topbar{ padding-bottom:6px!important }
+
+/* Переменные — на СТРАНИЦЕ, а не на #a2: закреплённая полоса с кнопкой
+   лежит рядом с ним, и внутри неё var(--a2-*) не разрешался — кнопка
+   выходила вообще без фона. */
+html #pg-add-blogger-card{
+  --a2-s:#131418; --a2-s2:#1B1D22; --a2-s3:#23262C;
+  --a2-line:rgba(255,255,255,.08);
+  --a2-tx:#F3F4F6; --a2-mu:#8C919B; --a2-mu2:#666B75;
+  --a2-acc:#2f6ce0;
+}
+html #pg-add-blogger-card #a2{
+  display:block; padding:0 14px 132px;
+  --a2-s:#131418; --a2-s2:#1B1D22; --a2-s3:#23262C;
+  --a2-line:rgba(255,255,255,.08);
+  --a2-tx:#F3F4F6; --a2-mu:#8C919B; --a2-mu2:#666B75;
+  --a2-acc:#2f6ce0;
+  color:var(--a2-tx);
+}
+html #pg-add-blogger-card #a2 *{ box-sizing:border-box }
+html #pg-add-blogger-card #a2 input,
+html #pg-add-blogger-card #a2 textarea,
+html #pg-add-blogger-card #a2 button{ font-family:inherit }
+
+/* ── Живая карточка: то же, что увидит рекламодатель ───────────────── */
+.a2-prev{
+  background:var(--a2-s); border:1px solid var(--a2-line); border-radius:18px;
+  padding:13px; display:flex; flex-direction:column; gap:11px;
+  position:relative; overflow:hidden; margin:12px 0 16px;
+}
+.a2-prev::before{
+  content:''; position:absolute; inset:0 0 auto; height:2px;
+  background:rgb(var(--a2-plt,47,108,224)); opacity:.7;
+}
+.a2-prev-top{ display:flex; align-items:center; gap:11px }
+.a2-ava{
+  width:50px; height:50px; border-radius:16px; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  font-size:17px; font-weight:750; letter-spacing:-.03em; color:#EDEEF0;
+  background:rgba(var(--a2-plt,47,108,224),.13);
+  border:1px solid var(--a2-line); overflow:hidden;
+}
+.a2-ava img{ width:100%; height:100%; object-fit:cover; display:block }
+.a2-prev-id{ min-width:0; flex:1 }
+.a2-prev-name{ font-size:15.5px; font-weight:680; letter-spacing:-.02em;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.a2-prev-sub{ font-size:12.5px; color:var(--a2-mu); margin-top:2px }
+.a2-pills{ display:flex; flex-wrap:wrap; gap:5px }
+.a2-pill{
+  height:29px; padding:0 10px 0 7px; border-radius:999px;
+  display:inline-flex; align-items:center; gap:6px;
+  background:var(--a2-s2); color:var(--a2-mu); font-size:12.5px; font-weight:600;
+}
+.a2-pill i{ width:16px; height:16px; border-radius:5px; display:block; flex:0 0 auto;
+  background-size:10px 10px; background-repeat:no-repeat; background-position:center }
+.a2-pill b{ font-weight:700; font-variant-numeric:tabular-nums; color:inherit }
+.a2-prev-stats{
+  display:grid; grid-template-columns:repeat(3,1fr);
+  background:var(--a2-s2); border-radius:13px; padding:9px 4px;
+}
+.a2-prev-stats > div{ text-align:center; position:relative }
+.a2-prev-stats > div + div::before{
+  content:''; position:absolute; left:0; top:3px; bottom:3px; width:1px; background:var(--a2-line);
+}
+.a2-prev-stats .v{ font-size:14.5px; font-weight:680; letter-spacing:-.025em;
+  font-variant-numeric:tabular-nums }
+.a2-prev-stats .k{ font-size:11px; color:var(--a2-mu2); margin-top:1px }
+.a2-prev-tags{ display:flex; flex-wrap:wrap; gap:5px }
+.a2-prev-tag{ font-size:12px; padding:3px 8px; border-radius:8px;
+  background:var(--a2-s2); color:var(--a2-mu) }
+.a2-prev-buy{ display:flex; align-items:flex-end; gap:10px }
+.a2-prev-price b{ display:block; font-size:19.5px; font-weight:780; letter-spacing:-.035em }
+.a2-prev-price small{ font-size:12px; color:var(--a2-mu) }
+.a2-prev-add{
+  margin-left:auto; height:38px; padding:0 15px; border-radius:999px;
+  background:#F3F4F6; color:#0A0A0C; font-size:14px; font-weight:680;
+  display:flex; align-items:center; flex:0 0 auto; opacity:.55;
+}
+.a2-prev-ghost{ font-size:12.5px; color:var(--a2-mu2); text-align:center; padding:6px 0 }
+
+/* ── Заголовки разделов ───────────────────────────────────────────── */
+.a2-h{ font-size:13px; font-weight:700; letter-spacing:.02em;
+  text-transform:uppercase; color:var(--a2-mu2); margin:20px 0 9px }
+.a2-h:first-child{ margin-top:4px }
+.a2-note{ font-size:12.5px; color:var(--a2-mu); line-height:1.45; margin:-4px 0 10px }
+
+/* ── Канал ────────────────────────────────────────────────────────── */
+.a2-ch{
+  background:var(--a2-s); border:1px solid var(--a2-line); border-radius:16px;
+  margin-bottom:9px; overflow:hidden;
+}
+.a2-ch.open{ border-color:rgba(255,255,255,.16) }
+.a2-ch-head{
+  display:flex; align-items:center; gap:11px; padding:12px 13px;
+  cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+.a2-ch-ic{
+  width:38px; height:38px; border-radius:12px; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  background-size:18px 18px; background-repeat:no-repeat; background-position:center;
+}
+.a2-ch-id{ flex:1; min-width:0 }
+.a2-ch-name{ font-size:14px; font-weight:680; letter-spacing:-.01em }
+.a2-ch-sum{ font-size:12px; color:var(--a2-mu); margin-top:2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.a2-ch-sum.warn{ color:#f6a823 }
+.a2-ch-ar{ flex:0 0 auto; color:var(--a2-mu2); transition:transform .18s }
+.a2-ch.open .a2-ch-ar{ transform:rotate(90deg) }
+.a2-ch-body{ display:none; padding:0 13px 13px }
+.a2-ch.open .a2-ch-body{ display:block }
+
+.a2-lbl{ font-size:12px; font-weight:600; color:var(--a2-mu); margin:12px 0 6px }
+.a2-inp{
+  width:100%; height:44px; padding:0 13px; border-radius:12px;
+  background:var(--a2-s2); border:1px solid transparent; color:var(--a2-tx);
+  font-size:14px; outline:none; transition:border-color .15s;
+}
+.a2-inp::placeholder{ color:var(--a2-mu2) }
+.a2-inp:focus{ border-color:rgba(47,108,224,.55) }
+.a2-inp.bad{ border-color:rgba(240,71,94,.6) }
+.a2-3{ display:grid; grid-template-columns:repeat(3,1fr); gap:7px }
+.a2-3 .a2-inp{ padding:0 9px; text-align:center; font-variant-numeric:tabular-nums }
+.a2-3-lbl{ display:grid; grid-template-columns:repeat(3,1fr); gap:7px;
+  font-size:11px; color:var(--a2-mu2); text-align:center; margin-top:5px }
+.a2-hint{ font-size:11.5px; color:var(--a2-mu2); line-height:1.45; margin-top:7px }
+.a2-where{ font-size:11.5px; color:#7fa8f0; margin-top:7px; cursor:pointer;
+  -webkit-tap-highlight-color:transparent }
+.a2-todo div[data-act="goto"]{ cursor:pointer }
+.a2-todo div[data-act="goto"]:active{ opacity:.6 }
+
+/* форматы и цены */
+.a2-fmt{ display:flex; align-items:center; gap:9px; padding:9px 0;
+  border-top:1px solid var(--a2-line) }
+.a2-fmt:first-of-type{ border-top:none }
+.a2-fmt-nm{ flex:1; min-width:0; font-size:13.5px }
+.a2-fmt-nm small{ display:block; font-size:11.5px; color:var(--a2-mu2); margin-top:1px }
+.a2-fmt-pr{
+  width:112px; height:38px; flex:0 0 auto; border-radius:11px;
+  background:var(--a2-s2); border:1px solid transparent; color:var(--a2-tx);
+  font-size:14px; font-weight:650; text-align:right; padding:0 10px; outline:none;
+  font-variant-numeric:tabular-nums;
+}
+.a2-fmt-pr:focus{ border-color:rgba(47,108,224,.55) }
+.a2-fmt-pr::placeholder{ font-weight:500; color:var(--a2-mu2) }
+.a2-fmt.on .a2-fmt-nm{ color:var(--a2-tx) }
+.a2-fmt-more{
+  width:100%; height:38px; margin-top:8px; border-radius:11px;
+  background:transparent; border:1px dashed rgba(255,255,255,.16);
+  color:var(--a2-mu); font-size:13px; font-weight:600; cursor:pointer;
+}
+.a2-ch-del{
+  width:100%; height:38px; margin-top:12px; border-radius:11px;
+  background:transparent; border:1px solid rgba(240,71,94,.35);
+  color:#ff8d9c; font-size:13px; font-weight:600; cursor:pointer;
+}
+
+/* добавление канала */
+.a2-add{ display:flex; flex-wrap:wrap; gap:7px; margin-top:2px }
+.a2-add button{
+  height:44px; padding:0 14px 0 11px; border-radius:14px;
+  background:var(--a2-s); border:1px dashed rgba(255,255,255,.18);
+  color:var(--a2-tx); font-size:13.5px; font-weight:600; cursor:pointer;
+  display:inline-flex; align-items:center; gap:8px;
+}
+.a2-add button i{ width:20px; height:20px; border-radius:6px; display:block;
+  background-size:12px 12px; background-repeat:no-repeat; background-position:center }
+
+/* ── Тематики ─────────────────────────────────────────────────────── */
+.a2-topics{ display:flex; flex-wrap:wrap; gap:6px }
+.a2-topic{
+  height:34px; padding:0 12px; border-radius:999px; cursor:pointer;
+  background:var(--a2-s2); border:1px solid transparent;
+  color:var(--a2-mu); font-size:13px; font-weight:550;
+  display:inline-flex; align-items:center; gap:6px;
+}
+.a2-topic.on{ background:rgba(47,108,224,.16); border-color:rgba(47,108,224,.5); color:var(--a2-tx) }
+.a2-topic.off{ opacity:.4 }
+
+/* ── Аудитория ────────────────────────────────────────────────────── */
+.a2-card{ background:var(--a2-s); border:1px solid var(--a2-line);
+  border-radius:16px; padding:13px }
+.a2-row{ display:flex; align-items:center; gap:11px; min-height:34px }
+.a2-row + .a2-row{ margin-top:12px; padding-top:12px; border-top:1px solid var(--a2-line) }
+.a2-row-id{ flex:1; min-width:0 }
+.a2-row-t{ font-size:13.5px; font-weight:600 }
+.a2-row-s{ font-size:11.5px; color:var(--a2-mu2); margin-top:2px }
+.a2-sw{
+  width:44px; height:26px; border-radius:999px; flex:0 0 auto; cursor:pointer;
+  background:var(--a2-s3); position:relative; transition:background .18s;
+}
+.a2-sw::after{
+  content:''; position:absolute; top:3px; left:3px; width:20px; height:20px;
+  border-radius:50%; background:#8C919B; transition:transform .18s, background .18s;
+}
+.a2-sw.on{ background:rgba(47,108,224,.35) }
+.a2-sw.on::after{ transform:translateX(18px); background:var(--a2-acc) }
+.a2-gender{ margin-top:11px }
+.a2-gbar{ height:6px; border-radius:999px; overflow:hidden; display:flex;
+  background:rgba(59,130,246,.45) }
+.a2-gbar i{ display:block; height:100%; background:rgba(236,72,153,.6) }
+.a2-grow{ display:flex; justify-content:space-between; font-size:11.5px;
+  color:var(--a2-mu2); margin-top:6px }
+.a2-range{ width:100%; margin-top:8px; accent-color:var(--a2-acc) }
+
+/* ── Слово рекламодателю ──────────────────────────────────────────── */
+.a2-ta{
+  width:100%; min-height:96px; padding:12px 13px; border-radius:14px;
+  background:var(--a2-s2); border:1px solid transparent; color:var(--a2-tx);
+  font-size:14px; line-height:1.5; resize:none; outline:none;
+}
+.a2-ta:focus{ border-color:rgba(47,108,224,.55) }
+.a2-cnt{ font-size:11.5px; color:var(--a2-mu2); text-align:right; margin-top:6px }
+
+/* ── Что осталось + кнопка ────────────────────────────────────────── */
+.a2-todo{ display:flex; flex-direction:column; gap:7px; margin-top:2px }
+.a2-todo div{ display:flex; align-items:center; gap:9px; font-size:13px; color:var(--a2-mu) }
+.a2-todo div.ok{ color:var(--a2-mu2) }
+.a2-todo b{
+  width:18px; height:18px; border-radius:50%; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700;
+  background:var(--a2-s3); color:var(--a2-mu2);
+}
+.a2-todo div.ok b{ background:rgba(47,108,224,.2); color:#7fa8f0 }
+
+#a2-bar{
+  position:fixed; left:0; right:0; bottom:0; z-index:60;
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  background:linear-gradient(to top, #0A0A0C 62%, rgba(10,10,12,0));
+  pointer-events:none;
+}
+#a2-bar button{
+  pointer-events:auto; width:100%; height:52px; border-radius:16px; border:none;
+  background:var(--a2-acc, #2f6ce0); color:#fff; font-size:15px; font-weight:700;
+  cursor:pointer; transition:background .16s, opacity .16s;
+}
+#a2-bar button.idle{ background:var(--a2-s3); color:var(--a2-mu) }
+#a2-bar button:active{ opacity:.85 }
+#a2-bar .a2-why{ pointer-events:none; font-size:11.5px; color:var(--a2-mu2);
+  text-align:center; margin-top:7px; min-height:14px }
+
+@keyframes a2shake{ 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)}
+  75%{transform:translateX(5px)} }
+#a2-bar button.shake{ animation:a2shake .28s }
+@media (prefers-reduced-motion:reduce){
+  #a2-bar button.shake{ animation:none }
+  .a2-ch-ar{ transition:none }
+}
+</style>
+
+<script id="bp-abc2">
+/* Пара к style#bp-abc2-css. Пояснение — там же. */
+(function(){
+'use strict';
+if(window.__bpAbc2) return; window.__bpAbc2 = 1;
+
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'abc2'); }catch(_){} }
+function esc(v){ return (typeof bpEsc === 'function') ? bpEsc(v)
+  : String(v == null ? '' : v).replace(/[<>&"']/g, function(c){
+      return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+var PLAT = {
+  youtube:  { name:'YouTube',  rgb:'255,59,48',  bg:'#FF0000', ic:'youtube',  ph:'youtube.com/@канал',  host:'youtube.com' },
+  telegram: { name:'Telegram', rgb:'49,166,232', bg:'#229ED9', ic:'telegram', ph:'t.me/канал',          host:'t.me' },
+  tiktok:   { name:'TikTok',   rgb:'37,244,238', bg:'#111111', ic:'tiktok',   ph:'tiktok.com/@аккаунт', host:'tiktok.com' }
+};
+var ORDER = ['youtube', 'telegram', 'tiktok'];
+/* Настоящую цифру взять должно быть ЛЕГЧЕ, чем придумать — это самый
+   дешёвый способ поднять правдивость карточки. */
+var WHERE = {
+  youtube:  'YouTube Студия → Статистика → за последние 28 дней',
+  telegram: 'Меню канала → Статистика (открывается от 50 подписчиков)',
+  tiktok:   'Профиль → Инструменты для авторов → Аналитика'
+};
+var ICON = 'https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/';
+function icoUrl(pid){
+  var u = ICON + PLAT[pid].ic + '.svg';
+  try{ if(typeof bpUrl === 'function') u = bpUrl(u); }catch(e){}
+  return u;
+}
+function icoStyle(pid, size){
+  var p = PLAT[pid];
+  return 'background-color:' + p.bg + ';background-image:url(' + icoUrl(pid) + ');'
+    + 'background-size:' + size + 'px ' + size + 'px;'
+    + (pid === 'tiktok' ? 'box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);' : '')
+    + 'filter:none';
+}
+
+/* ── Состояние ────────────────────────────────────────────────────── */
+var S = null;
+function blank(){
+  return { id:'', chans:{}, order:[], topics:[], genderF:50, showGender:false,
+           kids:false, showKids:false, msg:'' };
+}
+function num(v){
+  var n = Number(String(v == null ? '' : v).replace(/[^\d.,-]/g, '').replace(',', '.'));
+  return isFinite(n) && n > 0 ? n : 0;
+}
+function short(n){
+  n = Math.round(num(n));
+  if(n >= 1000000) return String((n / 1e6).toFixed(1)).replace('.0', '') + 'M';
+  if(n >= 10000)   return String(Math.round(n / 1000)) + 'K';
+  if(n >= 1000)    return String((n / 1000).toFixed(1)).replace('.0', '') + 'K';
+  return String(n);
+}
+function money(n){ return Math.round(num(n)).toLocaleString('ru-RU'); }
+function handleOf(url){
+  var s = String(url || '').trim();
+  var m = /(?:^|\/)@([A-Za-z0-9._-]{2,40})/.exec(s);
+  if(m) return '@' + m[1];
+  m = /(?:t\.me|telegram\.me)\/([A-Za-z0-9._-]{2,40})/i.exec(s);
+  if(m) return '@' + m[1];
+  m = /youtube\.com\/(?:c|channel|user)\/([A-Za-z0-9._-]{2,40})/i.exec(s);
+  if(m) return m[1];
+  return '';
+}
+/* Ссылку без схемы сервер выбрасывает вместе со ВСЕЙ площадкой
+   (cleanCard: if(url && !/^https?:\/\//) continue) — а плейсхолдеры сами
+   предлагают набирать без схемы. Дописываем сами, молча. */
+function normUrl(v){
+  var s = String(v || '').trim().replace(/\s+/g, '');
+  if(!s) return '';
+  if(!/^https?:\/\//i.test(s)) s = 'https://' + s.replace(/^\/+/, '');
+  return s;
+}
+function urlOk(pid, v){
+  var s = normUrl(v);
+  if(!s) return false;
+  try{
+    var h = new URL(s).hostname.replace(/^www\./, '').toLowerCase();
+    if(pid === 'telegram') return h === 't.me' || h === 'telegram.me';
+    if(pid === 'youtube')  return /(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(h);
+    if(pid === 'tiktok')   return /(^|\.)tiktok\.com$/.test(h);
+  }catch(e){ return false; }
+  return false;
+}
+
+function fmtsOf(pid){
+  try{ return (typeof ABC_FORMATS !== 'undefined' && ABC_FORMATS[pid]) || []; }catch(e){ return []; }
+}
+function topicsAll(){
+  try{ return (typeof ABC_TOPICS !== 'undefined' && ABC_TOPICS) || []; }catch(e){ return []; }
+}
+function me(){ try{ return (typeof currentUser !== 'undefined' && currentUser) || null; }catch(e){ return null; } }
+function myCards(){
+  try{ var a = JSON.parse(localStorage.getItem('bp_my_cards') || '[]'); return Array.isArray(a) ? a : []; }
+  catch(e){ return []; }
+}
+/* Своя карта — по владельцу, а не по ключу правки. Ключ ставил один
+   слой и тут же стирал другой, поэтому заход из профиля открывал пустой
+   мастер и публикация заводила ВТОРУЮ карточку. Здесь этой развилки нет
+   вовсе: есть карта у человека — правим её. */
+function myCard(){
+  var u = me(); if(!u) return null;
+  var all = myCards();
+  for(var i = 0; i < all.length; i++){
+    var c = all[i];
+    if(c && !c._foreign && !c.hidden && String(c.userId) === String(u.id)) return c;
+  }
+  return null;
+}
+function draftKey(){ var u = me(); return 'bp_abc2_draft_' + (u ? u.id : 'anon'); }
+
+function fromCard(c){
+  var s = blank();
+  s.id = c.id;
+  var pd = c.platData || {}, ig = c.integrations || {};
+  ORDER.forEach(function(pid){
+    var p = pd[pid]; if(!p) return;
+    var ch = { url: p.url || '', subs: num(p.subs), reach: num(p.reach), er: num(p.er), fmts: {} };
+    (ig[pid] || []).forEach(function(it){
+      if(it && it.fmtId && num(it.price)) ch.fmts[it.fmtId] = num(it.price);
+    });
+    s.chans[pid] = ch; s.order.push(pid);
+  });
+  /* Тематики в старых картах бывают с повторами — мастер их не сторожил.
+     Повтор безобиден в списке чипов (тот же чип просто подсвечен), но в
+     карточке даёт два одинаковых тега и съедает место третьего. */
+  /* В старых картах в topics лежат то id ('games'), то подписи ('Игры'):
+     мастер писал по-разному в разные годы. Приводим к id, иначе чип не
+     подсветится и человек решит, что тема слетела. */
+  var _byLabel = {}; topicsAll().forEach(function(t){ _byLabel[t.label] = t.id; });
+  var _known = {}; topicsAll().forEach(function(t){ _known[t.id] = 1; });
+  s.topics = uniq((Array.isArray(c.topics) ? c.topics : []).map(function(x){
+    var v = String(x).trim();
+    return _known[v] ? v : (_byLabel[v] || '');
+  }).filter(Boolean)).slice(0, 5);
+  if(!s.topics.length && c.catsText){
+    var byLabel = {}; topicsAll().forEach(function(t){ byLabel[t.label] = t.id; });
+    String(c.catsText).split('·').forEach(function(x){
+      var id = byLabel[x.trim()]; if(id) s.topics.push(id);
+    });
+  }
+  if(typeof c.genderF === 'number') s.genderF = c.genderF;
+  s.showGender = !!c.showGender; s.kids = !!c.kids; s.showKids = !!c.showKids;
+  s.msg = String(c.msg || '');
+  return s;
+}
+function uniq(a){
+  var out = [], seen = {};
+  (a || []).forEach(function(x){ var k = String(x); if(!seen[k]){ seen[k] = 1; out.push(x); } });
+  return out;
+}
+/* Подпись состояния: по ней видно, разошлось ли то, что на экране, с
+   тем, что уже лежит в каталоге. */
+function sign(st){
+  try{
+    return JSON.stringify({
+      c: (st.order || []).map(function(p){
+        var c = st.chans[p] || {};
+        return [p, normUrl(c.url), num(c.subs), num(c.reach), num(c.er),
+                Object.keys(c.fmts || {}).sort().map(function(k){ return k + ':' + num(c.fmts[k]); })];
+      }),
+      t: uniq(st.topics || []).slice().sort(),
+      g: st.showGender ? st.genderF : -1, k: !!st.kids, m: String(st.msg || '')
+    });
+  }catch(e){ return ''; }
+}
+var _saved = '';
+function dirty(){ return !!S.id && sign(S) !== _saved; }
+function saveDraft(){
+  if(S && S.id) return;                 /* правим опубликованную — черновик не нужен */
+  try{ localStorage.setItem(draftKey(), JSON.stringify(S)); }catch(e){}
+}
+function loadDraft(){
+  try{
+    var raw = localStorage.getItem(draftKey());
+    if(!raw) return null;
+    var d = JSON.parse(raw);
+    if(!d || typeof d !== 'object') return null;
+    var s = blank();
+    if(Array.isArray(d.topics)) s.topics = uniq(d.topics).slice(0, 5);
+    if(Array.isArray(d.order)) s.order = uniq(d.order);
+    if(d.chans && typeof d.chans === 'object'){
+      ORDER.forEach(function(pid){
+        var c = d.chans[pid]; if(!c) return;
+        s.chans[pid] = { url:String(c.url||''), subs:num(c.subs), reach:num(c.reach),
+                         er:num(c.er), fmts:(c.fmts && typeof c.fmts==='object') ? c.fmts : {} };
+      });
+    }
+    s.order = s.order.filter(function(p){ return s.chans[p]; });
+    ORDER.forEach(function(p){ if(s.chans[p] && s.order.indexOf(p) < 0) s.order.push(p); });
+    if(typeof d.genderF === 'number') s.genderF = d.genderF;
+    s.showGender = !!d.showGender; s.kids = !!d.kids; s.showKids = !!d.showKids;
+    s.msg = String(d.msg || '');
+    return s;
+  }catch(e){ return null; }
+}
+
+/* ── Что готово, чего не хватает ──────────────────────────────────── */
+function chanReady(pid){
+  var c = S.chans[pid]; if(!c) return false;
+  return urlOk(pid, c.url) && Object.keys(c.fmts).some(function(k){ return num(c.fmts[k]) > 0; });
+}
+function readyChans(){ return S.order.filter(chanReady); }
+function todo(){
+  var t = [];
+  t.push({ ok: readyChans().length > 0, txt: 'Канал со ссылкой и ценой', to: 'chan' });
+  t.push({ ok: S.topics.length >= 3, txt: 'Три тематики или больше', to: 'topics' });
+  var withNums = readyChans().filter(function(p){ return num(S.chans[p].reach) > 0; });
+  t.push({ ok: withNums.length > 0, txt: 'Просмотры — по ним считается цена за тысячу', to: 'reach' });
+  return t;
+}
+function whyNot(){
+  var t = todo();
+  if(!t[0].ok) return 'Добавьте канал: ссылка и цена хотя бы за один формат';
+  if(!t[1].ok) return 'Выберите минимум 3 тематики';
+  return '';
+}
+
+/* ── Живая карточка ───────────────────────────────────────────────── */
+function mainPid(){
+  var best = '', bs = -1;
+  readyChans().forEach(function(p){
+    var s = num(S.chans[p].subs);
+    if(s > bs){ bs = s; best = p; }
+  });
+  return best || readyChans()[0] || S.order[0] || '';
+}
+function lowPrice(pid){
+  var c = S.chans[pid]; if(!c) return 0;
+  var low = 0;
+  Object.keys(c.fmts).forEach(function(k){
+    var v = num(c.fmts[k]); if(v > 0 && (!low || v < low)) low = v;
+  });
+  return low;
+}
+function cpmOf(pid){
+  var c = S.chans[pid]; if(!c) return '';
+  var p = lowPrice(pid), r = num(c.reach);
+  if(!p || !r) return '';
+  var v = (p / r) * 1000;
+  return (v < 1 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : money(v)) + ' ₽';
+}
+function previewHtml(){
+  var u = me();
+  var name = (u && u.name) || 'Блогер';
+  var ready = readyChans();
+  var mp = mainPid();
+  if(!ready.length){
+    return '<div class="a2-prev"><div class="a2-prev-ghost">'
+      + 'Добавьте канал — и здесь появится ваша карточка ровно в том виде,<br>в каком её увидит рекламодатель</div></div>';
+  }
+  var c = S.chans[mp] || {};
+  var pl = PLAT[mp] || PLAT.youtube;
+  var initials = String(name).replace(/[^A-Za-zА-Яа-я0-9\s]/g, '').trim()
+    .split(/\s+/).map(function(w){ return w.charAt(0); }).join('').slice(0, 2).toUpperCase() || 'Б';
+  var ava = (u && u.avatar) ? '<img alt="" src="' + esc(u.avatar) + '">' : esc(initials);
+  var handle = handleOf(c.url);
+
+  var pills = ready.map(function(p){
+    var s = num(S.chans[p].subs);
+    return '<span class="a2-pill"><i style="' + icoStyle(p, 10) + '"></i>'
+      + esc(PLAT[p].name) + (s ? ' <b>' + esc(short(s)) + '</b>' : '') + '</span>';
+  }).join('');
+
+  var cpm = cpmOf(mp);
+  var stats = ''
+    + '<div><div class="v">' + (num(c.reach) ? esc(short(c.reach)) : '—') + '</div><div class="k">Просмотры</div></div>'
+    + '<div><div class="v">' + (num(c.er) ? esc(num(c.er).toFixed(1)) + '%' : '—') + '</div><div class="k">ER</div></div>'
+    + '<div><div class="v">' + (cpm ? esc(cpm) : '—') + '</div><div class="k">CPM</div></div>';
+
+  var byId = {}; topicsAll().forEach(function(t){ byId[t.id] = t.label; });
+  var tags = uniq(S.topics).slice(0, 3).map(function(id){
+    return '<span class="a2-prev-tag">' + esc(byId[id] || id) + '</span>';
+  }).join('');
+
+  var low = lowPrice(mp);
+  var fmtName = '';
+  fmtsOf(mp).forEach(function(f){ if(num(c.fmts[f.id]) === low) fmtName = f.name; });
+  var prices = Object.keys(c.fmts).map(function(k){ return num(c.fmts[k]); }).filter(Boolean).sort(function(a,b){ return a-b; });
+  var top = prices.length > 1 ? prices[prices.length - 1] : 0;
+
+  return '<div class="a2-prev" style="--a2-plt:' + pl.rgb + '">'
+    + '<div class="a2-prev-top">'
+    +   '<div class="a2-ava">' + ava + '</div>'
+    +   '<div class="a2-prev-id"><div class="a2-prev-name">' + esc(name) + '</div>'
+    +     '<div class="a2-prev-sub">' + (handle ? esc(handle) + ' · ' : '') + esc(pl.name) + '</div></div>'
+    + '</div>'
+    + '<div class="a2-pills">' + pills + '</div>'
+    + '<div class="a2-prev-stats">' + stats + '</div>'
+    + (tags ? '<div class="a2-prev-tags">' + tags + '</div>' : '')
+    + '<div class="a2-prev-buy"><div class="a2-prev-price">'
+    +   '<b>' + (top ? money(low) + ' – ' + money(top) : money(low)) + ' ₽</b>'
+    +   (fmtName && !top ? '<small>' + esc(fmtName) + '</small>' : '')
+    + '</div><div class="a2-prev-add">Добавить</div></div>'
+    + '</div>';
+}
+
+/* ── Разметка канала ──────────────────────────────────────────────── */
+function chanHtml(pid, open){
+  var c = S.chans[pid], p = PLAT[pid];
+  var handle = handleOf(c.url);
+  var low = lowPrice(pid);
+  var bits = [];
+  if(num(c.subs)) bits.push(short(c.subs) + ' подписчиков');
+  if(low) bits.push('от ' + money(low) + ' ₽');
+  var sum = bits.join(' · ');
+  var warn = '';
+  if(!urlOk(pid, c.url)) warn = 'нужна ссылка на канал';
+  else if(!low) warn = 'нужна цена хотя бы за один формат';
+
+  var fmts = fmtsOf(pid);
+  var shown = fmts.filter(function(f){ return num(c.fmts[f.id]) > 0; });
+  var showAll = !!c.__all || shown.length === 0;
+  var list = showAll ? fmts : shown;
+
+  return '<div class="a2-ch' + (open ? ' open' : '') + '" data-p="' + pid + '">'
+    + '<div class="a2-ch-head" data-act="toggle">'
+    +   '<div class="a2-ch-ic" style="' + icoStyle(pid, 18) + '"></div>'
+    +   '<div class="a2-ch-id"><div class="a2-ch-name">' + esc(p.name)
+    +     (handle ? ' <span style="color:#666B75;font-weight:500">' + esc(handle) + '</span>' : '') + '</div>'
+    +     '<div class="a2-ch-sum' + (warn ? ' warn' : '') + '">' + esc(warn || sum || 'заполните канал') + '</div></div>'
+    +   '<svg class="a2-ch-ar" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>'
+    + '</div>'
+    + '<div class="a2-ch-body">'
+    +   '<div class="a2-lbl">Ссылка на канал</div>'
+    +   '<input class="a2-inp' + (c.url && !urlOk(pid, c.url) ? ' bad' : '') + '" data-f="url" type="url"'
+    +     ' inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false"'
+    +     ' placeholder="' + esc(p.ph) + '" value="' + esc(c.url) + '">'
+    +   (c.url && !urlOk(pid, c.url)
+        ? '<div class="a2-hint" style="color:#ff8d9c">Это не похоже на ссылку ' + esc(p.name) + ' — ждём адрес вида ' + esc(p.ph) + '</div>'
+        : '')
+    +   '<div class="a2-lbl">Ваши цифры</div>'
+    +   '<div class="a2-3">'
+    +     '<input class="a2-inp" data-f="subs" inputmode="numeric" placeholder="0" value="' + (num(c.subs) ? esc(String(Math.round(c.subs))) : '') + '">'
+    +     '<input class="a2-inp" data-f="reach" inputmode="numeric" placeholder="0" value="' + (num(c.reach) ? esc(String(Math.round(c.reach))) : '') + '">'
+    +     '<input class="a2-inp" data-f="er" inputmode="decimal" placeholder="0" value="' + (num(c.er) ? esc(String(c.er)) : '') + '">'
+    +   '</div>'
+    +   '<div class="a2-3-lbl"><span>подписчики</span><span>просмотры</span><span>ER, %</span></div>'
+    +   '<div class="a2-hint">Цифры с ваших слов — карточка так и подпишет. После размещения '
+    +     'рекламодатель попросит скриншот статистики: при расхождении он может открыть спор.</div>'
+    +   '<div class="a2-where" data-act="where" data-p="' + pid + '">Где это посмотреть' + (c.__where ? ' \u2191' : ' \u2193') + '</div>'
+    +   (c.__where ? '<div class="a2-hint" style="margin-top:4px">' + esc(WHERE[pid] || '') + '</div>' : '')
+    +   (num(c.reach) ? '' : '<div class="a2-hint" style="margin-top:6px">Без просмотров не посчитается цена за тысячу — а по ней рекламодатели и сравнивают каналы.</div>')
+    +   '<div class="a2-lbl">Форматы и цены</div>'
+    +   list.map(function(f){
+          var v = num(c.fmts[f.id]);
+          return '<div class="a2-fmt' + (v ? ' on' : '') + '">'
+            + '<div class="a2-fmt-nm">' + esc(f.name) + '<small>' + esc(f.desc) + '</small></div>'
+            + '<input class="a2-fmt-pr" data-fmt="' + esc(f.id) + '" inputmode="numeric"'
+            + ' placeholder="цена ₽" value="' + (v ? esc(money(v)) : '') + '">'
+            + '</div>';
+        }).join('')
+    +   (showAll || shown.length === fmts.length ? ''
+        : '<button class="a2-fmt-more" data-act="allfmt">Показать все форматы (' + fmts.length + ')</button>')
+    +   '<button class="a2-ch-del" data-act="del">Убрать канал</button>'
+    + '</div></div>';
+}
+
+function addRowHtml(){
+  var left = ORDER.filter(function(p){ return !S.chans[p]; });
+  if(!left.length) return '';
+  return '<div class="a2-add">' + left.map(function(pid){
+    return '<button data-act="addch" data-p="' + pid + '">'
+      + '<i style="' + icoStyle(pid, 12) + '"></i>' + esc(PLAT[pid].name) + '</button>';
+  }).join('') + '</div>';
+}
+
+function bodyHtml(){
+  var byId = {};
+  var tp = topicsAll();
+  var full = S.topics.length >= 5;
+  return ''
+    + previewHtml()
+    + '<div class="a2-h">Каналы</div>'
+    + '<div class="a2-note">Каждый канал — своя ссылка, свои цифры и свои цены. Можно добавить все три.</div>'
+    + '<div id="a2-chans">' + S.order.map(function(pid){
+        return chanHtml(pid, S.__open === pid);
+      }).join('') + '</div>'
+    + addRowHtml()
+    + '<div class="a2-h">Тематики</div>'
+    + '<div class="a2-note">От 3 до 5 — по ним рекламодатели ищут в каталоге. Выбрано: ' + S.topics.length + ' из 5.</div>'
+    + '<div class="a2-topics">' + tp.map(function(t){
+        var on = S.topics.indexOf(t.id) >= 0;
+        return '<div class="a2-topic' + (on ? ' on' : (full ? ' off' : '')) + '" data-act="topic" data-id="' + esc(t.id) + '">'
+          + esc(t.ico) + ' ' + esc(t.label) + '</div>';
+      }).join('') + '</div>'
+    + '<div class="a2-h">Аудитория</div>'
+    + '<div class="a2-card">'
+    +   '<div class="a2-row"><div class="a2-row-id"><div class="a2-row-t">Показывать пол аудитории</div>'
+    +     '<div class="a2-row-s">Помогает подобрать подходящий оффер</div></div>'
+    +     '<div class="a2-sw' + (S.showGender ? ' on' : '') + '" data-act="sw" data-k="showGender"></div></div>'
+    +   (S.showGender ? '<div class="a2-gender"><div class="a2-gbar"><i style="width:' + S.genderF + '%"></i></div>'
+    +     '<div class="a2-grow"><span>' + S.genderF + '% женщины</span><span>' + (100 - S.genderF) + '% мужчины</span></div>'
+    +     '<input class="a2-range" type="range" min="0" max="100" step="5" value="' + S.genderF + '" data-act="gender"></div>' : '')
+    +   '<div class="a2-row"><div class="a2-row-id"><div class="a2-row-t">Контент для детей</div>'
+    +     '<div class="a2-row-s">Часть рекламодателей это ограничивает</div></div>'
+    +     '<div class="a2-sw' + (S.kids ? ' on' : '') + '" data-act="sw" data-k="kids"></div></div>'
+    + '</div>'
+    + '<div class="a2-h">Пара слов рекламодателю</div>'
+    + '<div class="a2-note">Необязательно. Видно прямо в карточке — коротко о канале и о том, с кем вам интересно работать.</div>'
+    + '<textarea class="a2-ta" data-act="msg" maxlength="500" placeholder="Например: делаю обзоры техники, беру не больше двух интеграций в месяц.">' + esc(S.msg) + '</textarea>'
+    + '<div class="a2-cnt">' + S.msg.length + ' / 500</div>'
+    + '<div class="a2-h">Осталось</div>'
+    + '<div class="a2-todo">' + todo().map(function(t){
+        return '<div class="' + (t.ok ? 'ok' : '') + '"' + (t.ok ? '' : ' data-act="goto" data-to="' + t.to + '"')
+          + '><b>' + (t.ok ? '\u2713' : '\u00b7') + '</b>' + esc(t.txt) + '</div>';
+      }).join('') + '</div>';
+}
+
+/* ── Отрисовка ────────────────────────────────────────────────────── */
+var root = null, bar = null;
+function ensure(){
+  var scroll = document.getElementById('abc-scroll');
+  if(!scroll) return false;
+  if(!root || !root.isConnected){
+    root = document.getElementById('a2');
+    if(!root){
+      root = document.createElement('div');
+      root.id = 'a2';
+      scroll.appendChild(root);
+    }
+    root.addEventListener('click', onClick);
+    root.addEventListener('input', onInput);
+    root.addEventListener('change', onInput);
+  }
+  var page = document.getElementById('pg-add-blogger-card');
+  if(!bar || !bar.isConnected){
+    bar = document.getElementById('a2-bar');
+    if(!bar){
+      bar = document.createElement('div');
+      bar.id = 'a2-bar';
+      bar.innerHTML = '<button type="button"></button><div class="a2-why"></div>';
+      (page || document.body).appendChild(bar);
+      bar.querySelector('button').addEventListener('click', publish);
+      bar.addEventListener('click', function(ev){
+        var t = ev.target;
+        if(t && t.getAttribute && t.getAttribute('data-act') === 'tocat'){
+          try{ goTo('catalog'); }catch(e){ try{ goTo('home'); }catch(e2){} }
+        }
+      });
+    }
+  }
+  return true;
+}
+function paintBar(){
+  if(!bar) return;
+  var b = bar.querySelector('button'), w = bar.querySelector('.a2-why');
+  var why = whyNot();
+  if(S.__done){
+    b.textContent = 'Опубликовано \u2713';
+    b.classList.remove('idle');
+    w.innerHTML = '<span data-act="tocat" style="color:#7fa8f0;pointer-events:auto;cursor:pointer">Открыть каталог</span>';
+    return;
+  }
+  b.textContent = S.id ? (dirty() ? 'Сохранить изменения' : 'Сохранить карту') : 'Опубликовать карту';
+  b.classList.toggle('idle', !!why);
+  w.textContent = why
+    || (S.id ? (dirty() ? 'Есть несохранённые правки — в каталоге пока прежняя карточка'
+                        : 'Всё сохранено — так карточка и стоит в каталоге')
+             : 'Карточка появится в каталоге сразу');
+}
+var _focus = null;
+function render(){
+  if(!ensure()) return;
+  try{
+    var a = document.activeElement;
+    _focus = (a && root.contains(a)) ? {
+      p: (a.closest('.a2-ch') || {}).dataset ? a.closest('.a2-ch').dataset.p : '',
+      f: a.getAttribute('data-f') || '', fmt: a.getAttribute('data-fmt') || '',
+      act: a.getAttribute('data-act') || '', pos: a.selectionStart
+    } : null;
+  }catch(e){ _focus = null; }
+
+  root.innerHTML = bodyHtml();
+  paintBar();
+
+  if(_focus){
+    try{
+      var sel = _focus.act === 'msg' ? '[data-act="msg"]'
+        : _focus.fmt ? '.a2-ch[data-p="' + _focus.p + '"] [data-fmt="' + _focus.fmt + '"]'
+        : _focus.f ? '.a2-ch[data-p="' + _focus.p + '"] [data-f="' + _focus.f + '"]' : '';
+      var el = sel && root.querySelector(sel);
+      if(el){ el.focus(); if(_focus.pos != null && el.setSelectionRange){ try{ el.setSelectionRange(_focus.pos, _focus.pos); }catch(e2){} } }
+    }catch(e){ E(e); }
+  }
+  saveDraft();
+}
+
+/* ── Ввод ─────────────────────────────────────────────────────────── */
+function onInput(ev){
+  var t = ev.target; if(!t) return;
+  try{
+    if(t.getAttribute('data-act') === 'msg'){
+      S.msg = String(t.value || '').slice(0, 500);
+      var cnt = root.querySelector('.a2-cnt');
+      if(cnt) cnt.textContent = S.msg.length + ' / 500';
+      saveDraft(); return;
+    }
+    if(t.getAttribute('data-act') === 'gender'){
+      S.genderF = Math.max(0, Math.min(100, parseInt(t.value, 10) || 0));
+      var bar2 = root.querySelector('.a2-gbar i');
+      var row = root.querySelector('.a2-grow');
+      if(bar2) bar2.style.width = S.genderF + '%';
+      if(row) row.innerHTML = '<span>' + S.genderF + '% женщины</span><span>' + (100 - S.genderF) + '% мужчины</span>';
+      saveDraft(); return;
+    }
+    var box = t.closest ? t.closest('.a2-ch') : null;
+    if(!box) return;
+    var pid = box.getAttribute('data-p');
+    var c = S.chans[pid]; if(!c) return;
+    var f = t.getAttribute('data-f'), fmt = t.getAttribute('data-fmt');
+    if(f === 'url'){ c.url = String(t.value || ''); softPaint(pid); saveDraft(); return; }
+    if(f === 'subs' || f === 'reach' || f === 'er'){ c[f] = num(t.value); softPaint(pid); saveDraft(); return; }
+    if(fmt){
+      var v = num(t.value);
+      if(v) c.fmts[fmt] = v; else delete c.fmts[fmt];
+      softPaint(pid); saveDraft(); return;
+    }
+  }catch(e){ E(e); }
+}
+/* Перерисовывать всё на каждую букву нельзя — уедет курсор. Обновляем
+   только то, что зависит от введённого: строку-итог канала, живую
+   карточку, список «осталось» и кнопку. */
+function softPaint(pid){
+  try{
+    var box = root.querySelector('.a2-ch[data-p="' + pid + '"]');
+    if(box){
+      var c = S.chans[pid], low = lowPrice(pid);
+      var bits = [];
+      if(num(c.subs)) bits.push(short(c.subs) + ' подписчиков');
+      if(low) bits.push('от ' + money(low) + ' ₽');
+      var warn = !urlOk(pid, c.url) ? 'нужна ссылка на канал' : (!low ? 'нужна цена хотя бы за один формат' : '');
+      var sm = box.querySelector('.a2-ch-sum');
+      if(sm){ sm.textContent = warn || bits.join(' · ') || 'заполните канал'; sm.classList.toggle('warn', !!warn); }
+      var nm = box.querySelector('.a2-ch-name');
+      var h = handleOf(c.url);
+      if(nm) nm.innerHTML = esc(PLAT[pid].name) + (h ? ' <span style="color:#666B75;font-weight:500">' + esc(h) + '</span>' : '');
+      var inp = box.querySelector('[data-f="url"]');
+      if(inp) inp.classList.toggle('bad', !!c.url && !urlOk(pid, c.url));
+    }
+    var pv = root.querySelector('.a2-prev');
+    var wrap = document.createElement('div');
+    wrap.innerHTML = previewHtml();
+    var fresh = wrap.firstChild;
+    if(pv && fresh) pv.parentNode.replaceChild(fresh, pv);
+    else if(!pv && fresh) root.insertBefore(fresh, root.firstChild);
+    var td = root.querySelector('.a2-todo');
+    if(td) td.innerHTML = todo().map(function(t){
+      return '<div class="' + (t.ok ? 'ok' : '') + '"><b>' + (t.ok ? '✓' : '·') + '</b>' + esc(t.txt) + '</div>';
+    }).join('');
+    paintBar();
+  }catch(e){ E(e); }
+}
+
+function onClick(ev){
+  var t = ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null;
+  if(!t) return;
+  var act = t.getAttribute('data-act');
+  try{
+    if(act === 'toggle'){
+      var pid = t.closest('.a2-ch').getAttribute('data-p');
+      S.__open = (S.__open === pid) ? '' : pid;
+      render();
+      if(S.__open){
+        var box = root.querySelector('.a2-ch[data-p="' + S.__open + '"]');
+        if(box) setTimeout(function(){ try{ box.scrollIntoView({ block:'nearest', behavior:'smooth' }); }catch(e){} }, 60);
+      }
+      return;
+    }
+    if(act === 'addch'){
+      var p2 = t.getAttribute('data-p');
+      if(!S.chans[p2]){ S.chans[p2] = { url:'', subs:0, reach:0, er:0, fmts:{} }; S.order.push(p2); }
+      S.__open = p2; render();
+      var inp = root.querySelector('.a2-ch[data-p="' + p2 + '"] [data-f="url"]');
+      if(inp) setTimeout(function(){ try{ inp.focus(); }catch(e){} }, 80);
+      return;
+    }
+    if(act === 'del'){
+      var p3 = t.closest('.a2-ch').getAttribute('data-p');
+      /* Один тап не должен уносить введённые цены. Переспрашиваем только
+         когда есть что терять — пустой канал убираем молча. */
+      var cc = S.chans[p3] || {};
+      var hasWork = !!String(cc.url || '').trim() || Object.keys(cc.fmts || {}).length
+        || num(cc.subs) || num(cc.reach) || num(cc.er);
+      if(hasWork && !t.dataset.sure){
+        t.dataset.sure = '1';
+        t.textContent = 'Точно убрать ' + PLAT[p3].name + '? Цены сотрутся';
+        t.style.borderColor = 'rgba(240,71,94,.7)';
+        setTimeout(function(){
+          try{ if(t.isConnected){ t.dataset.sure = ''; t.textContent = 'Убрать канал'; t.style.borderColor = ''; } }catch(e){}
+        }, 4000);
+        return;
+      }
+      delete S.chans[p3];
+      S.order = S.order.filter(function(x){ return x !== p3; });
+      if(S.__open === p3) S.__open = '';
+      render(); return;
+    }
+    if(act === 'goto'){
+      /* Названо, чего не хватает, — значит надо и привести. */
+      var to = t.getAttribute('data-to');
+      if(to === 'topics'){
+        var h = [].filter.call(root.querySelectorAll('.a2-h'), function(x){ return /ТЕМАТИКИ/i.test(x.textContent); })[0];
+        if(h) h.scrollIntoView({ block:'start', behavior:'smooth' });
+        return;
+      }
+      var want = S.order.filter(function(p){ return !chanReady(p); })[0]
+        || S.order.filter(function(p){ return !num(S.chans[p].reach); })[0] || S.order[0];
+      if(!want){
+        var add = root.querySelector('.a2-add');
+        if(add) add.scrollIntoView({ block:'center', behavior:'smooth' });
+        return;
+      }
+      S.__open = want; render();
+      setTimeout(function(){
+        try{
+          var box = root.querySelector('.a2-ch[data-p="' + want + '"]');
+          if(!box) return;
+          box.scrollIntoView({ block:'start', behavior:'smooth' });
+          var c2 = S.chans[want];
+          var sel = !urlOk(want, c2.url) ? '[data-f="url"]'
+            : (to === 'reach' && !num(c2.reach)) ? '[data-f="reach"]'
+            : '.a2-fmt-pr';
+          var f = box.querySelector(sel);
+          if(f) setTimeout(function(){ try{ f.focus(); }catch(e){} }, 240);
+        }catch(e){ E(e); }
+      }, 40);
+      return;
+    }
+    if(act === 'where'){
+      var pw = t.getAttribute('data-p');
+      if(S.chans[pw]){ S.chans[pw].__where = !S.chans[pw].__where; render(); }
+      return;
+    }
+    if(act === 'allfmt'){
+      var p4 = t.closest('.a2-ch').getAttribute('data-p');
+      S.chans[p4].__all = 1; render(); return;
+    }
+    if(act === 'topic'){
+      var id = t.getAttribute('data-id');
+      var i = S.topics.indexOf(id);
+      /* убираем ВСЕ вхождения: в старых картах бывают повторы, и одно
+         нажатие снимало только первое — чип оставался подсвеченным */
+      if(i >= 0) S.topics = S.topics.filter(function(x){ return x !== id; });
+      else if(S.topics.length < 5) S.topics.push(id);
+      else { toast('Больше пяти тематик не выбрать'); return; }
+      render(); return;
+    }
+    if(act === 'sw'){
+      var k = t.getAttribute('data-k');
+      S[k] = !S[k];
+      if(k === 'kids') S.showKids = S.kids;
+      render(); return;
+    }
+  }catch(e){ E(e); }
+}
+function toast(m){
+  try{ if(typeof showAuthToast === 'function') return showAuthToast(m, 'err'); }catch(e){}
+  try{ if(typeof bpToast === 'function') return bpToast(m); }catch(e){}
+}
+
+/* ── Публикация ───────────────────────────────────────────────────── */
+function publish(){
+  var why = whyNot();
+  if(why){
+    var b = bar.querySelector('button');
+    b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake');
+    toast(why);
+    return;
+  }
+  try{
+    var u = me();
+    var ready = readyChans();
+    var mp = mainPid();
+    var name = (u && u.name) || 'Блогер';
+    var initials = String(name).replace(/[^A-Za-zА-Яа-я0-9\s]/g, '').trim()
+      .split(/\s+/).map(function(w){ return w.charAt(0); }).join('').toUpperCase().slice(0, 2) || 'Б';
+    var colors = ['#2f6ce0,#1b49a8','#06b6d4,#3b82f6','#f6a823,#f0642a','#6366f1,#818cf8','#e8305a,#c2569c'];
+    var col = colors[Math.abs(String(name).split('').reduce(function(a, ch){ return a + ch.charCodeAt(0); }, 0)) % colors.length];
+
+    var socsHtml = ready.map(function(pid){
+      var cls = { youtube:'syt', telegram:'stg', tiktok:'stt' }[pid];
+      return '<div class="blc-soc ' + cls + '" title="' + PLAT[pid].name + '">'
+        + '<img loading="lazy" class="soc-img" src="' + icoUrl(pid) + '" alt=""></div>';
+    }).join('');
+
+    var byId = {}; topicsAll().forEach(function(t){ byId[t.id] = t.label; });
+    var catsText = S.topics.slice(0, 5).map(function(id){ return byId[id] || id; }).join(' · ')
+      || 'Новый блогер на платформе';
+
+    var platData = {}, integrations = {};
+    ready.forEach(function(pid){
+      var c = S.chans[pid];
+      platData[pid] = { url: normUrl(c.url), subs: num(c.subs), er: num(c.er),
+                        reach: num(c.reach), verified: true, enabled: true };
+      var list = [];
+      Object.keys(c.fmts).forEach(function(fid){
+        var v = num(c.fmts[fid]); if(v > 0) list.push({ fmtId: fid, price: v });
+      });
+      if(list.length) integrations[pid] = list;
+    });
+
+    var m = S.chans[mp] || {};
+    var cpm = cpmOf(mp);
+    var old = myCard();
+    var sinceText = '';
+    try{
+      var reg = (u && u.registeredAt) ? new Date(u.registeredAt) : new Date();
+      sinceText = (typeof daysSince === 'function') ? daysSince(reg.toISOString()) : '';
+    }catch(e){}
+
+    var cardData = {
+      id: (old && old.id) || ('mycard_' + Date.now()),
+      name: name, initials: initials, col: col, socsHtml: socsHtml,
+      catsText: catsText, sinceText: (old && old.sinceText) || sinceText,
+      subsVal:  num(m.subs)  ? short(m.subs)  : '—',
+      reachVal: num(m.reach) ? short(m.reach) : '—',
+      erVal:    num(m.er)    ? num(m.er).toFixed(1) + '%' : '—',
+      cpvVal:   cpm || '—',
+      publishedAt: (old && old.publishedAt) || new Date().toISOString(),
+      /* У карточки бывает СВОЁ фото, загруженное отдельно. Правка цены
+         не должна подменять его аватаром профиля. */
+      avatar: (old && old.avatar) ? old.avatar : ((u && u.avatar) ? u.avatar : null),
+      userId: u ? u.id : null,
+      userEmail: u ? u.email : null,
+      platforms: ready.slice(),
+      integrations: integrations,
+      platData: platData,
+      genderF: S.genderF, genderM: 100 - S.genderF,
+      kids: !!S.kids, showGender: !!S.showGender, showKids: !!S.showKids,
+      topics: S.topics.slice(),
+      msg: String(S.msg || '').trim().slice(0, 500)
+    };
+
+    var all = myCards();
+    var idx = -1;
+    for(var i = 0; i < all.length; i++) if(all[i] && String(all[i].id) === String(cardData.id)) idx = i;
+    /* Дописываем поверх старой записи, а не заменяем: иначе исчезают
+       поля, которых раздел не знает — рейтинг, отзывы, скрытие админом. */
+    if(idx >= 0) all[idx] = Object.assign({}, all[idx], cardData);
+    else all.unshift(cardData);
+    localStorage.setItem('bp_my_cards', JSON.stringify(all));
+
+    /* Ключ правки старого мастера снимаем, чтобы он не открылся следом. */
+    try{ localStorage.removeItem('bp_editing_card_id'); }catch(e){}
+    try{ localStorage.removeItem(draftKey()); }catch(e){}
+
+    var wasEdit = idx >= 0;
+    S.id = cardData.id;
+    try{
+      var dom = document.querySelector('.blc[data-cardid="' + cardData.id + '"]');
+      if(dom) dom.remove();
+    }catch(e){}
+    try{ if(typeof renderMyCard === 'function') renderMyCard(cardData); }catch(e){ E(e); }
+    try{ if(typeof loadMyCards === 'function') loadMyCards(); }catch(e){}
+    try{ if(typeof showAuthToast === 'function') showAuthToast(wasEdit ? 'Карта обновлена' : 'Карта опубликована', 'ok'); }catch(e){}
+    /* Раньше публикация выкидывала на главную, и человек не понимал, что
+       именно уехало в каталог. Остаёмся на месте: кнопка становится
+       отметкой, рядом — дорога в каталог. */
+    _saved = sign(S);
+    S.__done = 1;
+    render();
+    setTimeout(function(){ try{ S.__done = 0; paintBar(); }catch(e){} }, 6000);
+  }catch(e){ E(e); toast('Не удалось сохранить карту'); }
+}
+
+/* ── Вход в раздел ────────────────────────────────────────────────── */
+/* Ссылка без http:// выбрасывается сервером вместе со ВСЕЙ площадкой:
+   карточка на другом устройстве приезжает без цифр канала. Старый мастер
+   писал именно так. Чиним разом при первом открытии раздела. */
+var _urlsFixed = false;
+function fixStoredUrls(){
+  if(_urlsFixed) return; _urlsFixed = true;
+  try{
+    var all = myCards(), changed = 0;
+    all.forEach(function(c){
+      if(!c || c._foreign || !c.platData) return;
+      Object.keys(c.platData).forEach(function(pid){
+        var p = c.platData[pid];
+        if(!p || !p.url) return;
+        var fixed = normUrl(p.url);
+        if(fixed !== p.url){ p.url = fixed; changed++; }
+      });
+    });
+    if(changed) localStorage.setItem('bp_my_cards', JSON.stringify(all));
+  }catch(e){ E(e); }
+}
+
+function open(){
+  try{
+    fixStoredUrls();
+    var card = myCard();
+    S = card ? fromCard(card) : (loadDraft() || blank());
+    S.__open = S.order.length === 1 ? S.order[0] : '';
+    if(!S.order.length) S.__open = '';
+    _saved = card ? sign(S) : '';
+    var sub = document.getElementById('abc-step-label');
+    if(sub) sub.textContent = card ? 'Правим вашу карточку' : 'Одна страница — и вы в каталоге';
+    var ttl = document.querySelector('.abc-nav-title');
+    if(ttl) ttl.textContent = card ? 'Ваша карта' : 'Карта блогера';
+    render();
+    if(bar) bar.style.display = '';
+  }catch(e){ E(e); }
+}
+function close(){ try{ if(bar) bar.style.display = 'none'; }catch(e){} }
+
+function onPage(){
+  var pg = document.getElementById('pg-add-blogger-card');
+  var on = pg && pg.classList.contains('on');
+  if(on) open(); else close();
+}
+(function hook(){
+  try{
+    var orig = window.goTo;
+    if(typeof orig === 'function'){
+      window.goTo = function(page){
+        var r = orig.apply(this, arguments);
+        setTimeout(onPage, 0);
+        return r;
+      };
+    }
+  }catch(e){ E(e); }
+  try{
+    var pg = document.getElementById('pg-add-blogger-card');
+    if(pg) new MutationObserver(function(){ onPage(); })
+      .observe(pg, { attributes:true, attributeFilter:['class'] });
+  }catch(e){ E(e); }
+  setTimeout(onPage, 400);
+})();
+})();
+</script>
+
 </body>
 </html>
