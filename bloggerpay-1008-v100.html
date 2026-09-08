@@ -87352,9 +87352,18 @@ html #pg-add-blogger-card #a3 :focus-visible{ outline:2px solid var(--a3-t1); ou
   background:rgba(255,255,255,.04); border:1px solid var(--a3-brd2)!important; color:var(--a3-t2);
   transition:background .16s var(--a3-ease), border-color .16s var(--a3-ease), color .16s var(--a3-ease);
 }
-.a3-chip[aria-pressed="true"]{ background:rgba(47,108,224,.24); border-color:rgba(91,147,245,.85)!important; color:#fff; font-weight:650 }
+/* Выбранный чип был только обведён тонкой синей рамкой — на телефоне
+   отличить его от невыбранного получалось не сразу. Заливаем. */
+.a3-chip[aria-pressed="true"]{ background:var(--a3-b)!important; border-color:var(--a3-b)!important;
+  color:#fff; font-weight:700; box-shadow:0 2px 10px rgba(47,108,224,.35) }
 .a3-chip.dim{ opacity:.45 }
 .a3-none{ font-size:12.5px; color:var(--a3-t3); padding:6px 2px }
+
+/* честное предупреждение по своим же цифрам */
+.a3-note{ display:flex; gap:10px; align-items:flex-start; margin:-4px 0 14px; padding:11px 13px; border-radius:14px;
+  background:rgba(246,168,35,.09); border:1px solid rgba(246,168,35,.3);
+  font-size:12px; line-height:1.45; color:var(--a3-t2) }
+.a3-note svg{ width:16px; height:16px; flex:0 0 auto; margin-top:1px; color:var(--a3-warn) }
 
 /* переключатели */
 .a3-sw{ display:flex; align-items:center; gap:12px; padding:11px 0; border-top:1px solid var(--a3-brd) }
@@ -87367,11 +87376,17 @@ html #pg-add-blogger-card #a3 :focus-visible{ outline:2px solid var(--a3-t1); ou
   background:#fff; opacity:.7; box-shadow:0 1px 3px rgba(0,0,0,.4); transition:transform .18s var(--a3-ease), opacity .18s }
 .a3-tg[aria-checked="true"]{ background:var(--a3-b); border-color:var(--a3-b)!important }
 .a3-tg[aria-checked="true"]::after{ transform:translateX(19px); opacity:1 }
-.a3-gender{ padding:4px 0 6px }
-.a3-gbar{ height:6px; border-radius:999px; overflow:hidden; display:flex; background:rgba(59,130,246,.45) }
-.a3-gbar i{ display:block; height:100%; background:rgba(236,72,153,.7) }
-.a3-grow{ display:flex; justify-content:space-between; font-size:11.5px; color:var(--a3-t3); margin-top:6px }
-.a3-range{ width:100%; margin-top:8px; accent-color:var(--a3-b) }
+/* Полоса и ползунок были ДВУМЯ элементами один под другим — одно и то же
+   число рисовалось дважды. Ползунок лежит прозрачным поверх полосы: видна
+   полоса, а тянут за неё же. */
+.a3-gender{ padding:2px 0 4px }
+.a3-gwrap{ position:relative; height:28px; display:flex; align-items:center }
+.a3-gbar{ height:8px; width:100%; border-radius:999px; overflow:hidden; display:flex; background:rgba(59,130,246,.5) }
+.a3-gbar i{ display:block; height:100%; background:rgba(236,72,153,.75); transition:width .1s linear }
+.a3-gknob{ position:absolute; top:50%; width:18px; height:18px; margin:-9px 0 0 -9px; border-radius:50%;
+  background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.5); pointer-events:none }
+.a3-grow{ display:flex; justify-content:space-between; font-size:11.5px; color:var(--a3-t3); margin-top:2px }
+.a3-range{ position:absolute; left:0; right:0; top:0; width:100%; height:28px; margin:0; opacity:0; cursor:pointer }
 
 /* текст */
 .a3-tawrap{ position:relative }
@@ -87513,6 +87528,7 @@ var IC = {
   tag:   svg('<path d="M3.5 12.5v-8a1 1 0 0 1 1-1h8l8 8-9 9z"/><circle cx="8" cy="8" r="1.3"/>'),
   users: svg('<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.6a3 3 0 0 1 0 5.8M20.5 19a5.4 5.4 0 0 0-3.6-5.1"/>'),
   photo: svg('<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="m4 17 5-4 4 3 3-2 4 3"/>'),
+  warn:  svg('<path d="M12 4.5 21 19.5H3z"/><path d="M12 10v4M12 17h.01"/>'),
   msg:   svg('<path d="M4.5 5.5h15a1 1 0 0 1 1 1V16a1 1 0 0 1-1 1H9l-4.5 3.5V6.5a1 1 0 0 1 1-1z"/>'),
   find:  svg('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-3.6-3.6"/>'),
   back:  svg('<polyline points="15 18 9 12 15 6"/>', 20),
@@ -87581,15 +87597,27 @@ function plural(n, a, b, c){
   if(d === 1) return a;
   return c;
 }
+/* Человеческое имя канала из ссылки. Служебный id вида
+   youtube.com/channel/UCAnAbLV2reQJC_tKhfsLnhQ ником НЕ считаем: он
+   занимал всю строку в шапке и стоял в карточке под именем блогера как
+   набор букв. Лучше не показывать ничего. */
 function handleOf(url){
   var s = String(url || '').trim();
   var m = /(?:^|\/)@([A-Za-z0-9._-]{2,40})/.exec(s);
   if(m) return '@' + m[1];
   m = /(?:t\.me|telegram\.me)\/([A-Za-z0-9._-]{2,40})/i.exec(s);
   if(m) return '@' + m[1];
-  m = /youtube\.com\/(?:c|channel|user)\/([A-Za-z0-9._-]{2,40})/i.exec(s);
-  if(m) return m[1];
+  m = /youtube\.com\/(?:c|user)\/([A-Za-z0-9._-]{2,40})/i.exec(s);
+  if(m && !/^UC[A-Za-z0-9_-]{20,}$/.test(m[1])) return m[1];
   return '';
+}
+/* Имя из профиля бывает пустым или мусорным: у входа через Телеграм его
+   может не быть вовсе, и в карточке оставалась одна кавычка. Тогда берём
+   ник из ссылки на канал — ровно так же поступает карточка в каталоге. */
+function nameOf(u, url){
+  var s = String((u && u.name) || '').trim();
+  if(s.replace(/[^A-Za-zА-Яа-яЁё0-9]/g, '').length >= 2) return s;
+  return handleOf(url) || 'Блогер';
 }
 /* Ссылку без схемы сервер выбрасывает вместе со ВСЕЙ площадкой
    (cleanCard: if(url && !/^https?:\/\//) continue), а плейсхолдеры сами
@@ -88061,9 +88089,11 @@ function step2Html(){
     + '<div class="a3-group">'
     +   '<div class="a3-sw"><div class="lb" id="a3-sw-g">Показывать пол аудитории<small>Помогает подобрать подходящий оффер</small></div>'
     +     '<button type="button" class="a3-tg" role="switch" aria-checked="' + (S.showGender ? 'true' : 'false') + '" data-act="sw" data-k="showGender" aria-labelledby="a3-sw-g"></button></div>'
-    +   (S.showGender ? '<div class="a3-gender"><div class="a3-gbar"><i style="width:' + S.genderF + '%"></i></div>'
-    +     '<div class="a3-grow"><span>' + S.genderF + '% женщины</span><span>' + (100 - S.genderF) + '% мужчины</span></div>'
-    +     '<input class="a3-range" type="range" min="0" max="100" step="5" value="' + S.genderF + '" data-act="gender" aria-label="Доля женщин в аудитории"></div>' : '')
+    +   (S.showGender ? '<div class="a3-gender"><div class="a3-gwrap">'
+    +     '<div class="a3-gbar"><i style="width:' + S.genderF + '%"></i></div>'
+    +     '<span class="a3-gknob" style="left:' + S.genderF + '%"></span>'
+    +     '<input class="a3-range" type="range" min="0" max="100" step="5" value="' + S.genderF + '" data-act="gender" aria-label="Доля женщин в аудитории"></div>'
+    +     '<div class="a3-grow"><span>' + S.genderF + '% женщины</span><span>' + (100 - S.genderF) + '% мужчины</span></div></div>' : '')
     +   '<div class="a3-sw"><div class="lb" id="a3-sw-k">Контент для детей<small>Часть рекламодателей это ограничивает</small></div>'
     +     '<button type="button" class="a3-tg" role="switch" aria-checked="' + (S.kids ? 'true' : 'false') + '" data-act="sw" data-k="kids" aria-labelledby="a3-sw-k"></button></div>'
     + '</div>'
@@ -88083,14 +88113,36 @@ function initialsOf(name){
   var r = ((w[0] || '').charAt(0) + (w[1] ? w[1].charAt(0) : '')).toUpperCase();
   return r || 'Б';
 }
+/* Раздел не выдумывает «рыночные» цифры — он делит одно введённое число
+   на другое и показывает результат. Если из своих же цифр выходит цена в
+   сотню рублей за просмотр, лучше сказать об этом здесь, чем оставить это
+   рекламодателю в каталоге. */
+function sanity(pid){
+  var c = chanOf(pid); if(!c) return [];
+  var out = [], low = lowPrice(pid), r = numInt(c.reach), er = numEr(c.er);
+  if(low && r){
+    var per = low / r;
+    if(per >= 10) out.push('Цена делится на просмотры как ' + money(per) + ' ₽ за один просмотр — проверьте цену и число просмотров.');
+  }
+  if(low && !r) out.push('Без просмотров цена за тысячу не считается — в карточке на её месте будет прочерк.');
+  if(er >= 50) out.push('ER ' + erText(er) + ' — такую цифру рекламодатель попросит подтвердить скриншотом статистики.');
+  if(r && numInt(c.subs) && r > numInt(c.subs) * 50)
+    out.push('Просмотров в ' + Math.round(r / numInt(c.subs)) + ' раз больше, чем подписчиков — проверьте, те ли это числа.');
+  return out;
+}
+function sanityHtml(pid){
+  var list = sanity(pid);
+  if(!list.length) return '';
+  return '<div class="a3-note">' + IC.warn + '<div>' + list.map(function(t){ return esc(t); }).join('<br>') + '</div></div>';
+}
 function previewHtml(){
   var u = me();
-  var name = (u && u.name) || 'Блогер';
   var ready = readyChans(), mp = mainPid();
   if(!ready.length){
     return '<div class="a3-empty"><h3>Карточки пока нет</h3><p>Вернитесь на первый шаг и добавьте канал со ссылкой и ценой.</p></div>';
   }
   var c = chanOf(mp) || {}, pl = PLAT[mp] || PLAT.youtube;
+  var name = nameOf(u, c.url);
   var ava = (u && u.avatar) ? '<img alt="" src="' + esc(u.avatar) + '" onerror="this.remove()">' : '';
   var handle = handleOf(c.url);
   var pills = ready.map(function(p){
@@ -88110,7 +88162,7 @@ function previewHtml(){
   return '<div class="a3-prev" style="--p-plt:' + pl.rgb + '">'
     + '<div class="a3-prev-top"><div class="a3-ava">' + esc(initialsOf(name)) + ava + '</div>'
     +   '<div style="min-width:0;flex:1"><div class="a3-prev-name">' + esc(name) + '</div>'
-    +   '<div class="a3-prev-sub">' + (handle ? esc(handle) + ' · ' : '') + esc(pl.name) + '</div></div></div>'
+    +   '<div class="a3-prev-sub">' + (handle && handle !== name ? esc(handle) + ' · ' : '') + esc(pl.name) + '</div></div></div>'
     + '<div class="a3-pills">' + pills + '</div>'
     + '<div class="a3-stats">'
     +   '<div><div class="v">' + (numInt(c.reach) ? esc(short(c.reach)) : '—') + '</div><div class="k">Просмотры</div></div>'
@@ -88120,6 +88172,7 @@ function previewHtml(){
     + '<div class="a3-buy"><div class="a3-price"><b' + (priceTxt.length > 13 ? ' data-long="1"' : '') + '>' + esc(priceTxt) + '</b>'
     +   (fmtName && !top ? '<small>' + esc(fmtName) + '</small>' : '') + '</div><div class="a3-add">Добавить</div></div>'
     + '</div>'
+    + sanityHtml(mp)
     + (ready.length > 1 ? '<div class="a3-help" style="margin:-8px 2px 14px">В полосе — цифры канала <b>' + esc(pl.name)
         + '</b>: по нему у вас больше всего подписчиков. Остальные каналы рекламодатель увидит нажатием.</div>' : '');
 }
@@ -88395,7 +88448,9 @@ function onInput(ev){
     if(act === 'gender'){
       S.genderF = Math.max(0, Math.min(100, parseInt(t.value, 10) || 0));
       var bar = root.querySelector('.a3-gbar i'), row = root.querySelector('.a3-grow');
+      var knob = root.querySelector('.a3-gknob');
       if(bar) bar.style.width = S.genderF + '%';
+      if(knob) knob.style.left = S.genderF + '%';
       if(row) row.innerHTML = '<span>' + S.genderF + '% женщины</span><span>' + (100 - S.genderF) + '% мужчины</span>';
       paintFoot(); saveDraft(); return;
     }
@@ -88591,7 +88646,9 @@ function publish(){
   if(why){ step = stepNeed(1) ? 1 : 2; S.tried = 1; render(); scrollTop(); need(why); return; }
   try{
     var ready = readyChans(), mp = mainPid();
-    var name = (u && u.name) || 'Блогер';
+    /* Пустое или мусорное имя из профиля в каталог не пускаем: там его
+       всё равно подменяет карточка, а в записи оставалась одна кавычка. */
+    var name = nameOf(u, (chanOf(mp) || {}).url);
     var initials = initialsOf(name);
     var colors = ['#2f6ce0,#1b49a8','#06b6d4,#3b82f6','#f6a823,#f0642a','#6366f1,#818cf8','#e8305a,#c2569c'];
     var col = colors[Math.abs(String(name).split('').reduce(function(a, ch){ return a + ch.charCodeAt(0); }, 0)) % colors.length];
