@@ -87154,10 +87154,17 @@ html #pg-add-blogger-card{
 html #pg-add-blogger-card #abc-scroll{ padding-bottom:0!important }
 html #pg-add-blogger-card #a3{ display:block; color:var(--a3-t1); padding-bottom:112px }
 html #pg-add-blogger-card #a3 *{ box-sizing:border-box }
-html #pg-add-blogger-card #a3 input,
-html #pg-add-blogger-card #a3 textarea,
-html #pg-add-blogger-card #a3 button{ font:inherit; color:inherit }
-html #pg-add-blogger-card #a3 button{ background:none; border:0; padding:0; cursor:pointer;
+/* Сброс намеренно с НУЛЕВЫМ весом (:where). Он стоит первым, а все
+   правила ниже — обычные классы .a3-*, вес 0-1-0. Пока селектор весил
+   два id (html #pg-add-blogger-card #a3 button), слой перебивал сам
+   себя: padding обнулялся у чипов тематик, строк сводки и шапок
+   каналов, а font:inherit подменял кегли на 16/400 вместо
+   заявленных 13.5/550. Отсюда текст, упирающийся в края пилюль,
+   и плитка канала, наезжающая на скругление карточки.
+   Глобальных правил на button с !important в файле нет — проверено
+   обходом styleSheets, — поэтому нулевой вес безопасен. */
+:where(html #pg-add-blogger-card #a3) :where(input,textarea,button){ font:inherit; color:inherit }
+:where(html #pg-add-blogger-card #a3) :where(button){ background:none; border:0; padding:0; cursor:pointer;
   -webkit-tap-highlight-color:transparent }
 html #pg-add-blogger-card #a3 ::selection{ background:rgba(47,108,224,.35) }
 html #pg-add-blogger-card #a3 input,
@@ -87176,6 +87183,13 @@ html #pg-add-blogger-card #a3 :focus-visible{ outline:2px solid var(--a3-t1); ou
   color:var(--a3-t1); transition:background .15s var(--a3-ease), transform .12s var(--a3-ease);
 }
 .a3-back:active{ transform:scale(.94) }
+/* Размер кнопки «назад» взят с образца (36×36) и меняться не должен, но
+   36 меньше рекомендованных 44 для пальца. Растим только область
+   нажатия — прозрачным псевдоэлементом, как это уже сделано в других
+   разделах приложения. Вид на экране прежний. */
+.a3-back{ position:relative }
+.a3-back::after{ content:''; position:absolute; left:50%; top:50%;
+  width:46px; height:46px; transform:translate(-50%,-50%); border-radius:14px }
 .a3-mid{ min-width:0; display:flex; flex-direction:column; gap:2px }
 .a3-title{ font-size:18px; font-weight:800; line-height:1.2; letter-spacing:-.4px;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
@@ -87271,6 +87285,13 @@ html #pg-add-blogger-card #a3 :focus-visible{ outline:2px solid var(--a3-t1); ou
   background-repeat:no-repeat; background-position:center;
   border:1px solid rgba(255,255,255,.12);
 }
+/* Фирменный чёрный TikTok (#111) на тёмной карточке пропадал: плитка
+   сливалась и с фоном, и с рамкой. В каталоге эта же беда решена
+   светлым контуром — .stt{background:#111;border:1.5px solid
+   rgba(255,255,255,.18)}. Повторяем приём здесь, чтобы три площадки
+   весили на экране одинаково. */
+.a3-task[data-p="tiktok"] .a3-task-ic{ border-color:rgba(255,255,255,.24) }
+.a3-pill i{ box-shadow:inset 0 0 0 1px rgba(255,255,255,.14) }
 .a3-task-txt{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:2px }
 .a3-task-txt b{ font-size:13.5px; font-weight:700; letter-spacing:-.2px;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
@@ -87418,6 +87439,32 @@ html #pg-add-blogger-card #a3 :focus-visible{ outline:2px solid var(--a3-t1); ou
   font-size:17px; font-weight:750; letter-spacing:-.03em; color:#EDEEF0;
   background:rgba(var(--p-plt,47,108,224),.13); border:1px solid var(--p-line); overflow:hidden }
 .a3-ava img{ width:100%; height:100%; object-fit:cover; display:block }
+/* Три детали, которых предпросмотру не хватало до настоящей карточки
+   каталога. Сняты замером с живой .blc.bpc5.bpc6, а не на глаз:
+     значок площадки на аватаре  — 20×20, круг, right/bottom −6;
+     пилюля активной площадки    — фон rgba(цвет,.14), контур .42,
+                                   число подписчиков #F3F4F6 12.5/700;
+     строка аудитории            — подпись и значение 11/500 --p-mu2,
+                                   полоса 52×3, синяя основа
+                                   rgba(59,130,246,.45), женская доля
+                                   rgba(236,72,153,.6).
+   Шаг обещает «так она будет выглядеть в каталоге» — обещание должно
+   быть правдой. */
+.a3-ava-wrap{ position:relative; flex:0 0 auto }
+.a3-ava-plt{
+  position:absolute; right:-6px; bottom:-6px; width:20px; height:20px; border-radius:50%;
+  background-repeat:no-repeat; background-position:center;
+  box-shadow:0 0 0 2px var(--p-s);
+}
+.a3-pill.on{
+  background:rgba(var(--p-plt,47,108,224),.14);
+  box-shadow:inset 0 0 0 1px rgba(var(--p-plt,47,108,224),.42);
+}
+.a3-pill.on b{ color:#F3F4F6 }
+.a3-aud{ display:flex; align-items:center; gap:7px; font-size:11px; font-weight:500; color:var(--p-mu2) }
+.a3-aud-bar{ width:52px; height:3px; flex:0 0 auto; border-radius:999px; overflow:hidden;
+  background:rgba(59,130,246,.45) }
+.a3-aud-bar i{ display:block; height:100%; background:rgba(236,72,153,.6) }
 .a3-prev-name{ font-size:15.5px; font-weight:680; letter-spacing:-.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 .a3-prev-sub{ font-size:12.5px; color:var(--p-mu); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
 .a3-pills{ display:flex; flex-wrap:wrap; gap:5px }
@@ -88003,7 +88050,10 @@ function chanCard(pid){
     +   '<span class="a3-task-txt"><b>' + esc(p.name) + (handle ? '<em>' + esc(handle) + '</em>' : '') + '</b>'
     +     '<i class="' + (warn ? 'warn' : '') + '">' + esc(on ? chanSub(pid) : p.sub) + '</i></span>'
     +   '<span class="a3-tick">' + IC.tick + '</span>'
-    +   (on ? IC.chev : '')
+    /* Шеврон рисуем ВСЕГДА. Пока он появлялся только у заполненного
+       канала, нетронутая карточка выглядела строкой без действия:
+       ничто не подсказывало, что она раскрывается. */
+    +   IC.chev
     + '</button>';
   if(on){
     var bad = !!c.bad;
@@ -88147,11 +88197,14 @@ function previewHtml(){
   var handle = handleOf(c.url);
   var pills = ready.map(function(p){
     var s = numInt(chanOf(p).subs);
-    return '<span class="a3-pill"><i style="' + icoStyle(p, 10) + '"></i>' + esc(PLAT[p].name) + (s ? ' <b>' + esc(short(s)) + '</b>' : '') + '</span>';
+    /* Главная площадка в каталоге подсвечена своим цветом (.bpc6-ch.on) */
+    return '<span class="a3-pill' + (p === mp ? ' on' : '') + '"><i style="' + icoStyle(p, 10) + '"></i>' + esc(PLAT[p].name) + (s ? ' <b>' + esc(short(s)) + '</b>' : '') + '</span>';
   }).join('');
   var cpm = cpmText(mp);
   var byId = {}; topicsAll().forEach(function(t){ byId[t.id] = t.label; });
-  var tags = uniq(S.topics).slice(0, 3).map(function(id){ return '<span class="a3-tag">' + esc(byId[id] || id) + '</span>'; }).join('');
+  /* Каталог показывает все выбранные тематики (их и так не больше пяти),
+     а предпросмотр обрезал до трёх — карточка выглядела беднее правды. */
+  var tags = uniq(S.topics).slice(0, 5).map(function(id){ return '<span class="a3-tag">' + esc(byId[id] || id) + '</span>'; }).join('');
   var low = lowPrice(mp), fmtName = '';
   var kn = knownFmt(mp);
   Object.keys(c.fmts).forEach(function(k){ if(numInt(c.fmts[k], MAXP) === low && !fmtName) fmtName = (kn[k] && kn[k].name) || c.names[k] || ''; });
@@ -88160,7 +88213,8 @@ function previewHtml(){
   var top = hi > low ? hi : 0;      /* «1 – 1 ₽» вилкой не бывает */
   var priceTxt = top ? money(low) + ' – ' + money(top) + ' ₽' : money(low) + ' ₽';
   return '<div class="a3-prev" style="--p-plt:' + pl.rgb + '">'
-    + '<div class="a3-prev-top"><div class="a3-ava">' + esc(initialsOf(name)) + ava + '</div>'
+    + '<div class="a3-prev-top"><div class="a3-ava-wrap"><div class="a3-ava">' + esc(initialsOf(name)) + ava + '</div>'
+    +   '<i class="a3-ava-plt" style="' + icoStyle(mp, 12) + '"></i></div>'
     +   '<div style="min-width:0;flex:1"><div class="a3-prev-name">' + esc(name) + '</div>'
     +   '<div class="a3-prev-sub">' + (handle && handle !== name ? esc(handle) + ' · ' : '') + esc(pl.name) + '</div></div></div>'
     + '<div class="a3-pills">' + pills + '</div>'
@@ -88168,6 +88222,10 @@ function previewHtml(){
     +   '<div><div class="v">' + (numInt(c.reach) ? esc(short(c.reach)) : '—') + '</div><div class="k">Просмотры</div></div>'
     +   '<div><div class="v">' + (numEr(c.er) ? esc(erText(c.er)) : '—') + '</div><div class="k">ER</div></div>'
     +   '<div><div class="v">' + (cpm ? esc(cpm) : '—') + '</div><div class="k">CPM</div></div></div>'
+    + (S.showGender
+        ? '<div class="a3-aud"><span>Аудитория</span><span class="a3-aud-bar"><i style="width:'
+          + S.genderF + '%"></i></span><span>' + S.genderF + '% Ж · ' + (100 - S.genderF) + '% М</span></div>'
+        : '')
     + (tags ? '<div class="a3-tags">' + tags + '</div>' : '')
     + '<div class="a3-buy"><div class="a3-price"><b' + (priceTxt.length > 13 ? ' data-long="1"' : '') + '>' + esc(priceTxt) + '</b>'
     +   (fmtName && !top ? '<small>' + esc(fmtName) + '</small>' : '') + '</div><div class="a3-add">Добавить</div></div>'
