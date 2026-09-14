@@ -59831,6 +59831,15 @@ function bpStatFmt(x, t){
   else body = String(Math.round(x)).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0');
   return body + (t.suf === '%' ? '%' : (t.suf ? '\u00a0' + t.suf : ''));
 }
+/* bp-card8: пишем в текстовый узел, а не заменяем его. Замена
+   (textContent) — childList-мутация, на неё просыпаются четыре
+   наблюдателя карточки и перерисовывают её по кругу на каждом кадре
+   твина; правка data у того же узла им не видна. */
+function bpStatWrite(el, str){
+  var n = el.firstChild;
+  if(n && n.nodeType === 3 && !n.nextSibling){ if(n.data !== str) n.data = str; }
+  else el.textContent = str;
+}
 function bpSetStat(cardEl, label, value){
   var cells = cardEl.querySelectorAll('.blc-strip .bls');
   for(var i = 0; i < cells.length; i++){
@@ -59848,7 +59857,7 @@ function bpSetStat(cardEl, label, value){
     var to = bpStatParse(value);
     if(!to || _bpStatRM || !window.requestAnimationFrame){
       /* нечисловое значение или reduced-motion — короткая смена вспышкой */
-      v.textContent = value;
+      bpStatWrite(v, String(value));
       v.classList.remove('bp-val-swap');
       void v.offsetWidth;               /* перезапуск анимации без таймера */
       v.classList.add('bp-val-swap');
@@ -59866,7 +59875,7 @@ function bpSetStat(cardEl, label, value){
     for(var k = 0; k < q.length; k++) if(q[k].el === v){ q.splice(k, 1); break; }
     q.push({ el:v, from:start, to:to.raw, t:to, last:v.textContent });
     if(cardEl.__bpTwRun){ cancelAnimationFrame(cardEl.__bpTwRun); cardEl.__bpTwRun = 0; }
-    var t0 = performance.now(), DUR = 520;
+    var t0 = performance.now(), DUR = 360;   /* bp-card8: было 520 */
     /* СТРАХОВКА ОТ ЗАСТРЯВШЕЙ АНИМАЦИИ.
        Кадры могут не идти вовсе: вкладка не рисуется, экономия батареи,
        тяжёлая страница. Тогда число так и остаётся от прошлой площадки —
@@ -59887,7 +59896,7 @@ function bpSetStat(cardEl, label, value){
       }
       for(var j = 0; j < rest.length; j++){
         var s2 = bpStatFmt(rest[j].to, rest[j].t);
-        if(s2 !== rest[j].last){ rest[j].el.textContent = s2; rest[j].last = s2; }
+        if(s2 !== rest[j].last){ bpStatWrite(rest[j].el, s2); rest[j].last = s2; }
       }
       cardEl.__bpTwQ = [];
       if(cardEl.__bpTwRun){ cancelAnimationFrame(cardEl.__bpTwRun); cardEl.__bpTwRun = 0; }
@@ -59896,12 +59905,15 @@ function bpSetStat(cardEl, label, value){
     var tick = function(now){
       cardEl.__bpTwSeen = 1;               /* кадр был — страховке ждать дальше */
       var p = (now - t0) / DUR; if(p > 1) p = 1;
+      /* bp-card8: промежуточные кадры — через один; конечный — всегда */
+      cardEl.__bpTwF = (cardEl.__bpTwF | 0) + 1;
+      if(p < 1 && (cardEl.__bpTwF % 2)){ cardEl.__bpTwRun = requestAnimationFrame(tick); return; }
       var e = 1 - Math.pow(1 - p, 3);
       var list = cardEl.__bpTwQ || [];
       for(var i = 0; i < list.length; i++){
         var it = list[i];
         var s = (p >= 1) ? bpStatFmt(it.to, it.t) : bpStatFmt(it.from + (it.to - it.from) * e, it.t);
-        if(s !== it.last){ it.el.textContent = s; it.last = s; }
+        if(s !== it.last){ bpStatWrite(it.el, s); it.last = s; }
       }
       if(p >= 1){ cardEl.__bpTwQ = []; cardEl.__bpTwRun = 0; return; }
       cardEl.__bpTwRun = requestAnimationFrame(tick);
@@ -86866,7 +86878,25 @@ function build(el){
         +   (subs ? '<span class="bpc6-subs">' + esc(short(subs)) + '</span>' : '')
         + '</button>';
     });
-    row.innerHTML = html;
+    /* bp-card8: тот же набор пилюль — переключаем классы, а не
+       пересобираем разметку: пересборка заново грузила три картинки и
+       childList-мутацией будила соседние слои на каждое нажатие. */
+    var same = row.children.length === items.length;
+    if(same) for(var ci = 0; ci < items.length; ci++){
+      var bc = row.children[ci], pc = PLAT[items[ci].pid], sc = subsOf(card, items[ci].pid);
+      var lc = pc.name + (sc ? ', ' + short(sc) + ' подписчиков' : '');
+      if(!bc.classList.contains('bpc6-ch') || bc.getAttribute('data-p') !== items[ci].pid
+         || bc.getAttribute('aria-label') !== lc){ same = false; break; }
+    }
+    if(same){
+      items.forEach(function(it, ci){
+        var b = row.children[ci], on = it.pid === activePid;
+        if(b.classList.contains('on') !== on){
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        }
+      });
+    } else row.innerHTML = html;
     row.setAttribute('data-n', String(items.length));
     el.classList.add('bpc6');
 
@@ -87081,7 +87111,18 @@ function watch(){
     var list = document.getElementById('catBloggerList');
     if(!list || list.__bpc6w) return;
     list.__bpc6w = 1;
-    new MutationObserver(later).observe(list, { childList:true, subtree:true, attributes:true,
+    /* bp-card8: смена класса на УЖЕ собранной карточке (bpc7-switch,
+       bpc7-in — вспышки движения) не повод пересобирать все карточки:
+       так одно нажатие по каналу давало два лишних прохода. Классы
+       на значках каналов (.blc-pr-soc) и на несобранной карточке
+       (.bpc5 без .bpc6) по-прежнему будят проход. */
+    new MutationObserver(function(recs){
+      for(var i = 0; i < recs.length; i++){
+        var r = recs[i], tg = r.target;
+        if(r.type !== 'attributes' || r.attributeName !== 'class') return later();
+        if(!(tg && tg.classList && tg.classList.contains('blc') && tg.classList.contains('bpc6'))) return later();
+      }
+    }).observe(list, { childList:true, subtree:true, attributes:true,
       attributeFilter:['class', 'data-cardid'] });
     later();
   }catch(e){ E(e); }
@@ -89488,6 +89529,284 @@ setTimeout(sweep, 600);
 setTimeout(sweep, 2000);
 })();
 </script>
+
+<style id="bp-card8-css">
+/* ══ КАРТОЧКА КАТАЛОГА · ГЛАДКОСТЬ ═══════════════════════════════════
+   Владелец (14.09.2026): «карта дёргается и всё лагает, выглядит
+   непрофессионально». Замер в контуре: одно нажатие по каналу давало
+   129 мутаций DOM за полторы секунды — 55 переписываний текста цифр
+   твином (каждое заменяло текстовый узел и будило четыре наблюдателя,
+   слои перерисовывали карточку по кругу), плюс подпись «Выберите
+   размещение» вставлялась заново при каждой пересборке ряда форматов и
+   оставалась сиротой, когда ряд убирали (снимок m3/10: два заголовка на
+   одной карточке). Здесь — вид и движение; твин и подпись — в
+   script#bp-card8; наблюдатель и пилюли — точечно в bp-card6 (помечено
+   «bp-card8»).
+   Откат: удалить пару bp-card8-css + bp-card8 и вернуть две правки
+   в bp-card6.                                                          */
+
+/* 1 · Форматы переносятся, а не прокручиваются вбок. Третий чип
+   оставался за краем («Yo…» у карточки с тремя форматами), а лента
+   вбок внутри списка, который сам едет вверх-вниз, ловит палец при
+   листании и даёт рывок. Каналы по той же причине переносит bp-card6. */
+html #catBloggerList .blc.bpc5.bpc6 .bpc5-fmt{
+  flex-wrap:wrap!important; overflow:visible!important; scroll-behavior:auto!important;
+  -webkit-overflow-scrolling:auto!important;
+}
+
+/* 2 · Подпись над форматами — только когда есть ряд, и тише. Сирота
+   без ряда гасится здесь на случай, если скрипт ещё не прошёл. */
+html #catBloggerList .blc .bpc7-pick:not(:has(+ .bpc5-fmt)){ display:none!important }
+html #catBloggerList .blc .bpc7-pick{
+  font-size:10.5px!important; font-weight:600!important; letter-spacing:.45px!important;
+  color:var(--t3,#7d818c)!important; margin:1px 2px 7px!important;
+}
+
+/* 3 · Появление карточки: подъём и проявление без масштаба. Масштаб
+   заставляет растеризовать всю карточку заново на каждом кадре, и
+   при листании это видно как подёргивание. Fill-mode backwards: с
+   both элемент держит слой композитора и после конца анимации. */
+@keyframes bpc8In{ 0%{ opacity:0; transform:translateY(14px) } 100%{ opacity:1; transform:none } }
+html #catBloggerList .blc.bpc7-in{
+  animation:bpc8In .4s cubic-bezier(.22,1,.36,1) backwards!important;
+}
+
+/* 4 · Смена канала: одно движение на полосу чисел вместо трёх по
+   ячейкам с задержками; блик короче; везде backwards. */
+html #catBloggerList .blc.bpc7-switch .blc-strip > .bls,
+html #catBloggerList .blc.bpc7-switch .blc-stats > div{ animation:none!important }
+@keyframes bpc8Rise{ 0%{ opacity:.4; transform:translateY(4px) } 100%{ opacity:1; transform:none } }
+html #catBloggerList .blc.bpc5.bpc7-switch .blc-strip,
+html #catBloggerList .blc.bpc5.bpc7-switch .blc-stats{
+  animation:bpc8Rise .3s cubic-bezier(.22,1,.36,1) backwards;
+}
+html #catBloggerList .blc.bpc5.bpc7-switch .bpc5-sub,
+html #catBloggerList .blc.bpc5.bpc7-switch .bpc5-price,
+html #catBloggerList .blc.bpc5.bpc7-switch .bpc5-plt,
+html #catBloggerList .blc.bpc5.bpc6 .bpc5-price.bpc5-swap b,
+html #catBloggerList .blc.bpc5.bpc6 .bpc5-price.bpc5-swap small{ animation-fill-mode:backwards!important }
+html #catBloggerList .blc.bpc5.bpc7-switch .blc-strip::after,
+html #catBloggerList .blc.bpc5.bpc7-switch .blc-stats::after{
+  animation-duration:.5s!important; animation-fill-mode:backwards!important;
+}
+
+/* 5 · Узкий экран (320): цена «190 000 ₽» ломалась на две строки рядом
+   с широкой кнопкой (снимок v3/02). Цена не переносится, кнопка уходит
+   на свою строку во всю ширину. */
+@media (max-width:359px){
+  html #catBloggerList .blc.bpc5.bpc6 .bpc5-price b{ white-space:nowrap }
+  html #catBloggerList .blc.bpc5.bpc6 .bpc5-buy{ flex-wrap:wrap!important }
+  html #catBloggerList .blc.bpc5.bpc6 .bpc5-buy .blc-add{ flex:1 1 100%!important; margin-top:2px }
+}
+</style>
+
+<script id="bp-card8">
+/* Пара к style#bp-card8-css. Пояснение — там же. */
+(function(){
+'use strict';
+if(window.__bpCard8) return; window.__bpCard8 = 1;
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'card8'); }catch(_){} }
+
+/* ── A · Подпись «Выберите размещение»: ровно одна и ровно перед рядом.
+   bp-card7 вставляет её перед .bpc5-fmt один раз, но bp-card5 убирает
+   ряд, когда формат один, и создаёт новый узел, когда их снова два, —
+   подпись оставалась сиротой, а рядом с новым рядом появлялась вторая.
+   Убираем лишние; недостающую вставит сам bp-card7 на своём проходе. */
+function fixPick(card){
+  try{
+    var row = card.querySelector('.bpc5-fmt');
+    var labs = card.querySelectorAll('.bpc7-pick');
+    if(!labs.length) return;
+    var keep = null;
+    for(var i = 0; i < labs.length; i++){
+      if(row && !keep && labs[i].nextElementSibling === row){ keep = labs[i]; }
+    }
+    for(var j = 0; j < labs.length; j++) if(labs[j] !== keep) labs[j].remove();
+  }catch(e){ E(e); }
+}
+
+/* ── B · Твин цифр правится на месте, в bp-fix8 (bpStatWrite, DUR 360,
+   кадры через один): функция bpSetStat там локальная, снаружи её не
+   перекрыть. Пометки «bp-card8» в том слое. */
+
+/* ── C · Проход: только подпись. Идемпотентно: убираем лишь лишнее, и
+   следующий проход ничего не находит. */
+function sweep(){
+  try{ document.querySelectorAll('#catBloggerList .blc').forEach(fixPick); }catch(e){ E(e); }
+}
+var t = null;
+function later(){ if(t) return; t = setTimeout(function(){ t = null; sweep(); }, 160); }
+try{
+  var host = document.getElementById('catBloggerList');
+  if(host) new MutationObserver(later).observe(host, { childList:true, subtree:true });
+}catch(e){ E(e); }
+setTimeout(sweep, 800); setTimeout(sweep, 2400);
+})();
+</script>
+
+<style id="bp-ux1-css">
+/* ══ ПРИЯТНЕЕ ГЛАЗУ И РУКЕ · ПРОХОД 14.09.2026 ═════════════════════════
+   Откат: удалить пару bp-ux1-css + bp-ux1.                             */
+
+/* 1 · Рейтинг в профиле: бегущая золотая кромка. Владелец: «края чтобы
+   двигались только жёлтым — чтобы было понятно, что это рейтинг».
+   Приём — .bp-shimmer-edge (bp-fix8, секция 7): красится 1px канта и по
+   нему едет блик, анимируется только background-position. Оттенок свой:
+   насыщеннее shm-gold, чтобы кромка читалась жёлтой, а не белёсой.
+   Золото в приложении и есть цвет рейтинга и избранного. */
+html #pg-profile .pf2-rank.bp-shimmer-edge{
+  --shm-base:rgba(246,168,35,.42); --shm-hot:#ffd15c;
+  background:rgba(246,168,35,.05);
+}
+html #pg-profile .pf2-rank.bp-shimmer-edge:active{ background:rgba(246,168,35,.10) }
+html #pg-profile .pf2-rank.bp-shimmer-edge svg.l{ stroke:#f6a823 }
+html #pg-profile .pf2-rank.bp-shimmer-edge em b{ color:#ffd15c }
+html #pg-profile .pf2-rank.bp-shimmer-edge svg.a{ stroke:rgba(246,168,35,.7) }
+
+/* 2 · Проверка личности: подписи шагов («код в SMS · минута») стояли
+   моноширинным шрифтом — единственное место такого набора в приложении,
+   выпадало из Manrope. */
+html .kf3-meta{ font-family:inherit!important; letter-spacing:0!important }
+
+/* 3 · Шапка на узком экране: «0 ₽» в чипе кошелька переносился на две
+   строки (снимок shots6/03-home-320). Подзаголовок «Биржа рекламы» на
+   такой ширине отнимает место у чипа. */
+html #mainTopbar .tb-bal .num{ white-space:nowrap!important }
+@media (max-width:359px){
+  html #mainTopbar .tb-brand .bs{ display:none!important }
+  html #mainTopbar .tb-bal .num{ font-size:13px!important }
+}
+
+/* 4 · Рейтинг блогеров: аватары-заглушки шли бирюзовыми — чужой цвет.
+   Заглушка в приложении одна, синяя (bp-onb-tail, секция 5). Фото не
+   трогаем: у него свой img поверх подложки. */
+html .pf2-lb .av{ background:linear-gradient(135deg,#2f6ce0,#1b49a8)!important }
+
+/* 5 · Пустой «Баланс»: под карточкой была пустота во весь экран без
+   единого слова (снимок shots1/11). Подсказка, откуда возьмётся история. */
+html #pg-balance #txRecent:empty{
+  display:block; padding:16px 14px;
+  border:1px dashed var(--brd2,rgba(255,255,255,.15)); border-radius:14px;
+  color:var(--t3,#7d818c); font-size:13px; line-height:1.5; text-align:center;
+}
+html #pg-balance #txRecent:empty::before{ content:'История операций появится после первого пополнения или сделки' }
+
+/* 6 · Роль. Блогеру кнопка «Добавить в кампанию» на чужих карточках ни к
+   чему — кампании создаёт рекламодатель, у блогера и вкладки такой нет.
+   Класс bp-r-blogger ставит script#bp-ux1 только вошедшему блогеру;
+   гость кнопку видит — она и ведёт его к регистрации. Свою карточку
+   отличает ряд «Изменить / Удалить» (.blc-owner-actions): атрибут
+   data-mycard стоит и на чужих карточках — это серверный id. */
+html.bp-r-blogger #catBloggerList .blc:not(:has(.blc-owner-actions)) .bpc5-buy .blc-add:not(.blc-add-remove){ display:none!important }
+
+/* 7 · Тост поверх шапки мастера закрывал кнопку «назад» и счётчик шагов
+   (снимок shots5/04-wiz-3). Пока открыт мастер, тост опускается под
+   его шапку. */
+html body:has(#pg-add-blogger-card.on) .auth-toast,
+html body:has(#pg-add-blogger-card.on) #bpToastWrap,
+html body:has(#campModalOverlay[style*="flex"]) .auth-toast,
+html body:has(#campModalOverlay[style*="flex"]) #bpToastWrap{
+  top:calc(env(safe-area-inset-top,0px) + 118px)!important;
+}
+/* Видимый тост рисует не #authToast, а обёртка #bpToastWrap (слой
+   уведомлений): #authToast остаётся спрятанным. Правило — на обоих. */
+</style>
+
+<script id="bp-ux1">
+/* Пара к style#bp-ux1-css. Пояснение — там же. */
+(function(){
+'use strict';
+if(window.__bpUx1) return; window.__bpUx1 = 1;
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'ux1'); }catch(_){} }
+
+/* 1 · Золотая кромка строки рейтинга. Кнопку #pf2Rank создаёт renderRank
+   (bp-profile2) один раз и дальше переписывает только innerHTML —
+   класс на самой кнопке переживает перерисовки. */
+function gild(){
+  try{
+    var el = document.getElementById('pf2Rank');
+    if(el && !el.classList.contains('bp-shimmer-edge')) el.classList.add('bp-shimmer-edge', 'shm-gold');
+  }catch(e){ E(e); }
+}
+try{
+  var pg = document.getElementById('pg-profile');
+  if(pg){
+    var t = null;
+    new MutationObserver(function(){ if(t) return; t = setTimeout(function(){ t = null; gild(); }, 120); })
+      .observe(pg, { childList:true, subtree:true });
+  }
+}catch(e){ E(e); }
+setTimeout(gild, 900); setTimeout(gild, 3000);
+
+/* bp-ux1: роль на <html> — bp-r-adv / bp-r-blogger, только вошедшему.
+   Источник тот же, что у нижней полки: глобальный флаг _isAdvertiser. */
+function syncRole(){
+  try{
+    var h = document.documentElement, logged = false, adv = false;
+    try{ logged = !!isLoggedIn; }catch(e){}
+    try{ adv = (typeof _isAdvertiser !== 'undefined') && !!_isAdvertiser; }catch(e){}
+    h.classList.toggle('bp-r-adv', logged && adv);
+    h.classList.toggle('bp-r-blogger', logged && !adv);
+    fixChatsEmpty();
+  }catch(e){ E(e); }
+}
+try{
+  var tb = document.getElementById('bpTabbarIn');
+  if(tb) new MutationObserver(syncRole).observe(tb, { childList:true });
+}catch(e){ E(e); }
+setInterval(syncRole, 1500); setTimeout(syncRole, 400);
+
+/* 3 · Пустые чаты — по роли. Текст и кнопка были рекламодательские
+   («когда блогер примет ваш заказ», «Найти блогера») и показывались
+   блогеру (снимок shots4/06-chats-deals). Разметку рисует renderChats
+   при каждом заходе — правим после каждого, идемпотентно по пометке. */
+function fixChatsEmpty(){
+  try{
+    var box = document.querySelector('#pg-chats .chats-empty');
+    if(!box) return;
+    var h = document.documentElement;
+    var want = h.classList.contains('bp-r-adv') ? 'adv' : (h.classList.contains('bp-r-blogger') ? 'blogger' : '');
+    if(!want || box.getAttribute('data-bp-role') === want) return;
+    box.setAttribute('data-bp-role', want);
+    if(want !== 'blogger') return;
+    var kids = box.children;
+    for(var i = 0; i < kids.length; i++){
+      var k = kids[i];
+      if(k.classList.contains('bp-empty-art')) continue;
+      var t = String(k.textContent || '').trim();
+      if(/^Чаты появятся/.test(t)){
+        k.textContent = 'Чат откроется, когда рекламодатель напишет вам или примет ваш отклик на задание';
+      } else if(k.getAttribute('onclick') && /Найти блогера/.test(t)){
+        k.setAttribute('onclick', "goTo('tasks')");
+        k.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/></svg>К заданиям';
+      }
+    }
+  }catch(e){ E(e); }
+}
+try{
+  var pc = document.getElementById('pg-chats');
+  if(pc){
+    var tc = null;
+    new MutationObserver(function(){ if(tc) return; tc = setTimeout(function(){ tc = null; fixChatsEmpty(); }, 120); })
+      .observe(pc, { childList:true, subtree:true });
+  }
+}catch(e){ E(e); }
+})();
+</script>
+
+<style id="bp-abc3-css">
+/* ══ МАСТЕР КАРТЫ · ПРЕДПРОСМОТР КАК В КАТАЛОГЕ ═══════════════════════
+   Ряд форматов в предпросмотре обрезался по ширине (overflow:hidden):
+   третий чип уходил за край, а в каталоге (bp-card8) ряд переносится.
+   Подпись над рядом — того же кегля и веса, что в каталоге. Поле ввода
+   при фокусе прокручивается так, чтобы не уйти под закреплённую
+   кнопку шага и под шапку.
+   Откат: удалить блок.                                                 */
+html #pg-add-blogger-card .a3-fmtrow{ flex-wrap:wrap; overflow:visible }
+html #pg-add-blogger-card .a3-pick{ font-size:10.5px; font-weight:600; letter-spacing:.45px; margin:1px 0 -3px }
+html #pg-add-blogger-card #a3 input,
+html #pg-add-blogger-card #a3 textarea{ scroll-margin:120px 0 150px }
+</style>
 
 </body>
 </html>
