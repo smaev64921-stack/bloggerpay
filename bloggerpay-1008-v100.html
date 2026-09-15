@@ -88685,7 +88685,13 @@ function edHtml(pid){
     +   '<button type="button" class="a3-fold-h" data-act="ctfold" aria-expanded="' + (S.tOpen ? 'true' : 'false') + '">'
     +     '<span class="a3-fold-t">' + (tp.length ? esc(labelsOf(tp).join(' · ')) : 'Выберите тематики') + '</span>' + IC.chev
     +   '</button>'
-    +   '<div class="a3-fold-b"><div class="a3-chips" id="a3-chips">' + chips + '</div></div>'
+    +   '<div class="a3-fold-b"><div class="a3-chips" id="a3-chips">' + chips + '</div>'
+    /* 15.09.2026 владелец: «выбор тематики не закрывается». Свернуть можно
+       было только стрелкой в шапке, а она уезжает вверх, пока листаешь
+       тридцать с лишним тематик. Теперь внизу списка — «Готово». */
+    +     '<div class="a4-tfoot"><span class="a4-tfoot-n" id="a4-tfoot-n">' + tfootTxt(tp.length) + '</span>'
+    +     '<button type="button" class="a4-tdone" data-act="ctclose">Готово</button></div>'
+    +   '</div>'
     + '</div>'
     + '</section>'
 
@@ -88705,6 +88711,16 @@ function edHtml(pid){
     + '<button type="button" class="a3-ghost" data-act="del">Убрать канал</button>'
     + '</div>'
     + '</div>';
+}
+function tfootTxt(n){ return n ? ('Выбрано ' + n + ' из 5') : 'Выберите от 1 до 5'; }
+/* Свернуть список тематик и вернуть к нему взгляд: без прокрутки человек
+   остался бы на полэкрана ниже, среди «Аудитории». */
+function foldTopics(){
+  var fo = root && root.querySelector('.a4-tfold'); if(!fo) return;
+  S.tOpen = false;
+  fo.classList.remove('open');
+  var fh = fo.querySelector('.a3-fold-h'); if(fh) fh.setAttribute('aria-expanded', 'false');
+  try{ fo.scrollIntoView({ block:'nearest', behavior:'smooth' }); }catch(e){ try{ fo.scrollIntoView(false); }catch(_){} }
 }
 /* Точечная перерисовка настройки: отметки разделов, счётчик в шапке,
    счётчик тематик, кнопка. Полная перерисовка на каждую букву увела бы
@@ -89368,8 +89384,13 @@ function onClick(ev){
       var cpb = root.querySelector('.a4-copy'); if(cpb && ct.topics.length) cpb.remove();
       var fth = root.querySelector('.a4-tfold .a3-fold-t');
       if(fth) fth.textContent = ct.topics.length ? labelsOf(ct.topics).join(' · ') : 'Выберите тематики';
-      paintEd(); saveDraft(); return;
+      var tfn = root.querySelector('#a4-tfoot-n'); if(tfn) tfn.textContent = tfootTxt(ct.topics.length);
+      paintEd(); saveDraft();
+      /* пятая — больше выбрать нельзя, список дальше не нужен */
+      if(full5 && ct.topics.indexOf(tid) >= 0) setTimeout(foldTopics, 260);
+      return;
     }
+    if(act === 'ctclose'){ foldTopics(); return; }
     if(act === 'ctfold'){
       var fo = t.closest('.a3-fold'); if(!fo) return;
       S.tOpen = !fo.classList.contains('open');
@@ -90517,6 +90538,14 @@ html #pg-add-blogger-card .a4-kidic svg{ width:18px; height:18px }
 html #pg-add-blogger-card .a4-ed .a3-ghost{ margin-top:2px }
 html #pg-add-blogger-card .a4-tfold{ margin:0; border-radius:12px; background:rgba(255,255,255,.04); border-top-color:var(--a3-brd) }
 html #pg-add-blogger-card .a4-tfold .a3-fold-t{ white-space:normal; line-height:1.4 }
+/* низ раскрытого списка тематик: счётчик и «Готово» (15.09.2026) */
+html #pg-add-blogger-card .a4-tfoot{ display:flex; align-items:center; justify-content:space-between; gap:12px;
+  margin-top:12px; padding-top:12px; border-top:1px solid var(--a3-brd,rgba(255,255,255,.08)) }
+html #pg-add-blogger-card .a4-tfoot-n{ font-size:12.5px; color:var(--a3-t3,#8b8f99); font-variant-numeric:tabular-nums }
+html #pg-add-blogger-card .a4-tdone{ flex:0 0 auto; min-height:40px; padding:0 18px; border-radius:12px; cursor:pointer;
+  font:inherit; font-size:13.5px; font-weight:700; color:#fff; background:#2f6ce0; border:0;
+  -webkit-tap-highlight-color:transparent; transition:background .15s, transform .12s }
+html #pg-add-blogger-card .a4-tdone:active{ background:#1b49a8; transform:scale(.97) }
 
 /* ── шаг «О вас» ── */
 html #pg-add-blogger-card .a4-sec2{ margin-top:18px }
