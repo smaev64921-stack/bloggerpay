@@ -108,9 +108,9 @@ function offlinePage() {
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<title>BloggerPay</title>' +
     '<style>body{margin:0;min-height:100vh;display:flex;align-items:center;' +
-    'justify-content:center;background:#08080b;color:#e4e4e7;' +
+    'justify-content:center;background:#101319;color:#e5e7ea;' +
     'font:600 15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;text-align:center;padding:24px}' +
-    'p{color:#7d818c;font-weight:500;margin:8px 0 0;font-size:13px}</style>' +
+    'p{color:#8f97a5;font-weight:500;margin:8px 0 0;font-size:13px}</style>' +
     '<div><div>Нет соединения</div>' +
     '<p>BloggerPay откроется, как только появится сеть.</p></div>',
     { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 503 }
