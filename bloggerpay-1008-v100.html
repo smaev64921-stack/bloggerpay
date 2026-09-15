@@ -88128,7 +88128,11 @@ function fromCard(c){
      дальше человек поправит там, где аудитория другая. */
   s.order.forEach(function(pid){
     var ch = s.chans[pid], p = pd[pid] || stash[pid] || {};
-    ch.topics = (Array.isArray(p.topics) && p.topics.length) ? normTopics(p.topics) : s.topics.slice();
+    /* Общий список — только если у канала поля нет вовсе (карта старого
+       вида). Пустой список у канала нового вида — это «ещё не выбрал»:
+       подставлять чужие тематики нельзя, иначе недонастроенный канал
+       молча становился готовым и уезжал в каталог с чужими тематиками. */
+    ch.topics = Array.isArray(p.topics) ? normTopics(p.topics) : s.topics.slice();
     ch.genderF = (typeof p.genderF === 'number') ? Math.max(0, Math.min(100, Math.round(p.genderF))) : s.genderF;
     ch.showGender = (p.showGender != null) ? !!p.showGender : s.showGender;
     ch.kids = (p.kids != null) ? !!p.kids : s.kids;
@@ -90468,16 +90472,19 @@ html #catBloggerList .blc.bpc5 .blc-name{
 }
 
 /* 4 · Аудитория у каждого канала своя (скрипт — paintAud в bp-card5). */
-html #catBloggerList .blc .bpc5-tag[hidden],
-html #catBloggerList .blc .blc-aud[hidden],
-html #catBloggerList .blc .bpc9-kids[hidden]{ display:none!important }
-html #catBloggerList .blc .bpc9-kids{
+/* Селекторы без #catBloggerList: «Избранное» собирает карточки из копии
+   разметки каталога, и без этого там значок раздувался во всю ширину, а
+   скрытые тематики и полоса пола другого канала показывались снова. */
+html .blc .bpc5-tag[hidden],
+html .blc .blc-aud[hidden],
+html .blc .bpc9-kids[hidden]{ display:none!important }
+html .blc .bpc9-kids{
   display:inline-flex; align-items:center; gap:6px; align-self:flex-start;
   height:24px; padding:0 9px; border-radius:8px;
   font-size:11.5px; font-weight:600; color:#f3c46b;
   background:rgba(246,168,35,.10); border:1px solid rgba(246,168,35,.28);
 }
-html #catBloggerList .blc .bpc9-kids svg{ width:13px; height:13px; flex:0 0 auto }
+html .blc .bpc9-kids svg{ width:13px; height:13px; flex:0 0 auto }
 </style>
 
 

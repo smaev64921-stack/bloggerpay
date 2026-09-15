@@ -1414,7 +1414,8 @@ function cleanCard(raw) {
        15.09.2026). Строки режем по длине и срезаем угловые скобки: их
        показывают в чужом каталоге. */
     if (Array.isArray(pl.topics)) {
-      const tp = pl.topics.map((t) => cardStr(t, 40).replace(/[<>]/g, '').trim()).filter(Boolean).slice(0, 5);
+      /* сначала режем длину массива: иначе огромный список проходит целиком */
+      const tp = pl.topics.slice(0, 20).map((t) => cardStr(t, 40).replace(/[<>]/g, '').trim()).filter(Boolean).slice(0, 5);
       if (tp.length) out.platData[pid].topics = tp;
     }
     if (pl.genderF != null && Number.isFinite(Number(pl.genderF))) {
