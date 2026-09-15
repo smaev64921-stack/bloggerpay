@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
-<meta name="theme-color" content="#08080b">
+<meta name="theme-color" content="#101319">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -24,14 +24,14 @@
 }
 
 :root{
-  --bg:#08080b;
+  --bg:#101319;
   --ink:#ffffff;
-  --ink2:#b9bcc4;
-  --ink3:#7d818c;
+  --ink2:#c9cdd4;
+  --ink3:#8f97a5;
   --blue:#2f6ce0;
   --blue-l:#5b93f5;
   --blue-d:#1b49a8;
-  --paper-ink:#14161a;
+  --paper-ink:#1b202b;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overflow:hidden;background:var(--bg)}
@@ -93,7 +93,7 @@ body{
 .logo{display:flex;align-items:stretch;flex-shrink:0;
   font-family:'BPHead',Impact,sans-serif;font-weight:700;letter-spacing:.6px}
 .logo span{display:flex;align-items:center;padding:5px 8px 4px;font-size:16px;line-height:1}
-.logo .a{background:#fff;color:#0b0b0e}
+.logo .a{background:#fff;color:#12161d}
 .logo .b{background:var(--blue);color:#fff}
 
 /* ── скотч сверху справа ── */
@@ -209,7 +209,7 @@ body{
 /* ── посадка мегафона ──
    Картинка приходит с чёрным полем вокруг объекта, и это поле было
    видно прямоугольником: чистый чёрный #000 у JPEG светлее фона
-   экрана #08080b. mix-blend-mode:screen гасит всё, что темнее фона,
+   экрана #101319. mix-blend-mode:screen гасит всё, что темнее фона,
    и объект садится на подложку без шва. Заодно увеличиваем и уводим
    за левый край, как на референсе. */
 /* .stage получал z-index:2 от общего правила .screen>* и тем самым
@@ -382,7 +382,7 @@ body{
   /* Номер отбит от слова тонкой чертой, как в печатном списке: без неё
      цифра и слово слипались в одно пятно. Цвет — чернила бумаги, а не
      белый: на светлом обрывке белая линия не видна. */
-  padding-right:9px;border-right:2px solid rgba(20,22,26,.20)}
+  padding-right:9px;border-right:2px solid rgba(27,32,43,.20)}
 .plab em{position:relative;z-index:1;font-style:normal;white-space:nowrap;
   font-family:'BPHead',Impact,sans-serif;font-size:15px;font-weight:700;
   letter-spacing:.7px;text-transform:uppercase;color:var(--paper-ink)}
@@ -408,7 +408,7 @@ body{
 .note{
   flex-shrink:0;display:flex;align-items:center;gap:12px;margin-top:14px;
   border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:13px 14px;
-  background:#121218;
+  background:#191e27;
 }
 .note svg{flex-shrink:0;stroke:var(--ink2)}
 .note p{font-size:12.5px;line-height:1.45;color:var(--ink2)}
@@ -451,7 +451,7 @@ body{
 .card{
   flex-shrink:0;display:flex;align-items:flex-start;gap:13px;
   border:1px solid rgba(255,255,255,.09);border-radius:8px;
-  padding:15px 15px 16px;background:#121218;
+  padding:15px 15px 16px;background:#191e27;
 }
 /* иконки были вдвое мельче, чем на макете от ИИ */
 .card-ico{flex-shrink:0;width:56px;height:56px;display:flex;align-items:center;justify-content:center}
@@ -479,7 +479,7 @@ body{
 
 /* три тарифа */
 .rates{flex-shrink:0;display:flex;border:1px solid rgba(255,255,255,.09);
-  border-radius:8px;overflow:hidden;background:#121218}
+  border-radius:8px;overflow:hidden;background:#191e27}
 .rate{flex:1;padding:14px 5px 13px;text-align:center;min-width:0}
 .rate+.rate{border-left:1px solid rgba(255,255,255,.08)}
 .rate b{display:block;font-family:'BPHead',Impact,sans-serif;font-weight:700;
@@ -568,7 +568,7 @@ body{
 .bar{position:relative}
 .reg{
   flex-shrink:0;margin-top:18px;padding:18px 17px 19px;
-  border:1px solid rgba(255,255,255,.09);border-radius:8px;background:#121218;
+  border:1px solid rgba(255,255,255,.09);border-radius:8px;background:#191e27;
 }
 .reg-ico{margin-bottom:13px}
 .reg-ico svg{stroke:var(--blue-l);fill:none;stroke-width:1.7}
