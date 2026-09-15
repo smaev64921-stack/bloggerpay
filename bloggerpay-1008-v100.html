@@ -33348,7 +33348,13 @@ function applyCatFilters() {
       default: return 0;
     }
   });
-  visibleEntries.forEach(({card})=>list.appendChild(card));
+  /* bp-card10: переставляем, только если порядок и правда другой. Раньше
+     все видимые карточки вставлялись в список заново при каждом проходе
+     фильтра, в том числе при входе в каталог, — а перенос элемента
+     перезапускает его анимацию: карточка гасла и проявлялась второй раз. */
+  const _inDom = Array.prototype.filter.call(list.children, c => c.classList && c.classList.contains('blc') && !c.classList.contains('cat-hidden'));
+  const _same = _inDom.length === visibleEntries.length && visibleEntries.every((e, i) => _inDom[i] === e.card);
+  if(!_same) visibleEntries.forEach(({card})=>list.appendChild(card));
 
   const cntEl = document.getElementById('catCnt');
   if(cntEl) cntEl.textContent = visible + ' блог' + ((visible%10===1 && visible%100!==11) ? 'ер'
@@ -35197,6 +35203,8 @@ function bpRestyleCards(){
     card.dataset.bpRestyled='1';
   });
 }
+/* bp-card10: наружу — каталог собирает карточку сразу при вставке. */
+window.bpRestyleCards = bpRestyleCards;
 
 /* ───────────────────────────────────────────────
    ИНИЦИАЛИЗАЦИЯ
@@ -57307,14 +57315,10 @@ function paintPicker(){
        ней. И показываем её только тому, кто хотя бы раз уже добавлял
        блогера в кампанию: пока человек не прошёл этот путь, предлагать
        ему торговаться рано. */
-    if(!seenAdd()) return;
-    var cta = document.createElement('button');
-    cta.type = 'button'; cta.className = 'bpdc-link';
-    cta.disabled = !picked.items.length;
-    cta.textContent = 'Договориться о скидке';
-    cta.addEventListener('click', function(){ askForm(bid); });
-    if(doneBtn.nextSibling) host.insertBefore(cta, doneBtn.nextSibling);
-    else host.appendChild(cta);
+    /* bp-card10 (15.09.2026): кнопку «Договориться о скидке» владелец
+       попросил убрать — мешала главному действию. Уже начатые торги
+       по-прежнему видны плашками выше. */
+    return;
   }catch(e){ E(e, 73003); }
 }
 
@@ -59855,7 +59859,7 @@ function bpSetStat(cardEl, label, value){
     if(v.textContent.trim() === String(value)) continue;
     if(v.__bpTw){ cancelAnimationFrame(v.__bpTw); v.__bpTw = 0; }
     var to = bpStatParse(value);
-    if(!to || _bpStatRM || !window.requestAnimationFrame){
+    if(!to || _bpStatRM || !window.requestAnimationFrame || cardEl.__bpNoTw){   /* bp-card10: сборка — без твина */
       /* нечисловое значение или reduced-motion — короткая смена вспышкой */
       bpStatWrite(v, String(value));
       v.classList.remove('bp-val-swap');
@@ -59979,7 +59983,9 @@ function bpChSelect(cardEl, idx, quiet){
       sw.line.appendChild(hint);
     }
   }
-  if(!quiet){ try{ if(navigator.vibrate) navigator.vibrate(8); }catch(e){} }
+  /* bp-card10: автоматический выбор главного канала при сборке — не
+     нажатие человека, телефон при входе в каталог не вибрирует. */
+  if(!quiet && !cardEl.__bpNoTw){ try{ if(navigator.vibrate) navigator.vibrate(8); }catch(e){} }
   /* bp-card8: цена, размещения и аудитория канала — в том же кадре, что
      и цифры. Раньше их перерисовывали через 80 мс, и было видно, как
      карточка меняется в два приёма. */
@@ -84772,7 +84778,7 @@ function paintDeal(el){
     try{ if(typeof window.bpCard6One === 'function') window.bpCard6One(el); }catch(e2){ E(e2); }
     /* Докрутку цены запускаем ПОСЛЕ доводки: fitPrice меряет длину
        конечной цены, а не промежуточной. */
-    if(price && price.__roll){ var pr0 = price.__roll; price.__roll = null; roll(price.querySelector('b'), pr0.from, pr0.to); }
+    if(price && price.__roll){ var pr0 = price.__roll; price.__roll = null; if(!el.__bpNoTw) roll(price.querySelector('b'), pr0.from, pr0.to); }
   }catch(e){ E(e); }
 }
 
@@ -89956,10 +89962,15 @@ function flash(card){
    слои, и следующая правка уехала бы под чужую анимацию. */
 var seen = (typeof WeakSet === 'function') ? new WeakSet() : null;
 var io = null;
+var playedIds = {};
 function playIn(card, i){
   try{
     if(!card || (seen && seen.has(card))) return;
     if(seen) seen.add(card);
+    /* bp-card10: каталог пересоздаёт карточки при обновлении данных —
+       та же карточка второй раз не «въезжает», иначе весь список мигал. */
+    var cid = card.getAttribute('data-cardid');
+    if(cid){ if(playedIds[cid]) return; playedIds[cid] = 1; }
     card.style.animationDelay = Math.min(i, 6) * 55 + 'ms';
     card.classList.add('bpc7-in');
     setTimeout(function(){
@@ -90042,6 +90053,7 @@ try{
 }catch(e){ E(e); }
 setTimeout(sweep, 600);
 setTimeout(sweep, 2000);
+window.bpCard7Now = sweep;   /* bp-card10 */
 })();
 </script>
 
@@ -90156,6 +90168,7 @@ try{
   if(host) new MutationObserver(later).observe(host, { childList:true, subtree:true });
 }catch(e){ E(e); }
 setTimeout(sweep, 800); setTimeout(sweep, 2400);
+window.bpCard8Now = sweep;   /* bp-card10 */
 })();
 </script>
 
@@ -90487,6 +90500,125 @@ html .blc .bpc9-kids{
 html .blc .bpc9-kids svg{ width:13px; height:13px; flex:0 0 auto }
 </style>
 
+
+<style id="bp-card10-css">
+/* ══ КАТАЛОГ · КАРТОЧКА ПОЯВЛЯЕТСЯ СРАЗУ ГОТОВОЙ ════════════════════
+   Владелец (15.09.2026): «при входе карта моргает — секунду видна старая,
+   которую меняли сто раз, потом новая». Замер при замедленном процессоре
+   (как на телефоне) показал: карточка вставляется в базовом виде (старый
+   блок соцсетей, без цены), дважды гаснет и проявляется, потом прыгает
+   по высоте 375 → 334 и лишь в конце получает каналы и цену. Слои
+   отделки ждали каждый свой таймер (120–260 мс), а на загруженном
+   телефоне таймеры опаздывают на секунды.
+   Теперь script#bp-card10 прогоняет всю цепочку отделки в том же такте,
+   что и вставка — до первого кадра. Страховка: пока карточка не собрана,
+   она невидима, но не дольше 1,2 с.
+   Откат: удалить пару bp-card10-css + bp-card10 и пометки «bp-card10». */
+
+/* Базовое проявление .blc (blcFadeIn, заливка both) перезапускалось каждый
+   раз, когда с карточки снимали класс появления bpc7-in, — отсюда вторая и
+   третья вспышка. В каталоге появление одно: bpc7-in из bp-card7. */
+html #catBloggerList .blc{ animation:none!important }
+
+html #catBloggerList.bpx-cloak > .blc:not(.bpx-ok){ visibility:hidden!important }
+@keyframes bpxLate{ 0%{ opacity:0; transform:translateY(10px) } 100%{ opacity:1; transform:none } }
+html #catBloggerList .blc.bpx-late{ animation:bpxLate .32s cubic-bezier(.22,1,.36,1) backwards!important }
+
+/* Кнопка «Договориться о скидке» убрана и в разметке (bp-card10 в слое
+   торга); здесь — на случай старой копии окна выбора форматов. */
+html .bpdc-link{ display:none!important }
+
+@media (prefers-reduced-motion:reduce){
+  html #catBloggerList .blc.bpx-late{ animation:none!important }
+}
+</style>
+
+<script id="bp-card10">
+/* Пара к style#bp-card10-css. Пояснение — там же. */
+(function(){
+'use strict';
+if(window.__bpCard10) return; window.__bpCard10 = 1;
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'card10'); }catch(_){} }
+
+var list = document.getElementById('catBloggerList');
+if(!list) return;
+list.classList.add('bpx-cloak');
+
+function call(name){ try{ var f = window[name]; if(typeof f === 'function') f(); }catch(e){ E(e); } }
+
+/* Вся цепочка отделки — в одном такте. Порядок как у таймеров слоёв:
+   значки (перестройка) → переключатель каналов → три зоны карточки →
+   каналы-пилюли и главный канал (дважды: после автовыбора канала
+   пилюли пересобираются) → подпись размещений и появление → уборка. */
+var busy = false;
+function settle(){
+  if(busy) return;
+  busy = true;
+  var fresh = [];
+  try{
+    Array.prototype.forEach.call(list.children, function(c){
+      if(c.classList && c.classList.contains('blc') && !c.classList.contains('bpx-ok')){ fresh.push(c); c.__bpNoTw = 1; }
+    });
+    if(!fresh.length) return;
+    call('bpRestyleCards');
+    call('bpEnhanceAllCards');
+    call('bpCard5');
+    call('bpCard6Now');
+    call('bpCard6Now');
+    call('bpCard7Now');
+    call('bpCard8Now');
+  }catch(e){ E(e); }
+  finally{
+    fresh.forEach(function(c){ c.__bpNoTw = 0; c.classList.add('bpx-ok'); });
+    busy = false;
+  }
+}
+
+/* Колбэк наблюдателя — микрозадача: он выполняется после вставки, но ДО
+   отрисовки кадра. Поэтому человек не видит промежуточных состояний, по
+   какому бы пути карточка ни попала в каталог. Наблюдаем только детей
+   списка: правки внутри карточек сюда не возвращаются. */
+try{
+  new MutationObserver(function(recs){
+    for(var i = 0; i < recs.length; i++){
+      var a = recs[i].addedNodes;
+      for(var j = 0; j < a.length; j++){
+        if(a[j].nodeType === 1 && a[j].classList && a[j].classList.contains('blc')){ settle(); return; }
+      }
+    }
+  }).observe(list, { childList:true });
+}catch(e){ E(e); }
+
+/* Страховка: если что-то пошло не так и карточка не собралась, через
+   1,2 с она всё равно появляется — с мягким проявлением, а не рывком. */
+/* Класс появления снимаем сразу по окончании анимации, а не по таймеру:
+   на занятом телефоне таймер bp-card7 опаздывал на секунды, и любая
+   перестановка карточки за это время проигрывала появление заново. */
+try{
+  list.addEventListener('animationend', function(ev){
+    var t = ev.target;
+    if(!t || !t.classList || !t.classList.contains('blc')) return;
+    if(ev.animationName === 'bpc8In' || ev.animationName === 'bpxLate'){
+      t.classList.remove('bpc7-in', 'bpx-late');
+      t.style.animationDelay = '';
+    }
+  });
+}catch(e){ E(e); }
+
+setInterval(function(){
+  try{
+    var t = Date.now();
+    Array.prototype.forEach.call(list.children, function(c){
+      if(!c.classList || !c.classList.contains('blc') || c.classList.contains('bpx-ok')) return;
+      if(!c.__bpxSeen){ c.__bpxSeen = t; return; }
+      if(t - c.__bpxSeen > 1200) c.classList.add('bpx-ok', 'bpx-late');
+    });
+  }catch(e){ E(e); }
+}, 300);
+
+settle();
+})();
+</script>
 
 </body>
 </html>
