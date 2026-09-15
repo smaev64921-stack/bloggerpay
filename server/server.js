@@ -657,6 +657,20 @@ catch (e) { /* уже есть */ }
 try { db.exec('CREATE UNIQUE INDEX IF NOT EXISTS users_gsub ON users(google_sub) WHERE google_sub IS NOT NULL'); }
 catch (e) { /* индекс мог не создаться на старом движке — не критично */ }
 
+/* Журнал действий владельца. Решения по выплатам, личности, спорам и
+   блокировкам раньше оставляли только новый статус: при нескольких
+   админах (почты из ADMIN_EMAIL, принятые права, ключ) нельзя было
+   понять, кто выплатил или кого заблокировал. «Кто» — почта аккаунта
+   владельца, если он вошёл почтой; иначе «сессия пульта» или «ключ». */
+db.exec(`CREATE TABLE IF NOT EXISTS admin_log (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  at      TEXT NOT NULL DEFAULT (datetime('now')),
+  who     TEXT,
+  action  TEXT NOT NULL,
+  target  TEXT,
+  detail  TEXT
+)`);
+
 /* ── Мелкая утварь ─────────────────────────────────────────────────── */
 
 const q = {
@@ -742,13 +756,16 @@ const q = {
      мог положить конверт вида «сообщение в чужой сделке» — оно доезжало
      до всех приложений и вклеивалось в переписку от чужого имени. */
   syncPull: db.prepare(`SELECT ver, kind, rid, a_id, b_id, from_id, data, created_at, updated_at
-    FROM sync WHERE ver > ? AND (a_id = ? OR b_id = ? OR (b_id IS NULL AND kind = 'camp'))
+    FROM sync WHERE ver > ? AND (a_id = ? OR b_id = ?
+      OR (b_id IS NULL AND kind = 'camp' AND a_id NOT IN (SELECT id FROM users WHERE is_blocked = 1)))
     ORDER BY ver ASC LIMIT ?`),
   syncMax: db.prepare('SELECT COALESCE(MAX(ver), 0) AS v FROM sync'),
   /* Задания — единственные конверты без адресата: их и так видит каждый
      вошедший. Для витрины гостя берём те же строки. */
+  /* Задания заблокированного автора в общую ленту не попадают. */
   publicCamps: db.prepare(`SELECT rid, data, updated_at FROM sync
-    WHERE kind = 'camp' AND b_id IS NULL ORDER BY ver DESC LIMIT ?`),
+    WHERE kind = 'camp' AND b_id IS NULL AND a_id NOT IN (SELECT id FROM users WHERE is_blocked = 1)
+    ORDER BY ver DESC LIMIT ?`),
   cardGet: db.prepare('SELECT * FROM cards WHERE id = ?'),
   cardsMine: db.prepare('SELECT id FROM cards WHERE user_id = ?'),
   cardIns: db.prepare('INSERT INTO cards (id, user_id, data) VALUES (?,?,?)'),
@@ -759,8 +776,14 @@ const q = {
     FROM cards c JOIN users u ON u.id = c.user_id
     WHERE c.hidden = 0 AND u.is_blocked = 0
     ORDER BY c.updated_at DESC LIMIT ?`),
-  cardsAll: db.prepare(`SELECT c.id, c.user_id, c.hidden, c.updated_at, u.name AS owner
-    FROM cards c JOIN users u ON u.id = c.user_id ORDER BY c.updated_at DESC LIMIT 300`),
+  /* Фото карточки весит до 300 КБ: сортируем узкий подзапрос, а из данных
+     фото вырезаем ещё в базе — в пульте оно не показывается. */
+  cardsAll: db.prepare(`SELECT c.id, c.user_id, c.hidden, c.updated_at,
+      json_remove(c.data, '$.avatar') AS data, (json_extract(c.data, '$.avatar') IS NOT NULL) AS has_avatar,
+      u.name AS owner, u.email AS owner_email, u.is_blocked AS owner_blocked
+    FROM (SELECT id FROM cards ORDER BY updated_at DESC LIMIT 300) s
+    JOIN cards c ON c.id = s.id JOIN users u ON u.id = c.user_id
+    ORDER BY c.updated_at DESC`),
   insDeal: db.prepare('INSERT INTO deals (id, payer_id, payee_id, amount, status) VALUES (?,?,?,?,?)'),
   deal: db.prepare('SELECT * FROM deals WHERE id = ?'),
   updDeal: db.prepare(`UPDATE deals SET status = ?, payee_id = ?, updated_at = datetime('now') WHERE id = ?`),
@@ -786,6 +809,32 @@ const q = {
     WHERE d.status = 'held' ORDER BY d.created_at DESC LIMIT 100`),
   userLedger: db.prepare(`SELECT id, bucket, amount, kind, ref, created_at
     FROM ledger WHERE user_id = ? ORDER BY id DESC LIMIT 60`),
+  /* Пульт · «Пользователи». Поиск делаем в JS: LIKE в SQLite не знает
+     регистра кириллицы, «мария» не нашла бы «Марию». Людей пока немного,
+     потолок 5000 строк держит запрос лёгким. */
+  adminUsers: db.prepare(`SELECT u.id, u.name, u.email, u.role, u.created_at, u.is_admin, u.is_blocked, u.tg_id,
+      (u.google_sub IS NOT NULL) AS google,
+      COALESCE(b.av, 0) AS available, COALESCE(b.hd, 0) AS hold,
+      (SELECT k.status FROM kyc_requests k WHERE k.user_id = u.id ORDER BY k.id DESC LIMIT 1) AS kyc,
+      (SELECT COUNT(*) FROM channels c WHERE c.user_id = u.id) AS channels,
+      (SELECT COUNT(*) FROM cards c WHERE c.user_id = u.id) AS cards
+    FROM users u
+    LEFT JOIN (SELECT user_id,
+        SUM(CASE WHEN bucket = 'available' THEN amount END) AS av,
+        SUM(CASE WHEN bucket = 'hold' THEN amount END) AS hd
+      FROM ledger GROUP BY user_id) b ON b.user_id = u.id
+    ORDER BY u.id DESC LIMIT 100000`),
+  setBlocked: db.prepare('UPDATE users SET is_blocked = ? WHERE id = ?'),
+  userKycLast: db.prepare(`SELECT id, name, birth, status, note, created_at, updated_at,
+      (photo IS NOT NULL AND photo != '') AS has_photo, (selfie IS NOT NULL AND selfie != '') AS has_selfie
+    FROM kyc_requests WHERE user_id = ? ORDER BY id DESC LIMIT 1`),
+  userCards: db.prepare('SELECT id, hidden, updated_at, data FROM cards WHERE user_id = ? ORDER BY updated_at DESC'),
+  userWds: db.prepare(`SELECT id, amount, fee, net, status, note, created_at, updated_at
+    FROM withdrawals WHERE user_id = ? ORDER BY id DESC LIMIT 20`),
+  insAdminLog: db.prepare('INSERT INTO admin_log (who, action, target, detail) VALUES (?,?,?,?)'),
+  adminLogList: db.prepare('SELECT id, at, who, action, target, detail FROM admin_log ORDER BY id DESC LIMIT ?'),
+  trimAdminLog: db.prepare(`DELETE FROM admin_log WHERE id NOT IN
+    (SELECT id FROM admin_log ORDER BY id DESC LIMIT 20000)`),
   insError: db.prepare('INSERT INTO errors (user_id, message, where_at, version, ua) VALUES (?,?,?,?,?)'),
   /* Порядок однозначный: у checked_at разрешение в секунду, и две
      привязки подряд давали ничью — клиент брал строку наугад и мог
@@ -1188,9 +1237,14 @@ setInterval(() => {
    X-Admin-Session на всём, что меняет данные: поставить его из чужой
    формы нельзя, а наши страницы ставят его всегда. */
 const ADMIN_SESSION_MS = 12 * 60 * 60 * 1000;
-function adminSign(exp) {
-  return crypto.createHmac('sha256', ADMIN_KEY || 'нет-ключа').update('adm:' + exp).digest('hex').slice(0, 32);
+function adminSign(exp, label) {
+  /* label — кто вошёл (почта владельца или «ключ владельца»), base64url.
+     Подписывается вместе со сроком: подменить имя в куке нельзя. Старые
+     куки без метки (формат «срок.подпись») по-прежнему действуют. */
+  const what = label ? ('adm:' + exp + ':' + label) : ('adm:' + exp);
+  return crypto.createHmac('sha256', ADMIN_KEY || 'нет-ключа').update(what).digest('hex').slice(0, 32);
 }
+function adminLabel(who) { return Buffer.from(String(who || '').slice(0, 120), 'utf8').toString('base64url'); }
 function cookieOf(req, name) {
   const raw = String(req.headers.cookie || '');
   for (const part of raw.split(';')) {
@@ -1200,7 +1254,7 @@ function cookieOf(req, name) {
   }
   return '';
 }
-function adminCookie(req, exp) {
+function adminCookie(req, exp, who) {
   /* Смотрим на ВЫЧИСЛЕННЫЙ адрес (PUBLIC_URL выше = externalBase(ENV) ||
      …), а не на сырую настройку: у хостинга внешний адрес приходит в
      DOMAIN, а ENV.PUBLIC_URL так и остаётся http://127.0.0.1:8090 —
@@ -1208,7 +1262,8 @@ function adminCookie(req, exp) {
   const https = /^https:/i.test(PUBLIC_URL)
     || /^https:/i.test(String(ENV.PUBLIC_URL || ''))
     || String(req.headers['x-forwarded-proto'] || '') === 'https';
-  return 'bp_admin=' + encodeURIComponent(exp + '.' + adminSign(exp))
+  const label = who ? adminLabel(who) : '';
+  return 'bp_admin=' + encodeURIComponent(label ? (exp + '.' + label + '.' + adminSign(exp, label)) : (exp + '.' + adminSign(exp)))
     + '; Path=/; HttpOnly; SameSite=Strict; Max-Age=' + Math.floor(ADMIN_SESSION_MS / 1000)
     + (https ? '; Secure' : '');
 }
@@ -1243,16 +1298,66 @@ function ticketOk(raw) {
   ticketsUsed.set(parts[1], exp);
   return true;
 }
-function adminCookieOk(req) {
-  if (!ADMIN_KEY) return false;
-  const raw = cookieOf(req, 'bp_admin');
-  const i = raw.indexOf('.');
-  if (i < 0) return false;
-  const exp = Number(raw.slice(0, i));
-  if (!Number.isFinite(exp) || exp <= Date.now()) return false;
-  const a = Buffer.from(raw.slice(i + 1), 'utf8'), b = Buffer.from(adminSign(exp), 'utf8');
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+/* Разбор куки владельца: null — нет или не подходит, иначе {exp, who}. */
+function adminCookieParse(req) {
+  if (!ADMIN_KEY) return null;
+  const parts = cookieOf(req, 'bp_admin').split('.');
+  if (parts.length !== 2 && parts.length !== 3) return null;
+  const exp = Number(parts[0]);
+  if (!Number.isFinite(exp) || exp <= Date.now()) return null;
+  const label = parts.length === 3 ? parts[1] : '';
+  if (label && !/^[A-Za-z0-9_-]{1,200}$/.test(label)) return null;
+  const a = Buffer.from(parts[parts.length - 1], 'utf8'), b = Buffer.from(adminSign(exp, label), 'utf8');
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let who = '';
+  try { who = label ? Buffer.from(label, 'base64url').toString('utf8') : ''; } catch (e) { who = ''; }
+  return { exp, who };
 }
+function adminCookieOk(req) { return !!adminCookieParse(req); }
+function adminCookieWho(req) { const c = adminCookieParse(req); return c ? c.who : ''; }
+/* Кто нажал кнопку в пульте — для журнала действий. */
+function adminWho(req) {
+  try { const u = auth(req); if (u && u.is_admin) return String(u.email || ('id ' + u.id)); } catch (e) { /* ниже */ }
+  try { const c = adminCookieParse(req); if (c) return c.who || 'сессия пульта'; } catch (e) { /* ниже */ }
+  return 'ключ';
+}
+function adminLog(req, action, target, detail) {
+  try {
+    q.insAdminLog.run(adminWho(req), String(action).slice(0, 40),
+      target == null ? null : String(target).slice(0, 80),
+      detail == null ? null : String(detail).slice(0, 300));
+  } catch (e) { console.error('[admin_log]', e && e.message); }
+}
+/* Карточка каталога для пульта — сводка без фото: фото весит до 300 КБ,
+   а в списке их до трёхсот. */
+function cardBrief(raw) {
+  let d = {};
+  try { d = JSON.parse(raw || '{}') || {}; } catch (e) { d = {}; }
+  const pd = (d.platData && typeof d.platData === 'object') ? d.platData : {};
+  const plats = (Array.isArray(d.platforms) && d.platforms.length ? d.platforms : Object.keys(pd))
+    .filter((p) => CARD_PLATS.includes(p));
+  let from = 0;
+  const ig = (d.integrations && typeof d.integrations === 'object') ? d.integrations : {};
+  for (const p of Object.keys(ig)) {
+    if (!Array.isArray(ig[p])) continue;
+    for (const x of ig[p]) { const v = Number(x && x.price) || 0; if (v > 0 && (!from || v < from)) from = v; }
+  }
+  return {
+    name: String(d.name || '').slice(0, 60),
+    initials: String(d.initials || '').slice(0, 4),
+    col: String(d.col || '').slice(0, 64),
+    platforms: plats.map((p) => ({
+      id: p, url: String((pd[p] && pd[p].url) || '').slice(0, 300),
+      subs: Math.max(0, Math.round(Number(pd[p] && pd[p].subs) || 0)),
+      verified: !!(pd[p] && pd[p].verified),
+    })),
+    topics: (Array.isArray(d.topics) ? d.topics : []).slice(0, 5).map((t) => String(t).slice(0, 40)),
+    priceFrom: from,
+    msg: String(d.msg || '').slice(0, 160),
+    hasAvatar: !!d.avatar,
+  };
+}
+
 function isAdmin(req) {
   /* Сначала вошедший владелец: ему перебирать нечего. */
   const u = auth(req);
@@ -2197,12 +2302,17 @@ const routes = {
     if (!q.cardGet.get(id)) return { status: 404, body: { error: 'Карточка не найдена' } };
     q.cardHide.run(body.hidden === false ? 0 : 1, id);
     cardsCache.at = 0;
+    adminLog(req, body.hidden === false ? 'card-show' : 'card-hide', 'карточка ' + id, null);
     return { status: 200, body: { ok: true, id, hidden: body.hidden !== false } };
   },
 
   'GET /api/admin/cards': async (req) => {
     if (!isAdmin(req)) return { status: 403, body: { error: 'Только владелец площадки' } };
-    return { status: 200, body: { rows: q.cardsAll.all() } };
+    return { status: 200, body: { rows: q.cardsAll.all().map((c) => ({
+      id: c.id, user_id: c.user_id, hidden: c.hidden, updated_at: c.updated_at, owner: c.owner,
+      owner_email: c.owner_email, owner_blocked: c.owner_blocked,
+      card: Object.assign(cardBrief(c.data), { hasAvatar: !!c.has_avatar }),
+    })) } };
   },
 
   /* ── Рейтинг блогеров ──
@@ -3126,7 +3236,7 @@ const routes = {
     const toPayer = rest - toBlogger;
 
     if (!isAdmin(req) && !userKey(body.opKey)) return badKey;
-    return moneyOp(String(body.opKey || ''), d.payer_id, 'settle', (add) => {
+    const _settled = moneyOp(String(body.opKey || ''), d.payer_id, 'settle', (add) => {
       add(d.payer_id, 'hold', -rest, 'settle', dealId);
       if (toBlogger > 0) add(payee.id, 'available', toBlogger, 'settle-payout', dealId);
       if (toPayer > 0) add(d.payer_id, 'available', toPayer, 'settle-refund', dealId);
@@ -3141,6 +3251,10 @@ const routes = {
         разделено: rest,
       };
     });
+    if (_settled.status === 200 && !_settled.body.repeated) {
+      adminLog(req, 'settle', 'сделка ' + dealId, 'исполнителю ' + toBlogger + ' ₽, плательщику ' + toPayer + ' ₽ (' + share + '%)');
+    }
+    return _settled;
   },
 
   /* Заявка на вывод. Деньги уходят в hold и ЖДУТ ОПЕРАТОРА — статус
@@ -3542,6 +3656,7 @@ const routes = {
     const rows = q.channelsByExt.all(platform, externalId);
     if (!rows.length) return { status: 404, body: { error: 'Такой канал не подтверждён' } };
     q.delChannelEverywhere.run(platform, externalId);
+    adminLog(req, 'channel-unlink', platform + ':' + externalId, 'у ' + rows.map((r) => 'user ' + r.user_id).join(', '));
     return { status: 200, body: { ok: true, freedFrom: rows.map((r) => r.user_id) } };
   },
 
@@ -3658,6 +3773,7 @@ const routes = {
     if (!w) return { status: 404, body: { error: 'Заявка не найдена' } };
     if (w.status !== 'queued') return { status: 409, body: { error: 'Заявка не в очереди: ' + w.status } };
     q.updWd.run('processing', null, w.id);
+    adminLog(req, 'wd-take', 'заявка ' + w.id, w.net + ' ₽ · user ' + w.user_id);
     return { status: 200, body: { ok: true, withdrawalId: w.id, status: 'processing' } };
   },
 
@@ -3669,7 +3785,7 @@ const routes = {
     if (w.status !== 'processing' && w.status !== 'queued') {
       return { status: 409, body: { error: 'Заявка уже закрыта: ' + w.status } };
     }
-    return moneyOp(sysKey('wd-paid', w.id), w.user_id, 'wd-paid', (add) => {
+    const _wdPaid = moneyOp(sysKey('wd-paid', w.id), w.user_id, 'wd-paid', (add) => {
       add(w.user_id, 'hold', -w.amount, 'wd-paid', 'заявка ' + w.id);
       add(0, 'available', w.fee, 'fee', 'комиссия по заявке ' + w.id);
       q.updWd.run('paid', String(body.note || '').slice(0, 200) || null, w.id);
@@ -3678,6 +3794,8 @@ const routes = {
         w.net.toLocaleString('ru') + ' ₽ ушли на ваши реквизиты', '/');
       return { ok: true, withdrawalId: w.id, status: 'paid', net: w.net, fee: w.fee };
     });
+    if (_wdPaid.status === 200 && !_wdPaid.body.repeated) adminLog(req, 'wd-paid', 'заявка ' + w.id, w.net + ' ₽ · user ' + w.user_id);
+    return _wdPaid;
   },
 
   'POST /api/admin/withdrawals/reject': async (req, body) => {
@@ -3687,7 +3805,7 @@ const routes = {
     if (w.status === 'paid' || w.status === 'rejected' || w.status === 'cancelled') {
       return { status: 409, body: { error: 'Заявка уже закрыта: ' + w.status } };
     }
-    return moneyOp(sysKey('wd-reject', w.id), w.user_id, 'wd-reject', (add) => {
+    const _wdRej = moneyOp(sysKey('wd-reject', w.id), w.user_id, 'wd-reject', (add) => {
       add(w.user_id, 'hold', -w.amount, 'wd-reject', 'заявка ' + w.id);
       add(w.user_id, 'available', w.amount, 'wd-reject', 'заявка ' + w.id);
       q.updWd.run('rejected', String(body.note || '').slice(0, 200) || 'отклонена оператором', w.id);
@@ -3695,6 +3813,8 @@ const routes = {
         w.amount.toLocaleString('ru') + ' ₽ вернулись на баланс', '/');
       return { ok: true, withdrawalId: w.id, status: 'rejected' };
     });
+    if (_wdRej.status === 200 && !_wdRej.body.repeated) adminLog(req, 'wd-reject', 'заявка ' + w.id, String(body.note || '').slice(0, 200));
+    return _wdRej;
   },
 
   /* ── Верификация: оператор смотрит паспорт и решает ── */
@@ -3727,6 +3847,7 @@ const routes = {
       return { status: 409, body: { error: 'Заявка изменилась, пока вы смотрели — обновите список и проверьте заново' } };
     }
     q.updKyc.run('approved', null, k.id);
+    adminLog(req, 'kyc-approve', 'user ' + k.user_id, k.name);
     pushTo(k.user_id, 'Личность подтверждена', 'Вывод денег теперь открыт', '/');
     return { status: 200, body: { ok: true, requestId: k.id, status: 'approved' } };
   },
@@ -3741,6 +3862,7 @@ const routes = {
       return { status: 409, body: { error: 'Заявка изменилась, пока вы смотрели — обновите список и проверьте заново' } };
     }
     q.updKyc.run('rejected', String(body.note || '').slice(0, 200) || 'отклонена оператором', k.id);
+    adminLog(req, 'kyc-reject', 'user ' + k.user_id, String(body.note || '').slice(0, 200));
     pushTo(k.user_id, 'Проверка личности не пройдена',
       String(body.note || '').slice(0, 120) || 'Откройте приложение и подайте заявку заново', '/');
     return { status: 200, body: { ok: true, requestId: k.id, status: 'rejected' } };
@@ -3759,11 +3881,83 @@ const routes = {
     return {
       status: 200,
       body: {
-        user: { id: u.id, email: u.email, name: u.name, role: u.role },
+        user: { id: u.id, email: u.email, name: u.name, role: u.role,
+          created_at: u.created_at, is_admin: u.is_admin, is_blocked: u.is_blocked,
+          tg: !!u.tg_id, google: !!u.google_sub },
         balance: q.balance.get(u.id),
         ledger: q.userLedger.all(u.id),
+        kyc: q.userKycLast.get(u.id) || null,
+        channels: q.myChannels.all(u.id).map((c) => ({
+          platform: c.platform, external_id: c.external_id, title: c.title, url: c.url,
+          subs: c.subs, username: c.username, checked_at: c.checked_at,
+          risk_level: c.risk_level || null,
+        })),
+        cards: q.userCards.all(u.id).map((c) => ({ id: c.id, hidden: c.hidden, updated_at: c.updated_at, card: cardBrief(c.data) })),
+        withdrawals: q.userWds.all(u.id),
       },
     };
+  },
+
+  /* Пульт · список людей. Ищет по имени, почте, номеру и Телеграму;
+     фильтры — роль, заблокированные, владельцы. */
+  'GET /api/admin/users': async (req, body, url) => {
+    if (!isAdmin(req)) return { status: 403, body: { error: 'Только владелец площадки' } };
+    const qs = String(url.searchParams.get('q') || '').trim().toLowerCase().slice(0, 80);
+    const f = String(url.searchParams.get('filter') || '');
+    const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 50));
+    const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
+    let rows = q.adminUsers.all();
+    if (f === 'blocked') rows = rows.filter((r) => r.is_blocked);
+    else if (f === 'admin') rows = rows.filter((r) => r.is_admin);
+    else if (f === 'blogger' || f === 'advertiser') rows = rows.filter((r) => r.role === f);
+    else if (f === 'kyc') rows = rows.filter((r) => r.kyc === 'queued');
+    if (qs) {
+      const idq = qs.replace(/^#|^id\s*/, '');
+      const exact = (r) => String(r.id) === idq || (r.tg_id && String(r.tg_id) === qs);
+      rows = rows.filter((r) => exact(r) || String(r.name || '').toLowerCase().includes(qs)
+        || String(r.email || '').toLowerCase().includes(qs));
+      /* «12» находит и человека №12, и почты tg12…@telegram.local — номер
+         важнее, ставим его первым. */
+      rows.sort((a, b) => (exact(b) ? 1 : 0) - (exact(a) ? 1 : 0));
+    }
+    const total = rows.length;
+    return { status: 200, body: {
+      total, limit, offset,
+      rows: rows.slice(offset, offset + limit).map((r) => ({
+        id: r.id, name: r.name, email: r.email, role: r.role, created_at: r.created_at,
+        is_admin: r.is_admin, is_blocked: r.is_blocked, tg: !!r.tg_id, google: !!r.google,
+        available: r.available, hold: r.hold, kyc: r.kyc || null, channels: r.channels, cards: r.cards,
+      })),
+    } };
+  },
+
+  /* Блокировка. Заблокированный не входит (auth отказывает), его
+     карточка пропадает из каталога, он выпадает из рейтинга. Активные
+     сессии гасим сразу. Владельца и счёт платформы блокировать нельзя —
+     иначе можно запереть самого себя. Деньги не трогаем: заявки на
+     вывод и заморозки остаются, решайте их в своих разделах. */
+  'POST /api/admin/users/block': async (req, body) => {
+    if (!isAdmin(req)) return { status: 403, body: { error: 'Только владелец площадки' } };
+    const id = Number(body.userId);
+    if (!Number.isInteger(id) || id <= 0) return { status: 400, body: { error: 'Нужен номер пользователя' } };
+    const u = q.userById.get(id);
+    if (!u) return { status: 404, body: { error: 'Нет такого пользователя' } };
+    const blocked = body.blocked !== false;
+    const owner = u.is_admin || ADMIN_EMAILS.includes(String(u.email || '').toLowerCase());
+    if (blocked && owner) return { status: 409, body: { error: 'Владельца площадки заблокировать нельзя' } };
+    q.setBlocked.run(blocked ? 1 : 0, id);
+    if (blocked) q.delUserSessions.run(id);
+    cardsCache.at = 0; lbCache.at = 0;
+    adminLog(req, blocked ? 'user-block' : 'user-unblock', 'user ' + id,
+      (u.email || '') + (body.reason ? ' · ' + String(body.reason).slice(0, 200) : ''));
+    return { status: 200, body: { ok: true, userId: id, blocked } };
+  },
+
+  /* Журнал действий владельца — кто и что сделал в пульте. */
+  'GET /api/admin/log': async (req, body, url) => {
+    if (!isAdmin(req)) return { status: 403, body: { error: 'Только владелец площадки' } };
+    const limit = Math.min(500, Math.max(1, Number(url.searchParams.get('limit')) || 200));
+    return { status: 200, body: { rows: q.adminLogList.all(limit) } };
   },
 
   /* Сводка и сверка: сумма журнала должна сходиться сама с собой. */
@@ -3790,24 +3984,29 @@ const routes = {
       if (!pass) { adminMissed(req); return { status: 403, body: { error: 'Ключ владельца не подошёл' } }; }
     }
     const until = Date.now() + ADMIN_SESSION_MS;
+    /* Кто входит — пишется в куку и потом в журнал действий. */
+    const who = (u && u.is_admin) ? String(u.email || ('id ' + u.id))
+      : (adminCookieWho(req) || (body && body.ticket ? 'билет из приложения' : 'ключ владельца'));
     return {
       status: 200,
       body: {
-        ok: true, until,
+        ok: true, until, who,
         by: (u && u.is_admin) ? 'аккаунт' : (body && body.ticket ? 'билет' : 'ключ'),
         /* билет отдаём только приложению — чтобы открыть пульт без ключа */
         ticket: (body && body.wantTicket) ? ticketMake() : undefined,
       },
-      headers: { 'Set-Cookie': adminCookie(req, until) },
+      headers: { 'Set-Cookie': adminCookie(req, until, who) },
     };
   },
 
   /* Проверка: пустит ли сервер без ключа. Страница пульта спрашивает это
      первым делом и показывает поле ключа, только если ответ «нет». */
-  'GET /api/admin/session': async (req) => ({
-    status: 200,
-    body: { ok: isAdmin(req), until: 0 },
-  }),
+  'GET /api/admin/session': async (req) => {
+    const ok = isAdmin(req);
+    let who = '';
+    if (ok) { try { const u = auth(req); who = (u && u.is_admin) ? String(u.email || '') : adminCookieWho(req); } catch (e) { who = ''; } }
+    return { status: 200, body: { ok, until: 0, who } };
+  },
 
   'POST /api/admin/logout': async () => ({
     status: 200,
@@ -4731,7 +4930,8 @@ const handler = async (req, res) => {
     return send(res, 400, { error: 'Неверный адрес запроса' });
   }
   if (req.method === 'OPTIONS') return send(res, 204, {});
-  if (req.method === 'GET' && (url.pathname === '/operator' || url.pathname === '/operator.html')) {
+  if (req.method === 'GET' && (url.pathname === '/operator' || url.pathname === '/operator.html'
+      || url.pathname === '/admin' || url.pathname === '/admin.html')) {
     return sendOperatorPage(res);
   }
   if (req.method === 'GET' && url.pathname.startsWith('/api/verify/callback/')) {
@@ -4993,6 +5193,7 @@ setInterval(() => {
   try {
     const n = db.prepare('SELECT COUNT(*) AS n FROM errors').get().n;
     if (n > 25000) q.trimErrors.run();
+    try { q.trimAdminLog.run(); } catch (e) { /* журнал владельца не критичен */ }
   } catch (e) { /* уборка не обязана удаться */ }
 }, 3600000).unref();
 

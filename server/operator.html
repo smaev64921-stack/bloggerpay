@@ -2,231 +2,401 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>BloggerPay — выплаты</title>
+<meta name="theme-color" content="#0b0c10">
+<title>BloggerPay — админ-панель</title>
 <!--
-  РАБОЧЕЕ МЕСТО ОПЕРАТОРА.
+  ЕДИНАЯ АДМИН-ПАНЕЛЬ ВЛАДЕЛЬЦА (15.09.2026).
 
-  Это НЕ часть мини-аппа. Ключ оператора нельзя класть в файл, который
-  скачивает каждый пользователь, поэтому страница живёт отдельно и
-  открывается только тем, у кого есть ключ.
+  Раньше управление жило в двух местах: «Пульт выплат» (эта страница) и
+  «Панель владельца» внутри мини-аппа. Панель в мини-аппе почти целиком
+  работала на данных ОДНОГО браузера — показывала людей и деньги этого
+  телефона, а её «начисления» и «блокировки» сервер не видел. Владелец
+  попросил одно место и без мини-аппа — всё здесь, и всё с сервера.
 
-  Что здесь делает человек: видит, кому и сколько должен, берёт заявку в
-  работу, переводит деньги своим банком и отмечает, что перевёл.
-  Сервер сам деньги никуда не отправляет — он ведёт учёт.
+  Разделы: Обзор · Выплаты · Верификация · Спорные деньги · Пользователи ·
+  Каталог · Поломки · Площадки · Журнал.
 
-  Ключ хранится в sessionStorage: закрыл вкладку — надо ввести заново.
+  Страница НЕ входит в мини-апп и не скачивается пользователям. Открывается
+  по адресу /admin (или прежнему /operator). Вход — ключ владельца один
+  раз (ADMIN_KEY из server/.env) или аккаунт из ADMIN_EMAIL; дальше сервер
+  держит сессию-куку 12 часов. Каждое действие проверяет сервер (isAdmin),
+  а изменяющие запросы несут X-Admin-Session — чужой сайт его не поставит.
 -->
 <style>
   :root{
-    --bg:#0f1115; --card:#171a20; --card2:#1d2128; --line:#262b33;
-    --t1:#e8eaed; --t2:#a2a9b4; --t3:#6f7783;
-    --acc:#4a8cf7; --ok:#3ddc84; --warn:#f6a823; --bad:#ff6b6b;
+    --bg:#0b0c10; --side:#0e1015; --card:#14161c; --card2:#1a1d24; --card3:#20242c;
+    --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
+    --t1:#eceef2; --t2:#a9afba; --t3:#6f7683;
+    --acc:#2f6ce0; --acc2:#5b93f5; --accbg:rgba(47,108,224,.14);
+    --ok:#3ddc84; --okbg:rgba(61,220,132,.12);
+    --warn:#f5a524; --warnbg:rgba(245,165,36,.12);
+    --bad:#ff6b6b; --badbg:rgba(255,107,107,.11);
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-
-    /* Шкала размеров. Экран сканируют глазами: ищут сумму и статус,
-       а не читают подряд. Поэтому ступени крупные (шаг примерно ×1.25),
-       и их всего пять. Было восемь значений в диапазоне 11–15 px —
-       13,5 против 13 против 12,5 глаз не различает, и всё сливалось. */
-    --fs-xl:28px;   /* число в плитке — то, за чем сюда приходят */
-    --fs-lg:20px;   /* заголовок раздела */
-    --fs-md:15px;   /* основной текст и строки таблицы */
-    --fs-sm:12px;   /* второстепенное: подписи, реквизиты, пояснения */
-    --fs-xs:10px;   /* прописные метки: шапка таблицы, статусы */
+    --r:14px; --r2:10px;
+    /* Шкала размеров — пять ступеней, как в прежнем пульте: экран
+       сканируют глазами, ищут сумму и статус, а не читают подряд. */
+    --fs-xl:28px; --fs-lg:20px; --fs-md:15px; --fs-sm:12px; --fs-xs:10px;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--t1);
-    font:var(--fs-md)/1.5 -apple-system,"Segoe UI",Roboto,sans-serif;padding:20px}
-  .wrap{max-width:1080px;margin:0 auto}
-  h1{font-size:var(--fs-lg);margin:0 0 4px;letter-spacing:-.3px}
-  .sub{color:var(--t3);font-size:var(--fs-sm);margin:0 0 20px}
+  html,body{margin:0;background:var(--bg);color:var(--t1)}
+  body{font:var(--fs-md)/1.5 -apple-system,"Segoe UI",Roboto,Inter,sans-serif;-webkit-font-smoothing:antialiased}
+  button,input,select,textarea{font:inherit;color:inherit}
+  a{color:var(--acc2)}
+  [hidden]{display:none!important}
+  svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 
-  .gate{max-width:420px;margin:60px auto;background:var(--card);
-    border:1px solid var(--line);border-radius:14px;padding:22px}
-  .gate p{color:var(--t2);font-size:var(--fs-md);margin:0 0 14px;line-height:1.55}
-  input,button,select{font:inherit;font-family:inherit}
-  input[type=password],input[type=text]{width:100%;background:var(--card2);
-    border:1px solid var(--line);border-radius:10px;padding:11px 13px;color:var(--t1);outline:none}
-  input:focus{border-color:var(--acc)}
-  .btn{background:var(--acc);border:0;border-radius:10px;padding:11px 16px;
-    color:#fff;font-size:var(--fs-md);font-weight:600;cursor:pointer}
-  .btn:hover{filter:brightness(1.08)}
-  .btn.ghost{background:var(--card2);border:1px solid var(--line);color:var(--t1)}
-  .btn.ok{background:var(--ok);color:#07130c}
-  .btn.bad{background:transparent;border:1px solid var(--bad);color:var(--bad)}
-  .btn:disabled{opacity:.5;cursor:default}
-  .btn.sm{padding:7px 12px;font-size:var(--fs-sm);font-weight:700;border-radius:8px}
+  /* ── вход ── */
+  .gate{max-width:420px;margin:12vh auto 0;padding:0 16px}
+  .gate-card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:26px 24px}
+  .gate h1{font-size:var(--fs-lg);margin:0 0 6px;letter-spacing:-.3px}
+  .gate p{color:var(--t2);margin:0 0 14px;line-height:1.55;font-size:var(--fs-md)}
+  .gate .hint{color:var(--t3);font-size:var(--fs-sm)}
+  .brandmark{display:inline-flex;align-items:center;gap:10px;margin-bottom:18px;color:var(--t2);font-size:var(--fs-sm);font-weight:600;letter-spacing:.3px}
+  .brandmark i{width:30px;height:30px;border-radius:9px;background:linear-gradient(140deg,#5b93f5,#1b49a8);display:grid;place-items:center;font-style:normal;font-weight:800;color:#fff;font-size:13px}
+  .inp{width:100%;background:var(--card2);border:1px solid var(--line2);border-radius:var(--r2);padding:11px 13px;outline:none;transition:border-color .15s}
+  .inp:focus{border-color:var(--acc)}
+  textarea.inp{resize:vertical;min-height:84px;line-height:1.5}
+  .err{color:var(--bad);font-size:var(--fs-sm);margin-top:10px;min-height:1em}
+  .gate-or{display:flex;align-items:center;gap:10px;margin:18px 0 12px;color:var(--t3);font-size:var(--fs-sm)}
+  .gate-or::before,.gate-or::after{content:'';flex:1;height:1px;background:var(--line)}
 
-  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:18px}
-  .tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
-  .tile b{display:block;font-size:var(--fs-xl);font-family:var(--mono);
-    letter-spacing:-1px;line-height:1.05}
-  .tile i{display:block;font-style:normal;color:var(--t3);
-    font-size:var(--fs-sm);margin-top:6px}
+  /* ── кнопки ── */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--acc);border:0;border-radius:var(--r2);
+    padding:10px 16px;color:#fff;font-size:var(--fs-md);font-weight:600;cursor:pointer;white-space:nowrap;transition:filter .15s,background .15s}
+  .btn:hover{filter:brightness(1.1)}
+  .btn:disabled{opacity:.5;cursor:default;filter:none}
+  .btn.ghost{background:var(--card2);border:1px solid var(--line2);color:var(--t1)}
+  .btn.ok{background:var(--ok);color:#06140c}
+  .btn.bad{background:transparent;border:1px solid rgba(255,107,107,.55);color:var(--bad)}
+  .btn.warn{background:transparent;border:1px solid rgba(245,165,36,.55);color:var(--warn)}
+  .btn.sm{padding:6px 11px;font-size:var(--fs-sm);font-weight:700;border-radius:8px}
+  .btn.block{width:100%}
+
+  /* ── каркас ── */
+  .shell{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100vh}
+  .side{position:sticky;top:0;height:100vh;background:var(--side);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;padding:18px 12px 14px}
+  .side .brandmark{padding:0 8px;margin-bottom:22px;color:var(--t1);font-size:var(--fs-md);font-weight:700;letter-spacing:-.2px}
+  .side .brandmark span{display:block;color:var(--t3);font-size:var(--fs-xs);font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-top:1px}
+  .nav{display:flex;flex-direction:column;gap:2px}
+  .nav button{display:flex;align-items:center;gap:11px;width:100%;background:none;border:0;border-radius:10px;
+    padding:9px 10px;color:var(--t2);font-size:var(--fs-md);font-weight:500;cursor:pointer;text-align:left;transition:background .15s,color .15s}
+  .nav button:hover{background:rgba(255,255,255,.04);color:var(--t1)}
+  .nav button.on{background:var(--accbg);color:#fff}
+  .nav button.on svg.i{color:var(--acc2)}
+  .nav em{margin-left:auto;font-style:normal;font-size:var(--fs-xs);font-weight:800;min-width:20px;height:20px;padding:0 6px;border-radius:10px;
+    display:inline-flex;align-items:center;justify-content:center;background:var(--warnbg);color:var(--warn)}
+  .nav em.bad{background:var(--badbg);color:var(--bad)}
+  .nav em:empty{display:none}
+  .nav .sep{height:1px;background:var(--line);margin:10px 8px}
+  .side-foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding:0 4px}
+  .side-foot .who{color:var(--t3);font-size:var(--fs-sm);padding:0 6px;line-height:1.4}
+
+  .main{min-width:0;padding:26px 30px 60px}
+  .main-in{max-width:1180px;margin:0 auto}
+  .head{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  .head h1{font-size:var(--fs-xl);margin:0;letter-spacing:-.6px;line-height:1.1}
+  .head p{color:var(--t3);font-size:var(--fs-sm);margin:6px 0 0;max-width:70ch}
+  .head .tools{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+  /* ── плитки, сверка ── */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;margin-bottom:14px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 15px}
+  .tile b{display:block;font-size:var(--fs-xl);font-family:var(--mono);letter-spacing:-1px;line-height:1.05;font-weight:600}
+  .tile i{display:block;font-style:normal;color:var(--t3);font-size:var(--fs-sm);margin-top:7px}
   .tile.good b{color:var(--ok)} .tile.warn b{color:var(--warn)} .tile.bad b{color:var(--bad)}
-
-  .plats{ display:flex; flex-wrap:wrap; gap:10px; margin:0 0 14px }
-.plat{
-  flex:1 1 240px; border-radius:12px; padding:11px 13px;
-  border:1px solid var(--line); background:var(--card);
-}
-.plat b{ display:block; font-size:var(--fs-md); }
-.plat span{ display:block; font-size:var(--fs-sm); margin-top:2px }
-.plat.on span{ color:var(--ok) }
-.plat.off span{ color:var(--warn) }
-.plat i{ display:block; font-style:normal; font-size:var(--fs-sm); color:var(--t3);
-  margin:6px 0 8px; word-break:break-all }
-.plat-out{ white-space:pre-wrap; font-size:var(--fs-sm); line-height:1.5; margin-top:8px }
-.plat-out.good{ color:var(--ok) }
-.plat-out.warn{ color:var(--warn) }
-.recon{border-radius:12px;padding:13px 15px;margin-bottom:18px;font-size:var(--fs-md);
-    border:1px solid var(--line);background:var(--card)}
-  .recon.ok{border-color:rgba(61,220,132,.35);background:rgba(61,220,132,.08)}
-  .recon.bad{border-color:rgba(255,107,107,.4);background:rgba(255,107,107,.09)}
+  .recon{border-radius:var(--r);padding:13px 16px;margin-bottom:18px;font-size:var(--fs-md);border:1px solid var(--line);background:var(--card);line-height:1.5}
+  .recon.ok{border-color:rgba(61,220,132,.3);background:var(--okbg)}
+  .recon.bad{border-color:rgba(255,107,107,.4);background:var(--badbg)}
   .recon b{font-family:var(--mono)}
 
-  .tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
-  .tab{background:var(--card2);border:1px solid var(--line);border-radius:8px;
-    padding:7px 13px;font-size:var(--fs-sm);font-weight:600;color:var(--t2);cursor:pointer}
-  .tab.on{background:var(--t1);color:var(--bg);border-color:var(--t1);font-weight:600}
+  /* ── «нужно сделать» ── */
+  .todo{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-bottom:22px}
+  .todo button{display:flex;align-items:center;gap:13px;text-align:left;color:var(--t1);background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r);padding:14px 15px;cursor:pointer;transition:border-color .15s,background .15s}
+  .todo button:hover{border-color:var(--line2);background:var(--card2)}
+  .todo .ic{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--accbg);color:var(--acc2);flex-shrink:0}
+  .todo .ic.warn{background:var(--warnbg);color:var(--warn)} .todo .ic.bad{background:var(--badbg);color:var(--bad)} .todo .ic.ok{background:var(--okbg);color:var(--ok)}
+  .todo b{display:block;font-size:var(--fs-md)}
+  .todo span{display:block;color:var(--t3);font-size:var(--fs-sm);margin-top:2px}
+  .h2{font-size:var(--fs-sm);font-weight:700;color:var(--t3);letter-spacing:.6px;text-transform:uppercase;margin:0 0 10px}
 
-  /* Семь колонок в телефон не влезут — и это нормально. Важно, чтобы
-     вбок ездила ТАБЛИЦА, а не вся страница: иначе уплывают и плитки,
-     и полоса сверки, за которой оператор следит. */
-  .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;
-    border:1px solid var(--line);border-radius:12px;background:var(--card)}
-  table{width:100%;min-width:720px;border-collapse:collapse;background:transparent}
-  th{text-align:left;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.7px;
-    color:var(--t3);padding:10px 12px;border-bottom:1px solid var(--line);font-weight:700}
-  td{padding:12px;border-bottom:1px solid var(--line);font-size:var(--fs-md);vertical-align:top}
+  /* ── вкладки и фильтры ── */
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .chip{background:var(--card2);border:1px solid var(--line);border-radius:20px;padding:6px 13px;font-size:var(--fs-sm);font-weight:600;color:var(--t2);cursor:pointer}
+  .chip:hover{color:var(--t1);border-color:var(--line2)}
+  .chip.on{background:var(--t1);color:var(--bg);border-color:var(--t1)}
+  .search{position:relative;flex:1 1 260px;max-width:420px}
+  .search .inp{padding-left:38px}
+  .search svg.i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--t3);width:17px;height:17px}
+
+  /* ── таблицы: на широком экране строки, на узком — карточки ── */
+  .box{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.7px;color:var(--t3);padding:11px 14px;border-bottom:1px solid var(--line);font-weight:700;white-space:nowrap}
+  td{padding:12px 14px;border-bottom:1px solid var(--line);font-size:var(--fs-md);vertical-align:top}
   tr:last-child td{border-bottom:0}
-  .num{font-family:var(--mono);text-align:right;white-space:nowrap;
-    font-variant-numeric:tabular-nums}
-  .num b{font-size:var(--fs-lg);font-weight:700;letter-spacing:-.5px}
+  tbody tr.click{cursor:pointer} tbody tr.click:hover td{background:rgba(255,255,255,.02)}
+  .num{font-family:var(--mono);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .num b{font-size:var(--fs-lg);font-weight:600;letter-spacing:-.5px}
+  .mute{color:var(--t3);font-size:var(--fs-sm)}
   .req{font-family:var(--mono);font-size:var(--fs-sm);color:var(--t2);word-break:break-all}
-  .who{font-weight:600}
-  .who span{display:block;color:var(--t3);font-weight:400;font-size:var(--fs-sm);margin-top:2px}
-  .st{display:inline-block;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.5px;
-    padding:4px 8px;border-radius:6px;font-weight:700}
-  .st.queued{background:rgba(246,168,35,.15);color:var(--warn)}
-  .st.processing{background:rgba(74,140,247,.16);color:var(--acc)}
-  .st.paid,.st.approved{background:rgba(61,220,132,.15);color:var(--ok)}
-  .st.rejected,.st.cancelled{background:rgba(255,255,255,.07);color:var(--t3)}
+  .who b{font-weight:600} .who span{display:block;color:var(--t3);font-size:var(--fs-sm);margin-top:2px;word-break:break-all}
+  .linkish{background:none;border:0;padding:0;color:inherit;cursor:pointer;text-align:left}
+  .linkish:hover b{color:var(--acc2)}
+  .st{display:inline-block;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.5px;padding:4px 8px;border-radius:6px;font-weight:700;white-space:nowrap}
+  .st.queued{background:var(--warnbg);color:var(--warn)}
+  .st.processing{background:var(--accbg);color:var(--acc2)}
+  .st.paid,.st.approved,.st.on{background:var(--okbg);color:var(--ok)}
+  .st.rejected,.st.cancelled,.st.off{background:rgba(255,255,255,.07);color:var(--t3)}
+  .st.blocked{background:var(--badbg);color:var(--bad)}
+  .st.admin{background:var(--accbg);color:var(--acc2)}
   .acts{display:flex;gap:6px;flex-wrap:wrap}
-  .empty{padding:32px;text-align:center;color:var(--t3);font-size:var(--fs-md)}
-  .msg{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
-    background:var(--card2);border:1px solid var(--line);border-radius:10px;
-    padding:12px 18px;font-size:var(--fs-md);opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
-  .msg.on{opacity:1}
-  .msg.bad{border-color:var(--bad);color:var(--bad)}
-  .note{color:var(--t3);font-size:var(--fs-sm);margin-top:16px;line-height:1.65;max-width:70ch}
-/* Выход из пульта: закрывает сессию владельца на этом устройстве. */
-.leave{ float:right; margin:2px 0 0 12px; padding:7px 12px; border-radius:9px; cursor:pointer;
-  background:#1d1e20; border:1px solid #2a2b2e; color:#a9adb4; font:inherit; font-size:13px }
-.leave:hover{ color:#e6e8ec; border-color:#3a3c40 }
-.gate .hint{ color:#7e838b; font-size:13px; margin-top:-6px }
+  .empty{padding:38px 20px;text-align:center;color:var(--t3)}
+  .more{display:flex;justify-content:center;padding:14px}
+  .ava{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:13px;color:#fff;background:#2a3140;flex-shrink:0}
+  .person{display:flex;gap:11px;align-items:center;min-width:0}
+  .flags{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+
+  @media (max-width:760px){
+    table.rt thead{display:none}
+    table.rt, table.rt tbody, table.rt tr, table.rt td{display:block;width:100%}
+    table.rt tr{padding:12px 14px;border-bottom:1px solid var(--line)}
+    table.rt tr:last-child{border-bottom:0}
+    table.rt td{border:0;padding:4px 0;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;text-align:right}
+    table.rt td[data-l]::before{content:attr(data-l);color:var(--t3);font-size:var(--fs-sm);text-align:left;flex-shrink:0;padding-top:2px;
+      font-family:-apple-system,"Segoe UI",Roboto,Inter,sans-serif;letter-spacing:0}
+    table.rt td.first{display:block;text-align:left;padding-bottom:6px}
+    table.rt td.acts-td{display:block;text-align:left;padding-top:8px}
+    table.rt td.num{text-align:right}
+  }
+
+  /* ── карточки каталога ── */
+  .cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:10px}
+  .ccard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:15px;display:flex;flex-direction:column;gap:10px}
+  .ccard.hidden{opacity:.62;border-style:dashed}
+  .ccard .top{display:flex;gap:11px;align-items:center}
+  .ccard .top > div > b{display:block;font-size:var(--fs-md)} .ccard .top > div > span{display:block;color:var(--t3);font-size:var(--fs-sm)}
+  .plist{display:flex;gap:6px;flex-wrap:wrap}
+  .pchip{display:inline-flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font-size:var(--fs-sm);color:var(--t2);text-decoration:none}
+  .pchip i{width:8px;height:8px;border-radius:50%;background:var(--t3)}
+  .pchip.youtube i{background:#ff3b3b} .pchip.tiktok i{background:#e4e4e7} .pchip.telegram i{background:#29a9eb} .pchip.instagram i{background:#e1306c} .pchip.vk i{background:#4c75a3}
+  .ccard .price{font-family:var(--mono);font-size:var(--fs-lg);font-weight:600;letter-spacing:-.5px}
+  .ccard .row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:auto}
+
+  /* ── площадки ── */
+  .plats{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+  .plat{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:15px}
+  .plat b{display:block;font-size:var(--fs-md)}
+  .plat .state{font-size:var(--fs-sm);margin-top:2px} .plat.on .state{color:var(--ok)} .plat.off .state{color:var(--warn)}
+  .plat .redir{display:block;font-size:var(--fs-sm);color:var(--t3);margin:8px 0 10px;word-break:break-all;font-family:var(--mono)}
+  .plat-out{white-space:pre-wrap;font-size:var(--fs-sm);line-height:1.5;margin-top:10px}
+  .plat-out.good{color:var(--ok)} .plat-out.warn{color:var(--warn)}
+
+  .note{color:var(--t3);font-size:var(--fs-sm);margin-top:16px;line-height:1.65;max-width:78ch}
+
+  /* ── боковая карточка человека ── */
+  .veil{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:30;opacity:0;transition:opacity .2s}
+  .veil.on{opacity:1}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:min(600px,100vw);background:var(--bg);border-left:1px solid var(--line2);z-index:31;
+    display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s cubic-bezier(.22,1,.36,1)}
+  .drawer.on{transform:none}
+  .dr-head{display:flex;align-items:flex-start;gap:12px;padding:18px 20px 14px;border-bottom:1px solid var(--line)}
+  .dr-head h2{margin:0;font-size:var(--fs-lg);letter-spacing:-.3px;line-height:1.2;word-break:break-word}
+  .dr-head p{margin:3px 0 0;color:var(--t3);font-size:var(--fs-sm);word-break:break-all}
+  .x{margin-left:auto;width:36px;height:36px;border-radius:10px;border:1px solid var(--line2);background:var(--card2);display:grid;place-items:center;cursor:pointer;flex-shrink:0;color:var(--t2)}
+  .dr-body{flex:1;overflow:auto;padding:16px 20px 30px;display:flex;flex-direction:column;gap:14px}
+  .sec{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 15px}
+  .sec h3{margin:0 0 10px;font-size:var(--fs-sm);font-weight:700;color:var(--t3);letter-spacing:.6px;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+  .sec h3 .acts{margin-left:auto;text-transform:none;letter-spacing:0}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:var(--fs-md)}
+  .kv span{color:var(--t3)} .kv b{font-weight:500;text-align:right;word-break:break-word}
+  .lrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:var(--fs-md)}
+  .lrow:first-of-type{border-top:0;padding-top:0}
+  .lrow .l{min-width:0} .lrow .l b{font-weight:500} .lrow .l span{display:block;color:var(--t3);font-size:var(--fs-sm);word-break:break-all}
+  .money{font-family:var(--mono);white-space:nowrap}
+  .money.plus{color:var(--ok)} .money.minus{color:var(--t2)}
+  .bal{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .bal div{background:var(--card2);border-radius:10px;padding:10px 12px}
+  .bal b{display:block;font-family:var(--mono);font-size:var(--fs-lg);font-weight:600}
+  .bal i{font-style:normal;color:var(--t3);font-size:var(--fs-sm)}
+
+  /* ── диалог ── */
+  .modal{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.62)}
+  .dlg{width:min(480px,100%);background:var(--card);border:1px solid var(--line2);border-radius:18px;padding:20px 20px 16px;max-height:92vh;overflow:auto;
+    box-shadow:0 30px 80px rgba(0,0,0,.55);animation:dlgIn .18s cubic-bezier(.22,1,.36,1)}
+  @keyframes dlgIn{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+  .dlg h2{margin:0 0 8px;font-size:var(--fs-lg);letter-spacing:-.3px}
+  .dlg .txt{color:var(--t2);line-height:1.55;margin:0 0 14px;white-space:pre-line}
+  .dlg .txt b{color:var(--t1)}
+  .dlg .sugg{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 0}
+  .dlg .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 4px}
+  .split div{background:var(--card2);border-radius:10px;padding:10px 12px}
+  .split b{display:block;font-family:var(--mono);font-size:var(--fs-lg)} .split i{font-style:normal;color:var(--t3);font-size:var(--fs-sm)}
+  input[type=range]{width:100%;accent-color:var(--acc)}
+
+  .zoom{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:50;display:flex;align-items:center;justify-content:center;padding:20px;cursor:zoom-out}
+  .zoom img{max-width:100%;max-height:100%;border-radius:10px}
+
+  .msg{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(10px);background:var(--card3);border:1px solid var(--line2);
+    border-radius:12px;padding:12px 18px;font-size:var(--fs-md);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:60;max-width:92vw}
+  .msg.on{opacity:1;transform:translateX(-50%)}
+  .msg.bad{border-color:rgba(255,107,107,.55);color:var(--bad)}
+
+  /* ── телефон: меню — лентой сверху ── */
+  @media (max-width:960px){
+    /* minmax(0,…): иначе колонка растягивается до полной ширины ленты
+       разделов (кнопки не переносятся), и телефон «отъезжает» вправо. */
+    .shell{grid-template-columns:minmax(0,1fr)}
+    .side{min-width:0}
+    .side{position:sticky;top:0;height:auto;z-index:20;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 12px 8px;border-right:0;border-bottom:1px solid var(--line)}
+    .side .brandmark{margin:0;padding:0;font-size:var(--fs-md)}
+    .side .brandmark span,.side-foot .who{display:none}
+    .nav{order:3;flex:1 0 100%;flex-direction:row;overflow-x:auto;gap:4px;scrollbar-width:none;min-width:0;-webkit-overflow-scrolling:touch;margin:0 -12px;padding:0 12px}
+    .nav::-webkit-scrollbar{display:none}
+    .nav button{width:auto;white-space:nowrap;padding:8px 11px;font-size:var(--fs-sm)}
+    .nav button svg.i{display:none}
+    .nav .sep{display:none}
+    .side-foot{margin:0 0 0 auto;flex-direction:row;padding:0}
+    .side-foot .btn{padding:7px 10px;font-size:var(--fs-sm)}
+    .main{padding:18px 14px 50px}
+    .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .tile{padding:12px 13px} .tile b{font-size:22px}
+    .todo{grid-template-columns:minmax(0,1fr)}
+    .head h1{font-size:24px}
+  }
 </style>
 </head>
 <body>
 
-<div id="gate" class="gate">
-  <h1>Выплаты BloggerPay</h1>
-  <p>Введите ключ оператора один раз. Он берётся из <span class="req">server/.env</span>,
-     строка <span class="req">ADMIN_KEY</span>. Дальше пульт открывается сам —
-     двенадцать часов или до нажатия «Выйти».</p>
-  <p class="hint">Если открыть пульт из приложения (меню → «Пульт выплат»),
-     ключ не понадобится вовсе.</p>
-  <input type="password" id="key" placeholder="Ключ оператора" autocomplete="off">
-  <div style="margin-top:12px"><button class="btn" id="enter">Войти</button></div>
-  <div id="gateErr" style="color:var(--bad);font-size:var(--fs-sm);margin-top:10px"></div>
-</div>
-
-<div class="wrap" id="app" hidden>
-  <button type="button" id="leave" class="leave">Выйти</button>
-  <h1 id="pageTitle">Выплаты</h1>
-  <p class="sub" id="pageSub">Сервер деньги не отправляет — переводите своим банком и отмечайте здесь.</p>
-
-  <div class="tiles" id="tiles"></div>
-  <div id="recon"></div>
-  <div id="plats" class="plats"></div>
-
-  <div class="tabs" id="sections">
-    <button class="tab on" data-sec="wd">Выплаты</button>
-    <button class="tab" data-sec="kyc">Верификация</button>
-    <button class="tab" data-sec="deals">Спорные деньги</button>
-    <button class="tab" data-sec="errors">Поломки</button>
+<div id="gate" class="gate" hidden>
+  <div class="gate-card">
+    <div class="brandmark"><i>BP</i>BloggerPay · админ-панель</div>
+    <h1>Вход владельца</h1>
+    <p>Введите ключ владельца один раз — строка <span class="req">ADMIN_KEY</span> в
+       <span class="req">server/.env</span>. Дальше панель открывается сама:
+       двенадцать часов или до нажатия «Выйти».</p>
+    <input type="password" id="key" class="inp" placeholder="Ключ владельца" autocomplete="off">
+    <div style="margin-top:12px"><button class="btn block" id="enter">Войти по ключу</button></div>
+    <div class="err" id="gateErr"></div>
+    <div class="gate-or"><span>или почтой владельца</span></div>
+    <form id="mailForm" autocomplete="on" onsubmit="return false">
+      <input type="email" id="mail" class="inp" placeholder="Почта из ADMIN_EMAIL" autocomplete="username">
+      <input type="password" id="mailPass" class="inp" placeholder="Пароль от аккаунта" autocomplete="current-password" style="margin-top:8px">
+      <div style="margin-top:12px"><button type="button" class="btn ghost block" id="mailEnter">Войти почтой</button></div>
+      <div class="err" id="mailErr"></div>
+    </form>
+    <p class="hint" style="margin:10px 0 0">Вход почтой подписывает ваши действия в журнале вашим именем.</p>
   </div>
-
-  <div class="tabs" id="tabs"></div>
-  <div id="list"></div>
-
-  <p class="note" id="noteWd">
-    Порядок работы: <b>взять в работу</b> → перевести деньги по реквизитам →
-    <b>отмечено: выплачено</b>. Пока заявка в очереди, человек может отменить её сам;
-    как только вы взяли её в работу — уже нет, иначе можно получить перевод и вернуть
-    сумму себе на баланс.
-  </p>
-  <p class="note" id="noteErrors" hidden>
-    Ошибки, которые случились у людей в приложении. Раньше они жили в памяти
-    вкладки и стирались при перезагрузке — человек видел белый экран, а вы об
-    этом не узнавали никогда.<br><br>
-    Одинаковые ошибки собраны в одну строку: важно, <b>что</b> ломается и у
-    <b>скольких людей</b>, а не сколько раз подряд это повторилось у одного.
-    Личных данных здесь нет — только текст ошибки и место в коде.
-  </p>
-  <p class="note" id="noteDeals" hidden>
-    Здесь лежат деньги, замороженные под сделки и бюджеты кампаний. Обычно их
-    закрывают сами участники: заказчик подтверждает работу или возвращает.
-    <b>Вмешиваться нужно только по спору.</b><br><br>
-    Раздел делит <b>остаток</b> заморозки: доля исполнителю в процентах, остальное
-    возвращается заказчику. Копейки не теряются — суммы всегда сходятся ровно.
-    Решение необратимо, поэтому сначала разберитесь в переписке сторон.
-  </p>
-  <p class="note" id="noteKyc" hidden>
-    Люди, которые хотят выводить деньги, присылают сюда анкету, фото разворота
-    паспорта и селфи с паспортом в руках. Порядок: откройте паспорт, сверьте
-    ФИО и дату рождения с анкетой; откройте селфи и сравните лицо с фото в
-    документе — паспорт должен быть в руках у того, кто на снимке. Затем
-    <b>подтвердите</b> или <b>отклоните</b> с причиной — её человек увидит
-    в приложении и сможет прислать документы заново.<br><br>
-    Пока личность не подтверждена, кнопка вывода у человека закрыта.
-  </p>
 </div>
 
-<!-- Просмотр фото документа на весь экран строится скриптом при первом
-     клике по миниатюре (openZoom) — пустых картинок в разметке нет. -->
+<div id="app" class="shell" hidden>
+  <aside class="side">
+    <div class="brandmark"><i>BP</i><div>BloggerPay<span>админ-панель</span></div></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot">
+      <div class="who" id="whoLine"></div>
+      <button type="button" class="btn ghost sm" data-act="leave">Выйти</button>
+    </div>
+  </aside>
+  <main class="main"><div class="main-in">
+    <header class="head">
+      <div><h1 id="pageTitle"></h1><p id="pageSub"></p></div>
+      <div class="tools" id="tools"></div>
+    </header>
+    <div id="view"></div>
+  </div></main>
+</div>
 
-<div class="msg" id="msg"></div>
+<div class="msg" id="msg" role="status" aria-live="polite"></div>
 
 <script>
 'use strict';
 
-var KEY = '';
-var SEC = 'wd';          /* wd — выплаты, kyc — верификация, deals — спорные деньги */
-var TAB = 'queued';
-var TABS = [
-  ['queued', 'В очереди'],
-  ['processing', 'В работе'],
-  ['paid', 'Выплачено'],
-  ['rejected', 'Отклонено'],
-  ['cancelled', 'Отменено'],
-  ['', 'Все'],
-];
-
+/* ─────────────────────────── утварь ─────────────────────────── */
 function $(id){ return document.getElementById(id); }
-function money(n){ return (Number(n) || 0).toLocaleString('ru') + ' ₽'; }
+function money(n){ return (Math.round(Number(n) || 0)).toLocaleString('ru') + ' ₽'; }
 function esc(s){
   return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
     return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
   });
 }
+function safeUrl(u){ u = String(u || ''); return /^https?:\/\//i.test(u) ? u : ''; }
 function when(s){
   if(!s) return '';
-  var d = new Date(String(s).replace(' ', 'T') + 'Z');
+  var d = new Date(String(s).replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(s)) ? '' : 'Z'));
   if(isNaN(d)) return esc(s);
-  return d.toLocaleString('ru', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+  return d.toLocaleString('ru', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' });
 }
+function initials(name){
+  var p = String(name || '?').replace(/[^0-9A-Za-zА-Яа-яЁё\s]/g, ' ').trim().split(/\s+/).filter(Boolean);
+  return ((p[0] || '?')[0] + (p[1] ? p[1][0] : '')).toUpperCase();
+}
+function hueOf(s){ var h = 0; s = String(s || ''); for(var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360; return h; }
+function ava(name, seed){
+  return '<span class="ava" style="background:hsl(' + hueOf(seed || name) + ',38%,32%)">' + esc(initials(name)) + '</span>';
+}
+function plural(n, one, few, many){
+  var m10 = n % 10, m100 = n % 100;
+  return (m10 === 1 && m100 !== 11) ? one : (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) ? few : many;
+}
+
+var ICON = {
+  home:'<svg class="i" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>',
+  wd:'<svg class="i" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>',
+  kyc:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.5"/><path d="M5.5 17c.8-1.8 2-2.6 3.5-2.6s2.7.8 3.5 2.6"/><path d="M15 10h3M15 14h3"/></svg>',
+  deals:'<svg class="i" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7l-3 7a4 4 0 0 0 6 0z"/><path d="M19 7l-3 7a4 4 0 0 0 6 0z"/></svg>',
+  users:'<svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.9-3.4 3.4-5.2 6.5-5.2s5.6 1.8 6.5 5.2"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.9c1.8.7 3 2.4 3.5 5.1"/></svg>',
+  cards:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h6M7 13h10M7 16h4"/></svg>',
+  errors:'<svg class="i" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
+  plats:'<svg class="i" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>',
+  log:'<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  search:'<svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+  x:'<svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  refresh:'<svg class="i" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg>',
+};
+
+var SECTIONS = [
+  { id:'home',   t:'Обзор',          sub:'Деньги в системе, сверка и всё, что ждёт вашего решения.' },
+  { id:'wd',     t:'Выплаты',        sub:'Сервер деньги не отправляет — переводите своим банком и отмечайте здесь.', badge:'wd' },
+  { id:'kyc',    t:'Верификация',    sub:'Сверьте анкету с фото паспорта и селфи. Без подтверждения вывод закрыт.', badge:'kyc' },
+  { id:'deals',  t:'Спорные деньги', sub:'Деньги, замороженные под сделки и бюджеты кампаний. Делить — только по спору.' },
+  'sep',
+  { id:'users',  t:'Пользователи',   sub:'Все аккаунты на сервере: баланс, проверка личности, каналы, блокировка.' },
+  { id:'cards',  t:'Каталог',        sub:'Карточки блогеров в общем каталоге. Скрытая карточка пропадает у всех, но остаётся у автора.' },
+  'sep',
+  { id:'errors', t:'Поломки',        sub:'Что сломалось у людей в приложении.', badge:'errors' },
+  { id:'plats',  t:'Площадки',       sub:'Подключение входа через TikTok и YouTube: ключи и адреса возврата.' },
+  { id:'log',    t:'Журнал',         sub:'Кто и что сделал в панели: выплаты, решения, блокировки.' },
+];
+function secById(id){ for(var i = 0; i < SECTIONS.length; i++) if(SECTIONS[i].id === id) return SECTIONS[i]; return null; }
+
+/* ─────────────────────────── связь с сервером ─────────────────────────── */
+/* Ключ здесь не хранится вовсе: после входа сервер выдаёт сессию-куку,
+   а X-Admin-Session говорит ему, что запрос пришёл с нашей же страницы. */
+function keyLooksSane(k){ return /^[!-~]+$/.test(k); }
+function api(method, path, body){
+  return fetch(path, {
+    method: method,
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Session': '1' },
+    credentials: 'same-origin',
+    body: body ? JSON.stringify(body) : undefined,
+  }).then(function(r){
+    return r.json().catch(function(){ return {}; }).then(function(j){
+      /* 403 — возможно, кончилась сессия (12 часов): спросим сервер, пустит
+         ли он вообще, и если нет — вернём на вход, а не покажем «ошибку». */
+      if(r.status === 403 && path !== '/api/admin/session') checkSession();
+      if(!r.ok) throw new Error((j && j.error) || ('Ошибка ' + r.status));
+      return j;
+    });
+  });
+}
+/* Ключ идемпотентности: повтор после обрыва связи не проведёт операцию дважды. */
+function opKey(kind, id){ return 'bp-op-' + kind + '-' + id; }
 
 var msgTimer = null;
 function say(text, bad){
@@ -234,517 +404,899 @@ function say(text, bad){
   m.textContent = text;
   m.className = 'msg on' + (bad ? ' bad' : '');
   clearTimeout(msgTimer);
-  msgTimer = setTimeout(function(){ m.className = 'msg'; }, 3200);
+  msgTimer = setTimeout(function(){ m.className = 'msg'; }, 3400);
 }
 
-/* Ключ уезжает HTTP-заголовком, а туда помещаются только латиница и
-   цифры: кириллица роняет сам fetch с невнятной ошибкой про ISO-8859-1.
-   Проверяем заранее и говорим по-человечески. */
-function keyLooksSane(k){ return /^[!-~]+$/.test(k); }
-
-/* Ключ больше не летит в каждом запросе: после входа сервер выдал
-   сессию (кука), а заголовок X-Admin-Session говорит ему, что запрос
-   пришёл с нашей же страницы, а не подделан чужим сайтом.
-   KEY остаётся запасным путём — на случай, если куку не приняли. */
-function api(method, path, body){
-  var h = { 'Content-Type': 'application/json', 'X-Admin-Session': '1' };
-  if(KEY){
-    if(!keyLooksSane(KEY)) return Promise.reject(new Error('ключ-не-подходит'));
-    h['X-Admin-Key'] = KEY;
-  }
-  return fetch(path, {
-    method: method,
-    headers: h,
-    credentials: 'same-origin',
-    body: body ? JSON.stringify(body) : undefined,
-  }).then(function(r){
-    return r.json().catch(function(){ return {}; }).then(function(j){
-      if(!r.ok) throw new Error((j && j.error) || ('Ошибка ' + r.status));
-      return j;
-    });
-  });
-}
-
-/* Ключ идемпотентности: повторное нажатие не проведёт операцию дважды. */
-function opKey(kind, id){
-  /* Ключ ОБЯЗАН совпадать при повторном нажатии: иначе повтор после обрыва
-     связи выглядит для сервера новой операцией и получает 409 вместо
-     сохранённого результата. Вид операции и номер заявки — это и есть её
-     единственное верное имя. */
-  return 'bp-op-' + kind + '-' + id;
-}
-
-/* Открыть пульт. Ключ здесь спрашивают только тогда, когда сервер и
-   правда не пускает: если владелец уже вошёл в приложении своей почтой
-   или вводил ключ раньше (сессия жива 12 часов), пульт открывается
-   сразу. */
+/* ─────────────────────────── вход и выход ─────────────────────────── */
+var opened = false;
 function openConsole(){
+  opened = true;
   $('gate').hidden = true;
   $('app').hidden = false;
-  renderTabs();
-  /* Ссылка вида /operator#kyc из админ-панели приложения открывает
-     нужный раздел сразу — без лишнего клика по вкладке. */
-  var want = String(location.hash || '').slice(1);
-  if(/^(kyc|deals|errors)$/.test(want)) switchSection(want); else refresh();
+  paintNav();
+  go(hashSec() || 'home', true);
+  api('GET', '/api/admin/session').then(function(j){
+    $('whoLine').textContent = j && j.who ? ('Вы вошли как ' + j.who) : '';
+  }).catch(function(){});
+}
+function showGate(err){
+  opened = false;
+  $('app').hidden = true;
+  $('gate').hidden = false;
+  if(err) $('gateErr').textContent = err;
+  setTimeout(function(){ try{ $('key').focus(); }catch(e){} }, 50);
+}
+function checkSession(){
+  fetch('/api/admin/session', { credentials:'same-origin', headers:{ 'X-Admin-Session':'1' } })
+    .then(function(r){ return r.json(); })
+    .then(function(j){ if(!(j && j.ok)) sessionLost(); })
+    .catch(function(){});
+}
+function sessionLost(){
+  if(!opened) return;
+  closeDrawer(); closeModal();
+  showGate('Сессия закончилась — войдите ещё раз');
 }
 function enter(){
+  if($('enter').disabled) return;        /* запрос уже летит — повтор посчитался бы промахом */
   var typed = $('key').value.trim();
   if(!typed){ $('gateErr').textContent = 'Введите ключ'; return; }
-  if(!keyLooksSane(typed)){
-    $('gateErr').textContent = 'В ключе только латинские буквы, цифры и знаки — похоже, скопировалось лишнее';
-    return;
-  }
+  if(!keyLooksSane(typed)){ $('gateErr').textContent = 'В ключе только латинские буквы, цифры и знаки — похоже, скопировалось лишнее'; return; }
   $('gateErr').textContent = '';
+  $('enter').disabled = true;
   fetch('/api/admin/session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Admin-Session': '1' },
-    credentials: 'same-origin',
+    method:'POST', credentials:'same-origin',
+    headers:{ 'Content-Type':'application/json', 'X-Admin-Session':'1' },
     body: JSON.stringify({ key: typed }),
   }).then(function(r){
     return r.json().catch(function(){ return {}; }).then(function(j){
-      if(r.status === 429) throw new Error(j.error || 'Слишком много попыток');
+      if(r.status === 429) throw new Error(j.error || 'Слишком много попыток — подождите');
       if(!r.ok) throw new Error(j.error || 'Ключ не подошёл');
       return j;
     });
   }).then(function(){
-    KEY = '';               /* дальше работает сессия, ключ не нужен */
+    $('key').value = '';
     openConsole();
   }).catch(function(e){
     var m = String(e && e.message || '');
-    $('gateErr').textContent =
-        /Failed to fetch|NetworkError/.test(m) ? 'Сервер не отвечает — он запущен?' : m;
-  });
+    $('gateErr').textContent = /Failed to fetch|NetworkError/.test(m) ? 'Сервер не отвечает — он запущен?' : m;
+  }).then(function(){ $('enter').disabled = false; });
 }
 function leave(){
-  fetch('/api/admin/logout', { method: 'POST', headers: { 'X-Admin-Session': '1' }, credentials: 'same-origin' })
+  fetch('/api/admin/logout', { method:'POST', headers:{ 'X-Admin-Session':'1' }, credentials:'same-origin' })
     .catch(function(){})
-    .then(function(){ location.reload(); });
+    .then(function(){ location.hash = ''; location.reload(); });
 }
 
-function renderTabs(){
-  $('tabs').innerHTML = TABS.map(function(t){
-    return '<button class="tab' + (t[0] === TAB ? ' on' : '') + '" data-t="' + t[0] + '">' + t[1] + '</button>';
+/* ─────────────────────────── меню и маршруты ─────────────────────────── */
+var SEC = 'home';
+var BADGES = { wd:'', kyc:'', errors:'' };
+function paintNav(){
+  $('nav').innerHTML = SECTIONS.map(function(s){
+    if(s === 'sep') return '<div class="sep"></div>';
+    var b = s.badge ? BADGES[s.badge] : '';
+    return '<button type="button" data-go="' + s.id + '"' + (s.id === SEC ? ' class="on" aria-current="page"' : '') + '>'
+      + ICON[s.id] + '<span>' + esc(s.t) + '</span>'
+      + '<em' + (s.badge === 'errors' ? ' class="bad"' : '') + '>' + esc(b) + '</em></button>';
   }).join('');
+  var on = $('nav').querySelector('.on');
+  if(on && on.scrollIntoView && window.innerWidth <= 960){ try{ on.scrollIntoView({ block:'nearest', inline:'nearest' }); }catch(e){} }
 }
-
-function refresh(){
-  var second = SEC === 'deals' ? api('GET', '/api/admin/deals')
-    : SEC === 'errors' ? api('GET', '/api/admin/errors?days=7')
-    : SEC === 'kyc' ? api('GET', '/api/admin/kyc')
-    : api('GET', '/api/admin/withdrawals' + (TAB ? ('?status=' + encodeURIComponent(TAB)) : ''));
-  Promise.all([api('GET', '/api/admin/overview'), second]).then(function(r){
-    paintTiles(r[0]);
-    if(SEC === 'deals') paintDeals(r[1].rows || []);
-    else if(SEC === 'errors') paintErrors(r[1].rows || []);
-    else if(SEC === 'kyc') paintKyc(r[1].rows || []);
-    else paintList(r[1].rows || []);
-  }).catch(function(e){ say(e.message, true); });
+function hashSec(){ var h = String(location.hash || '').replace(/^#/, ''); return secById(h) ? h : ''; }
+function go(id, fromHash){
+  if(!secById(id)) id = 'home';
+  SEC = id;
+  var s = secById(id);
+  $('pageTitle').textContent = s.t;
+  $('pageSub').textContent = s.sub;
+  $('tools').innerHTML = '<button type="button" class="btn ghost sm" data-act="reload" title="Обновить">' + ICON.refresh + 'Обновить</button>';
+  $('view').innerHTML = '<div class="empty">Загружаем…</div>';
+  paintNav();
+  if(!fromHash && location.hash !== '#' + id){ try{ history.replaceState(null, '', '#' + id); }catch(e){ location.hash = id; } }
+  window.scrollTo(0, 0);
+  load(true);
 }
+window.addEventListener('hashchange', function(){ var h = hashSec(); if(opened && h && h !== SEC) go(h, true); });
 
-function switchSection(sec){
-  SEC = sec;
-  var wd = sec === 'wd';
-  var titles = { wd:'Выплаты', kyc:'Верификация личности', deals:'Спорные деньги', errors:'Поломки у людей' };
-  var subs = {
-    wd: 'Сервер деньги не отправляет — переводите своим банком и отмечайте здесь.',
-    kyc: 'Сверьте анкету с фото паспорта и решите: без подтверждения вывод закрыт.',
-    deals: 'Замороженные деньги по сделкам. Делить их нужно только по спору.',
-    errors: 'Что сломалось у людей за последнюю неделю.',
-  };
-  $('pageTitle').textContent = titles[sec] || 'Выплаты';
-  $('pageSub').textContent = subs[sec] || '';
-  $('tabs').hidden = !wd;
-  $('noteWd').hidden = !wd;
-  $('noteKyc').hidden = sec !== 'kyc';
-  $('noteDeals').hidden = sec !== 'deals';
-  $('noteErrors').hidden = sec !== 'errors';
-  [].forEach.call(document.querySelectorAll('#sections .tab'), function(b){
-    b.classList.toggle('on', b.dataset.sec === sec);
+/* Загрузка раздела. quiet — фоновое обновление: без «Загружаем…» и без
+   сброса того, что человек сейчас делает (поиск, открытая карточка). */
+var loadSeq = 0;
+function load(first){
+  var seq = ++loadSeq;
+  var fn = VIEWS[SEC];
+  if(SEC !== 'home' && SEC !== 'wd') refreshBadges();     /* «Обзор» и «Выплаты» берут сводку сами */
+  if(!fn) return;
+  Promise.resolve(fn(!!first, seq)).catch(function(e){
+    if(seq !== loadSeq) return;
+    if(first) $('view').innerHTML = '<div class="empty">Не получилось загрузить: ' + esc(e.message) + '</div>';
+    else say(e.message, true);
   });
-  refresh();
+}
+var OV = null;
+function refreshBadges(){
+  return api('GET', '/api/admin/overview').then(function(o){
+    OV = o;
+    BADGES.wd = o.заявок_в_очереди ? String(o.заявок_в_очереди) : '';
+    BADGES.kyc = o.верификаций_в_очереди ? String(o.верификаций_в_очереди) : '';
+    BADGES.errors = (o.ошибок_за_сутки && o.ошибок_за_сутки.n) ? String(o.ошибок_за_сутки.n) : '';
+    paintNav();
+    return o;
+  }).catch(function(){ return OV; });
 }
 
-function paintDeals(rows){
-  if(!rows.length){
-    $('list').innerHTML = '<div class="empty">Замороженных денег нет — все сделки закрыты</div>';
-    return;
-  }
-  var html = '<div class="scroll"><table><thead><tr>'
-    + '<th>Сделка</th><th>Плательщик</th><th class="num">Заморожено</th>'
-    + '<th class="num">Уже выплачено</th><th class="num">Остаток</th><th>Создана</th><th></th>'
-    + '</tr></thead><tbody>';
-  rows.forEach(function(d){
-    var left = d.amount - d.paid;
-    html += '<tr>'
-      + '<td class="req">' + esc(d.id) + '</td>'
-      + '<td class="who">' + esc(d.payer_name) + '<span>id ' + d.payer_id
-      + (d.payee_id ? (' → исполнитель id ' + d.payee_id) : ' → исполнитель не назначен') + '</span></td>'
-      + '<td class="num">' + money(d.amount) + '</td>'
-      + '<td class="num">' + money(d.paid) + '</td>'
-      + '<td class="num"><b>' + money(left) + '</b></td>'
-      + '<td style="color:var(--t3);font-size:var(--fs-sm);white-space:nowrap">' + when(d.created_at) + '</td>'
-      + '<td><button class="btn sm" data-settle="' + esc(d.id) + '" data-left="' + left
-      + '" data-payee="' + (d.payee_id || '') + '">Решить спор</button></td>'
-      + '</tr>';
+/* ─────────────────────────── диалоги ─────────────────────────── */
+/* Свои окна вместо системных confirm/prompt: во встроенных браузерах
+   системные окна не открываются вовсе, и денежная кнопка «ничего не
+   делала». Возвращают Promise: {ok, value}. */
+var modalDone = null;
+function closeModal(res){
+  var m = document.querySelector('.modal');
+  if(m) m.remove();
+  var d = modalDone; modalDone = null;
+  if(d) d(res || { ok:false });
+}
+function ask(o){
+  closeModal();
+  return new Promise(function(resolve){
+    modalDone = resolve;
+    var wrap = document.createElement('div');
+    wrap.className = 'modal';
+    var field = '';
+    if(o.input) field = o.input === 'area'
+      ? '<textarea class="inp" id="dlgIn" placeholder="' + esc(o.placeholder || '') + '">' + esc(o.value || '') + '</textarea>'
+      : '<input class="inp" id="dlgIn" placeholder="' + esc(o.placeholder || '') + '" value="' + esc(o.value || '') + '">';
+    var sugg = (o.sugg && o.sugg.length) ? '<div class="sugg">' + o.sugg.map(function(s){
+      return '<button type="button" class="chip" data-sugg="' + esc(s) + '">' + esc(s) + '</button>'; }).join('') + '</div>' : '';
+    wrap.innerHTML = '<div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgT">'
+      + '<h2 id="dlgT">' + esc(o.title || '') + '</h2>'
+      + (o.html ? '<div class="txt">' + o.html + '</div>' : (o.text ? '<p class="txt">' + esc(o.text) + '</p>' : ''))
+      + (o.body || '') + field + sugg
+      + '<div class="err" id="dlgErr"></div>'
+      + '<div class="foot"><button type="button" class="btn ghost" data-dlg="no">' + esc(o.cancel || 'Отмена') + '</button>'
+      + '<button type="button" class="btn ' + (o.danger ? 'bad' : (o.okClass || '')) + '" data-dlg="yes">' + esc(o.ok || 'Готово') + '</button></div>'
+      + '</div>';
+    document.body.appendChild(wrap);
+    var downOnWrap = false;
+    wrap.addEventListener('mousedown', function(e){ downOnWrap = (e.target === wrap); });
+    wrap.addEventListener('click', function(e){
+      /* закрываем по фону, только если и нажали, и отпустили на фоне:
+         выделение текста в поле, отпущенное на фоне, не должно стирать причину */
+      if(e.target === wrap){ if(downOnWrap) closeModal(); downOnWrap = false; return; }
+      var s = e.target.closest('[data-sugg]');
+      if(s){ var inp = $('dlgIn'); if(inp){ inp.value = s.getAttribute('data-sugg'); inp.focus(); } return; }
+      var b = e.target.closest('[data-dlg]');
+      if(!b) return;
+      if(b.getAttribute('data-dlg') === 'no'){ closeModal(); return; }
+      var inp2 = $('dlgIn'), val = inp2 ? inp2.value.trim() : '';
+      if(o.input && o.required && !val){ $('dlgErr').textContent = o.required === true ? 'Заполните поле' : o.required; if(inp2) inp2.focus(); return; }
+      if(o.check){ var er = o.check(val, wrap); if(er){ $('dlgErr').textContent = er; return; } }
+      closeModal({ ok:true, value: val, root: wrap });
+    });
+    if(o.onOpen) o.onOpen(wrap);
+    var f = $('dlgIn') || wrap.querySelector('[data-dlg="yes"]');
+    setTimeout(function(){ try{ f.focus(); }catch(e){} }, 30);
   });
-  $('list').innerHTML = html + '</tbody></table></div>';
 }
-
-/* Раздел верификации: анкета рядом с фото, решение в один клик.
-   Фото открывается на весь экран — паспорт с миниатюры не прочитать. */
-function kycStatusRu(s){
-  return { queued:'Ждёт проверки', approved:'Подтверждена', rejected:'Отклонена' }[s] || s;
-}
-function kycActions(k){
-  if(k.status !== 'queued') return '';
-  /* seenAt уезжает вместе с решением: если человек переотправил заявку,
-     пока вы смотрели, сервер ответит 409 вместо решения вслепую. */
-  return '<div class="acts">'
-    + '<button class="btn ok sm" data-kyc-ok="' + k.id + '" data-seen="' + esc(k.updated_at) + '" data-name="' + esc(k.name) + '">Подтвердить</button>'
-    + '<button class="btn bad sm" data-kyc-no="' + k.id + '" data-seen="' + esc(k.updated_at) + '">Отклонить</button>'
-    + '</div>';
-}
-function paintKyc(rows){
-  if(!rows.length){
-    $('list').innerHTML = '<div class="empty">Заявок на проверку личности нет</div>';
-    return;
-  }
-  var html = '<div class="scroll"><table><thead><tr>'
-    + '<th>Кто в приложении</th><th>Анкета</th><th>Документ и селфи</th>'
-    + '<th>Статус</th><th>Прислана</th><th></th>'
-    + '</tr></thead><tbody>';
-  rows.forEach(function(k){
-    html += '<tr>'
-      + '<td class="who">' + esc(k.user_name) + '<span>' + esc(k.email) + ' · id ' + k.user_id + '</span></td>'
-      + '<td class="who">' + esc(k.name) + '<span>дата рождения: ' + esc(k.birth) + '</span></td>'
-      /* фото не грузится вместе со списком (60 паспортов — десятки МБ),
-         а подтягивается по клику */
-      + '<td><div class="acts">' + (k.has_photo
-          ? '<button class="btn ghost sm" data-kyc-photo="' + k.id + '">Паспорт</button>'
-          : '<span style="color:var(--t3);font-size:var(--fs-sm)">нет фото</span>')
-        + (k.has_selfie
-          ? '<button class="btn ghost sm" data-kyc-photo="' + k.id + '" data-kind="selfie">Селфи</button>'
-          : '<span style="color:var(--t3);font-size:var(--fs-sm)">без селфи</span>') + '</div></td>'
-      + '<td><span class="st ' + esc(k.status) + '">' + kycStatusRu(k.status) + '</span>'
-      + (k.note ? '<div style="color:var(--t3);font-size:var(--fs-sm);margin-top:4px">' + esc(k.note) + '</div>' : '')
-      + '</td>'
-      + '<td style="color:var(--t3);font-size:var(--fs-sm);white-space:nowrap">' + when(k.created_at) + '</td>'
-      + '<td>' + kycActions(k) + '</td>'
-      + '</tr>';
-  });
-  $('list').innerHTML = html + '</tbody></table></div>';
-}
-
 function openZoom(src){
-  var z = $('zoom');
-  if(!z){
-    z = document.createElement('div');
-    z.id = 'zoom';
-    z.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:20;'
-      + 'align-items:center;justify-content:center;cursor:zoom-out;padding:24px;box-sizing:border-box';
-    z.addEventListener('click', function(){ z.style.display = 'none'; });
-    document.body.appendChild(z);
-  }
-  z.innerHTML = '';
+  var z = document.createElement('div');
+  z.className = 'zoom';
   var im = document.createElement('img');
-  im.alt = 'Фото документа';
-  im.style.cssText = 'max-width:100%;max-height:100%;border-radius:10px';
-  im.src = src;
+  im.alt = 'Фото документа'; im.src = src;
   z.appendChild(im);
-  z.style.display = 'flex';
+  z.addEventListener('click', function(){ z.remove(); });
+  document.body.appendChild(z);
+}
+function copyText(text){
+  (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
+    .then(function(){ say('Скопировано'); })
+    .catch(function(){ ask({ title:'Скопируйте вручную', input:'area', value:text, ok:'Закрыть', cancel:'Отмена' }); });
 }
 
-function paintErrors(rows){
-  if(!rows.length){
-    $('list').innerHTML = '<div class="empty">За неделю ни одной ошибки — и это хорошая новость</div>';
-    return;
-  }
-  var html = '<div class="scroll"><table><thead><tr>'
-    + '<th>Что сломалось</th><th>Где</th><th class="num">Раз</th>'
-    + '<th class="num">Людей</th><th>Последний раз</th>'
-    + '</tr></thead><tbody>';
-  rows.forEach(function(e){
-    /* Много людей — это не «часто», это «важно»: одна и та же поломка
-       у разных людей значит, что она системная, а не случайная. */
-    var hot = e.people > 1;
-    html += '<tr>'
-      + '<td' + (hot ? ' style="color:var(--bad)"' : '') + '>' + esc(e.message) + '</td>'
-      + '<td class="req">' + esc(e.where_at || '—') + '</td>'
-      + '<td class="num">' + e.n + '</td>'
-      + '<td class="num">' + (hot ? '<b>' + e.people + '</b>' : e.people) + '</td>'
-      + '<td style="color:var(--t3);font-size:var(--fs-sm);white-space:nowrap">' + when(e.last_at) + '</td>'
-      + '</tr>';
-  });
-  $('list').innerHTML = html + '</tbody></table></div>';
-}
+/* ─────────────────────────── разделы ─────────────────────────── */
+var VIEWS = {};
 
-/* Раздел спорных денег. Спрашиваем долю, показываем расчёт до рубля и
-   требуем подтверждения: операция необратима. */
-function settleDialog(dealId, left, payeeId){
-  var raw = window.prompt(
-    'Спор по сделке ' + dealId + '.\n'
-    + 'В заморозке осталось ' + money(left) + '.\n\n'
-    + 'Какая доля достаётся ИСПОЛНИТЕЛЮ, в процентах (0–100)?', '50');
-  if(raw === null) return;
-  var share = Number(String(raw).replace(',', '.').trim());
-  if(!isFinite(share) || share < 0 || share > 100){ say('Доля — число от 0 до 100', true); return; }
-
-  var toBlogger = Math.round(left * share / 100);
-  var toPayer = left - toBlogger;
-  var who = payeeId ? ('исполнителю id ' + payeeId) : 'исполнителю';
-  if(!payeeId && toBlogger > 0){
-    say('У этой заморозки не назначен исполнитель — доля больше нуля невозможна', true);
-    return;
-  }
-  if(!window.confirm(
-      'Разделить ' + money(left) + ':\n\n'
-      + '  ' + who + ' — ' + money(toBlogger) + '\n'
-      + '  заказчику обратно — ' + money(toPayer) + '\n\n'
-      + 'Решение необратимо. Продолжить?')) return;
-
-  api('POST', '/api/deals/settle', {
-    dealId: dealId, bloggerShare: share,
-    toUserId: payeeId || undefined,
-    opKey: opKey('settle', dealId),
-  }).then(function(r){
-    say('Разделено: исполнителю ' + money(r.исполнителю) + ', заказчику ' + money(r.плательщику));
-    refresh();
-  }).catch(function(e){ say(e.message, true); });
-}
-
-/* ── Подключение площадок ────────────────────────────────────────────
-   Блогер подтверждает канал входом в TikTok или YouTube. Если ключи
-   площадки не заданы, кнопка в приложении честно говорит «не подключено»,
-   а здесь видно, чего не хватает и какой адрес возврата нужно прописать
-   в кабинете разработчика: неверный адрес и лишние кавычки в ключе —
-   две главные причины ошибки «client_key» на стороне площадки. */
-function paintPlats(){
-  fetch('/api/verify/config').then(function(r){ return r.json(); }).then(function(j){
-    var p = (j && j.platforms) || {};
-    var names = Object.keys(p);
-    if(!names.length){ $('plats').innerHTML = ''; return; }
-    $('plats').innerHTML = names.map(function(k){
-      var it = p[k] || {};
-      return '<div class="plat ' + (it.configured ? 'on' : 'off') + '">'
-        + '<b>' + esc(it.label || k) + '</b>'
-        + '<span>' + (it.configured ? 'подключено' : 'ключи не заданы') + '</span>'
-        + '<i>адрес возврата: ' + esc(it.redirect || '') + '</i>'
-        + '<button class="btn sm" data-copy="' + esc(it.redirect || '') + '">Скопировать адрес</button> '
-        + '<button class="btn sm ghost" data-probe="' + esc(k) + '">Проверить</button>'
-        + '<div class="plat-out" id="plat-out-' + esc(k) + '"></div>'
-        + '</div>';
-    }).join('');
-  }).catch(function(){ $('plats').innerHTML = ''; });
-}
-
-function paintTiles(o){
-  var s = o.сверка || {};
-  $('tiles').innerHTML =
-      tile(o.заявок_в_очереди, 'Заявок в очереди', o.заявок_в_очереди ? 'warn' : '')
-    + tile(money(o.сумма_к_выплате), 'К выплате сейчас', o.сумма_к_выплате ? 'warn' : '')
-    + tile(o.взято_в_работу, 'Взято в работу', '')
-    + tile(o.верификаций_в_очереди || 0, 'Ждут проверки личности', o.верификаций_в_очереди ? 'warn' : '')
-    + tile(money(o.доход_платформы), 'Доход сервиса', 'good')
-    + tile(money(o.всего_в_системе.available + o.всего_в_системе.hold), 'Всего в системе', '')
-    + tile(money(o.всего_в_системе.hold), 'Из них заморожено', '')
-    + tile((o.ошибок_за_сутки && o.ошибок_за_сутки.n) || 0, 'Поломок за сутки',
-           (o.ошибок_за_сутки && o.ошибок_за_сутки.n) ? 'bad' : 'good');
-
-  paintPlats();
-  $('recon').className = 'recon ' + (s.сходится ? 'ok' : 'bad');
-  $('recon').innerHTML = s.сходится
+/* ── Обзор ── */
+function tile(v, label, cls){ return '<div class="tile ' + (cls || '') + '"><b>' + esc(v) + '</b><i>' + esc(label) + '</i></div>'; }
+function reconHtml(o){
+  /* Нет сводки — нет и вывода о расхождении: иначе при первой загрузке
+     «Выплат» мигала красная полоса «Расхождение 0 ₽». */
+  if(!o || !o.сверка) return '';
+  var s = o.сверка;
+  return '<div class="recon ' + (s.сходится ? 'ok' : 'bad') + '">' + (s.сходится
     ? '✓ Сверка сходится: внесено <b>' + money(o.внесено_всего) + '</b> − выплачено наружу <b>'
       + money(o.выплачено_наружу) + '</b> = <b>' + money(s.фактически_в_системе) + '</b> в системе.'
     : '✗ <b>Расхождение ' + money(s.расхождение) + '</b>. Ожидалось ' + money(s.ожидается_в_системе)
-      + ', фактически ' + money(s.фактически_в_системе) + '. Останови выплаты и разберись — деньги не сходятся.';
+      + ', фактически ' + money(s.фактически_в_системе) + '. Остановите выплаты и разберитесь — деньги не сходятся.') + '</div>';
 }
-
-function tile(v, label, cls){
-  return '<div class="tile ' + cls + '"><b>' + esc(v) + '</b><i>' + esc(label) + '</i></div>';
+function todoBtn(sec, ic, cls, title, sub){
+  return '<button type="button" data-go="' + sec + '"><span class="ic ' + cls + '">' + ICON[ic] + '</span><span><b>' + esc(title) + '</b><span>' + esc(sub) + '</span></span></button>';
 }
-
-function paintList(rows){
-  if(!rows.length){
-    $('list').innerHTML = '<div class="empty">Здесь пусто</div>';
-    return;
-  }
-  var html = '<div class="scroll"><table><thead><tr>'
-    + '<th>Кому</th><th>Реквизиты</th><th class="num">К выплате</th>'
-    + '<th class="num">Комиссия</th><th>Статус</th><th>Создана</th><th></th>'
-    + '</tr></thead><tbody>';
-  rows.forEach(function(w){
-    html += '<tr>'
-      + '<td class="who">' + esc(w.name) + '<span>' + esc(w.email) + '</span></td>'
-      + '<td class="req">' + esc(w.requisites) + '</td>'
-      + '<td class="num"><b>' + money(w.net) + '</b></td>'
-      + '<td class="num">' + money(w.fee) + '</td>'
-      + '<td><span class="st ' + esc(w.status) + '">' + statusRu(w.status) + '</span>'
-      + (w.note ? '<div style="color:var(--t3);font-size:var(--fs-sm);margin-top:4px">' + esc(w.note) + '</div>' : '')
-      + '</td>'
-      + '<td style="color:var(--t3);font-size:var(--fs-sm);white-space:nowrap">' + when(w.created_at) + '</td>'
-      + '<td>' + actions(w) + '</td>'
-      + '</tr>';
+VIEWS.home = function(){
+  return Promise.all([refreshBadges(), api('GET', '/api/admin/deals').catch(function(){ return { rows:[] }; })]).then(function(r){
+    var o = r[0] || {}, deals = (r[1] && r[1].rows) || [];
+    if(SEC !== 'home') return;
+    var tot = o.всего_в_системе || { available:0, hold:0 };
+    var err = o.ошибок_за_сутки || { n:0, people:0 };
+    var held = deals.reduce(function(a, d){ return a + (Number(d.amount) - Number(d.paid)); }, 0);
+    var todo = ''
+      + todoBtn('wd', 'wd', o.заявок_в_очереди ? 'warn' : 'ok',
+          o.заявок_в_очереди ? ('Выплат ждут: ' + o.заявок_в_очереди) : 'Очередь выплат пуста',
+          o.заявок_в_очереди ? ('к переводу ' + money(o.сумма_к_выплате)) : (o.взято_в_работу ? ('в работе: ' + o.взято_в_работу) : 'новые заявки появятся здесь'))
+      + todoBtn('kyc', 'kyc', o.верификаций_в_очереди ? 'warn' : 'ok',
+          o.верификаций_в_очереди ? ('Проверка личности: ' + o.верификаций_в_очереди) : 'Проверок личности нет',
+          o.верификаций_в_очереди ? 'без решения вывод у людей закрыт' : 'все анкеты разобраны')
+      + todoBtn('deals', 'deals', deals.length ? '' : 'ok',
+          deals.length ? ('Заморожено: ' + deals.length + ' ' + plural(deals.length, 'сделка', 'сделки', 'сделок')) : 'Замороженных денег нет',
+          deals.length ? ('остаток ' + money(held) + ' — вмешиваться только по спору') : 'все сделки закрыты')
+      + todoBtn('errors', 'errors', err.n ? 'bad' : 'ok',
+          err.n ? ('Поломок за сутки: ' + err.n) : 'За сутки без поломок',
+          err.n ? ('у ' + err.people + ' ' + plural(err.people, 'человека', 'человек', 'человек')) : 'и это хорошая новость');
+    $('view').innerHTML =
+        '<div class="tiles">'
+      + tile(o.заявок_в_очереди || 0, 'Заявок на вывод в очереди', o.заявок_в_очереди ? 'warn' : '')
+      + tile(money(o.сумма_к_выплате), 'К выплате сейчас', o.сумма_к_выплате ? 'warn' : '')
+      + tile(o.взято_в_работу || 0, 'Взято в работу', '')
+      + tile(o.верификаций_в_очереди || 0, 'Ждут проверки личности', o.верификаций_в_очереди ? 'warn' : '')
+      + tile(money(o.доход_платформы), 'Доход сервиса', 'good')
+      + tile(money(tot.available + tot.hold), 'Всего в системе', '')
+      + tile(money(tot.hold), 'Из них заморожено', '')
+      + tile(err.n || 0, 'Поломок за сутки', err.n ? 'bad' : 'good')
+      + '</div>'
+      + reconHtml(o)
+      + '<h2 class="h2">Ждёт вашего решения</h2><div class="todo">' + todo + '</div>';
   });
-  $('list').innerHTML = html + '</tbody></table></div>';
-}
+};
 
-function statusRu(s){
-  return { queued:'В очереди', processing:'В работе', paid:'Выплачено',
-           rejected:'Отклонена', cancelled:'Отменена' }[s] || s;
-}
+/* ── Выплаты ── */
+var WD_TAB = 'queued';
+var WD_TABS = [['queued','В очереди'],['processing','В работе'],['paid','Выплачено'],['rejected','Отклонено'],['cancelled','Отменено'],['','Все']];
+function statusRu(s){ return { queued:'В очереди', processing:'В работе', paid:'Выплачено', rejected:'Отклонена', cancelled:'Отменена' }[s] || s; }
+VIEWS.wd = function(first, seq){
+  var tab = WD_TAB;
+  return Promise.all([api('GET', '/api/admin/withdrawals' + (tab ? ('?status=' + encodeURIComponent(tab)) : '')), refreshBadges()]).then(function(r){
+    var j = r[0];
+    if(SEC !== 'wd' || seq !== loadSeq || tab !== WD_TAB) return;
+    var rows = j.rows || [];
+    var chips = '<div class="chips">' + WD_TABS.map(function(t){
+      return '<button type="button" class="chip' + (t[0] === WD_TAB ? ' on' : '') + '" data-wdtab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    var body = !rows.length ? '<div class="box"><div class="empty">Здесь пусто</div></div>'
+      : '<div class="box"><table class="rt"><thead><tr><th>Кому</th><th>Реквизиты</th><th class="num">К выплате</th><th class="num">Комиссия</th><th>Статус</th><th>Создана</th><th></th></tr></thead><tbody>'
+      + rows.map(function(w){
+          var a = '<div class="acts"><button type="button" class="btn ghost sm" data-copy="' + esc(w.requisites) + '">' + ICON.copy + 'Реквизиты</button>';
+          if(w.status === 'queued') a += '<button type="button" class="btn sm" data-take="' + w.id + '">Взять в работу</button>';
+          if(w.status === 'queued' || w.status === 'processing'){
+            a += '<button type="button" class="btn ok sm" data-paid="' + w.id + '" data-net="' + w.net + '" data-name="' + esc(w.name) + '" data-req="' + esc(w.requisites) + '">Выплачено</button>';
+            a += '<button type="button" class="btn bad sm" data-reject="' + w.id + '" data-amount="' + w.amount + '">Отклонить</button>';
+          }
+          a += '</div>';
+          return '<tr><td class="first who"><button type="button" class="linkish" data-user="' + w.user_id + '"><b>' + esc(w.name) + '</b><span>' + esc(w.email) + '</span></button></td>'
+            + '<td class="req" data-l="Реквизиты">' + esc(w.requisites) + '</td>'
+            + '<td class="num" data-l="К выплате"><b>' + money(w.net) + '</b></td>'
+            + '<td class="num" data-l="Комиссия">' + money(w.fee) + '</td>'
+            + '<td data-l="Статус"><span class="st ' + esc(w.status) + '">' + statusRu(w.status) + '</span>'
+            + (w.note ? '<div class="mute" style="margin-top:4px">' + esc(w.note) + '</div>' : '') + '</td>'
+            + '<td class="mute" data-l="Создана" style="white-space:nowrap">' + when(w.created_at) + '</td>'
+            + '<td class="acts-td">' + a + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    $('view').innerHTML = reconHtml(OV || {}) + chips + body
+      + '<p class="note">Порядок работы: <b>взять в работу</b> → перевести деньги по реквизитам → <b>выплачено</b>. '
+      + 'Пока заявка в очереди, человек может отменить её сам; взятую в работу — уже нет, иначе можно получить перевод и вернуть сумму себе на баланс.</p>';
+  });
+};
 
-function actions(w){
-  var a = '<div class="acts">';
-  a += '<button class="btn ghost sm" data-copy="' + esc(w.requisites) + '">Копировать</button>';
-  if(w.status === 'queued')
-    a += '<button class="btn sm" data-take="' + w.id + '">Взять в работу</button>';
-  if(w.status === 'queued' || w.status === 'processing'){
-    a += '<button class="btn ok sm" data-paid="' + w.id + '" data-net="' + w.net + '" data-name="' + esc(w.name) + '">Выплачено</button>';
-    a += '<button class="btn bad sm" data-reject="' + w.id + '">Отклонить</button>';
+/* ── Верификация ── */
+var KYC_TAB = 'queued';
+/* updated_at заявки на момент, когда оператор открыл её фото. Фоновое
+   обновление перерисовывает строки каждые 20 секунд — если брать seenAt
+   из свежей строки, защита от «решения по фото, которого не видел»
+   теряет смысл. */
+var KYC_SEEN = {};
+function kycRu(s){ return { queued:'Ждёт проверки', approved:'Подтверждена', rejected:'Отклонена' }[s] || (s || '—'); }
+function kycButtons(k){
+  var h = '<div class="acts">'
+    + (k.has_photo ? '<button type="button" class="btn ghost sm" data-kycphoto="' + k.id + '">Паспорт</button>' : '<span class="mute">нет фото</span>')
+    + (k.has_selfie ? '<button type="button" class="btn ghost sm" data-kycphoto="' + k.id + '" data-kind="selfie">Селфи</button>' : '<span class="mute">без селфи</span>');
+  if(k.status === 'queued'){
+    h += '<button type="button" class="btn ok sm" data-kycok="' + k.id + '" data-seen="' + esc(k.updated_at) + '" data-name="' + esc(k.name) + '">Подтвердить</button>'
+       + '<button type="button" class="btn bad sm" data-kycno="' + k.id + '" data-seen="' + esc(k.updated_at) + '">Отклонить</button>';
   }
-  return a + '</div>';
+  return h + '</div>';
+}
+VIEWS.kyc = function(first, seq){
+  var tab = KYC_TAB;
+  return api('GET', '/api/admin/kyc' + (tab ? ('?status=' + tab) : '')).then(function(j){
+    if(SEC !== 'kyc' || seq !== loadSeq || tab !== KYC_TAB) return;
+    var rows = (j.rows || []).filter(function(k){ return !KYC_TAB || k.status === KYC_TAB; });
+    var chips = '<div class="chips">' + [['queued','Ждут'],['approved','Подтверждённые'],['rejected','Отклонённые'],['','Все']].map(function(t){
+      return '<button type="button" class="chip' + (t[0] === KYC_TAB ? ' on' : '') + '" data-kyctab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    var body = !rows.length ? '<div class="box"><div class="empty">' + (KYC_TAB === 'queued' ? 'Заявок на проверку личности нет' : 'Здесь пусто') + '</div></div>'
+      : '<div class="box"><table class="rt"><thead><tr><th>Кто в приложении</th><th>Анкета</th><th>Статус</th><th>Прислана</th><th>Документы и решение</th></tr></thead><tbody>'
+      + rows.map(function(k){
+          return '<tr><td class="first who"><button type="button" class="linkish" data-user="' + k.user_id + '"><b>' + esc(k.user_name) + '</b><span>' + esc(k.email) + ' · id ' + k.user_id + '</span></button></td>'
+            + '<td class="who" data-l="Анкета"><b>' + esc(k.name) + '</b><span>дата рождения: ' + esc(k.birth) + '</span></td>'
+            + '<td data-l="Статус"><span class="st ' + esc(k.status) + '">' + kycRu(k.status) + '</span>'
+            + (k.note ? '<div class="mute" style="margin-top:4px">' + esc(k.note) + '</div>' : '') + '</td>'
+            + '<td class="mute" data-l="Прислана" style="white-space:nowrap">' + when(k.created_at) + '</td>'
+            + '<td class="acts-td">' + kycButtons(k) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    $('view').innerHTML = chips + body
+      + '<p class="note">Откройте паспорт, сверьте ФИО и дату рождения с анкетой. Откройте селфи и сравните лицо с фото в документе — '
+      + 'паспорт должен быть в руках у того, кто на снимке. Затем <b>подтвердите</b> или <b>отклоните</b> с причиной: её человек увидит в приложении и сможет прислать документы заново.</p>';
+  });
+};
+
+/* ── Спорные деньги ── */
+VIEWS.deals = function(){
+  return api('GET', '/api/admin/deals').then(function(j){
+    if(SEC !== 'deals') return;
+    var rows = j.rows || [];
+    $('view').innerHTML = (!rows.length ? '<div class="box"><div class="empty">Замороженных денег нет — все сделки закрыты</div></div>'
+      : '<div class="box"><table class="rt"><thead><tr><th>Сделка</th><th>Плательщик</th><th class="num">Заморожено</th><th class="num">Выплачено</th><th class="num">Остаток</th><th>Создана</th><th></th></tr></thead><tbody>'
+      + rows.map(function(d){
+          var left = d.amount - d.paid, camp = /^camp:/.test(String(d.id));
+          return '<tr><td class="first"><span class="req">' + esc(d.id) + '</span>' + (camp ? '<div class="mute">бюджет кампании</div>' : '') + '</td>'
+            + '<td class="who" data-l="Плательщик"><button type="button" class="linkish" data-user="' + d.payer_id + '"><b>' + esc(d.payer_name) + '</b></button>'
+            + '<span>' + (d.payee_id ? ('исполнитель: <button type="button" class="linkish" data-user="' + d.payee_id + '"><b>id ' + d.payee_id + '</b></button>') : 'исполнитель не назначен') + '</span></td>'
+            + '<td class="num" data-l="Заморожено">' + money(d.amount) + '</td>'
+            + '<td class="num" data-l="Выплачено">' + money(d.paid) + '</td>'
+            + '<td class="num" data-l="Остаток"><b>' + money(left) + '</b></td>'
+            + '<td class="mute" data-l="Создана" style="white-space:nowrap">' + when(d.created_at) + '</td>'
+            + '<td class="acts-td"><button type="button" class="btn sm" data-settle="' + esc(d.id) + '" data-left="' + left + '" data-payee="' + (d.payee_id || '') + '">Решить спор</button></td></tr>';
+        }).join('') + '</tbody></table></div>')
+      + '<p class="note">Обычно замороженные деньги закрывают сами участники: заказчик подтверждает работу или возвращает. '
+      + '<b>Вмешиваться нужно только по спору.</b> Решение делит <b>остаток</b>: доля исполнителю, остальное — заказчику; копейки не теряются. '
+      + 'Для бюджета кампании без назначенного исполнителя можно только вернуть остаток заказчику — и это закроет бюджет для всех блогеров кампании. Решение необратимо.</p>';
+  });
+};
+
+/* ── Пользователи ── */
+var U = { q:'', f:'', rows:[], total:0, offset:0, seq:0 };
+var U_FILTERS = [['','Все'],['blogger','Блогеры'],['advertiser','Рекламодатели'],['kyc','Ждут проверки'],['blocked','Заблокированные'],['admin','Владельцы']];
+function roleRu(r){ return r === 'blogger' ? 'Блогер' : r === 'advertiser' ? 'Рекламодатель' : (r || '—'); }
+function userFlags(u){
+  var f = '';
+  if(u.is_blocked) f += '<span class="st blocked">блок</span>';
+  if(u.is_admin) f += '<span class="st admin">владелец</span>';
+  if(u.kyc) f += '<span class="st ' + esc(u.kyc) + '">паспорт: ' + kycRu(u.kyc).toLowerCase() + '</span>';
+  if(u.tg) f += '<span class="st off">Телеграм</span>';
+  if(u.google) f += '<span class="st off">Google</span>';
+  return f ? '<div class="flags">' + f + '</div>' : '';
+}
+function usersRows(rows){
+  return rows.map(function(u){
+    return '<tr class="click" data-user="' + u.id + '"><td class="first"><div class="person">' + ava(u.name, u.email)
+      + '<div class="who" style="min-width:0"><b>' + esc(u.name) + '</b><span>' + esc(u.email) + ' · id ' + u.id + '</span>' + userFlags(u) + '</div></div></td>'
+      + '<td data-l="Роль">' + roleRu(u.role) + '</td>'
+      + '<td class="num" data-l="Баланс">' + money(u.available) + (u.hold ? '<div class="mute">+ ' + money(u.hold) + ' в заморозке</div>' : '') + '</td>'
+      + '<td class="num" data-l="Каналы · карты">' + u.channels + ' · ' + u.cards + '</td>'
+      + '<td class="mute" data-l="С нами с" style="white-space:nowrap">' + when(u.created_at) + '</td></tr>';
+  }).join('');
+}
+function usersQs(limit, offset){
+  return '?limit=' + limit + '&offset=' + offset + (U.q ? '&q=' + encodeURIComponent(U.q) : '') + (U.f ? '&filter=' + U.f : '');
+}
+/* Каждый запрос со своим номером: ответ устаревшего запроса отбрасываем.
+   Иначе два одновременных запроса (двойное «Обновить», фоновый тик)
+   склеивали списки, и люди шли дважды. Дубли по номеру тоже убираем:
+   между страницами кто-то мог зарегистрироваться и сдвинуть выдачу. */
+function usersFetch(reset){
+  var my = ++U.seq, base = reset ? [] : U.rows;
+  return api('GET', '/api/admin/users' + usersQs(50, base.length)).then(function(j){
+    if(my !== U.seq) return;
+    var seen = {}, rows = [];
+    base.concat(j.rows || []).forEach(function(r){ if(!seen[r.id]){ seen[r.id] = 1; rows.push(r); } });
+    U.rows = rows; U.total = j.total || 0; U.offset = rows.length;
+  });
+}
+function paintUsers(){
+  var list = $('usersList'); if(!list) return;
+  $('usersCount').textContent = U.total + ' ' + plural(U.total, 'человек', 'человека', 'человек');
+  list.innerHTML = !U.rows.length ? '<div class="empty">' + (U.q ? 'Никого не нашли по «' + esc(U.q) + '»' : 'Здесь пусто') + '</div>'
+    : '<table class="rt"><thead><tr><th>Человек</th><th>Роль</th><th class="num">Баланс</th><th class="num">Каналы · карты</th><th>С нами с</th></tr></thead><tbody>'
+      + usersRows(U.rows) + '</tbody></table>'
+      + (U.rows.length < U.total ? '<div class="more"><button type="button" class="btn ghost sm" data-act="umore">Показать ещё</button></div>' : '');
+}
+VIEWS.users = function(first){
+  if(first || !$('usersList')){
+    $('view').innerHTML = '<div class="head" style="margin-bottom:12px"><label class="search">' + ICON.search
+      + '<input class="inp" id="uq" type="search" placeholder="Имя, почта, номер или Телеграм" value="' + esc(U.q) + '" autocomplete="off"></label>'
+      + '<span class="mute" id="usersCount" style="margin-left:auto"></span></div>'
+      + '<div class="chips">' + U_FILTERS.map(function(t){
+          return '<button type="button" class="chip' + (t[0] === U.f ? ' on' : '') + '" data-ufilter="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>'
+      + '<div class="box" id="usersList"><div class="empty">Загружаем…</div></div>'
+      + '<p class="note">Баланс и заморозка — с сервера, по журналу денег. Блокировка закрывает человеку вход, убирает его карточку из каталога и из рейтинга; '
+      + 'деньги не трогает — его выводы и сделки решайте в своих разделах. Владельца заблокировать нельзя.</p>';
+  }
+  /* Фоновое обновление не сбрасывает «Показать ещё»: подгружаем столько
+     же строк, страницами по 200 (больше сервер за раз не отдаёт). */
+  var keep = first ? 50 : Math.max(50, U.rows.length), my = ++U.seq;
+  var rows = [], seen = {};
+  function page(offset){
+    return api('GET', '/api/admin/users' + usersQs(Math.min(200, keep - offset), offset)).then(function(j){
+      if(my !== U.seq) return;
+      (j.rows || []).forEach(function(r){ if(!seen[r.id]){ seen[r.id] = 1; rows.push(r); } });
+      U.total = j.total || 0;
+      var got = offset + (j.rows || []).length;
+      if(got < keep && got < U.total && (j.rows || []).length) return page(got);
+      U.rows = rows; U.offset = rows.length;
+    });
+  }
+  return page(0).then(function(){ if(SEC === 'users' && my === U.seq) paintUsers(); });
+};
+var uqTimer = null;
+document.addEventListener('input', function(e){
+  if(e.target && e.target.id === 'uq'){
+    clearTimeout(uqTimer);
+    uqTimer = setTimeout(function(){ U.q = e.target.value.trim(); usersFetch(true).then(paintUsers).catch(function(er){ say(er.message, true); }); }, 280);
+  }
+  if(e.target && e.target.id === 'cq'){ C.q = e.target.value.trim(); paintCards(); }
+});
+
+/* ── Каталог ── */
+var C = { q:'', f:'', rows:[] };
+var PL = { youtube:'YouTube', tiktok:'TikTok', telegram:'Telegram', instagram:'Instagram', vk:'VK' };
+function subsShort(n){ n = Number(n) || 0; return n >= 1e6 ? (Math.round(n / 1e5) / 10 + 'M') : n >= 1e3 ? (Math.round(n / 100) / 10 + 'K') : String(n); }
+function cardTile(c){
+  var k = c.card || {};
+  var plats = (k.platforms || []).map(function(p){
+    var u = safeUrl(p.url);
+    return (u ? '<a class="pchip ' + esc(p.id) + '" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' : '<span class="pchip ' + esc(p.id) + '">')
+      + '<i></i>' + esc(PL[p.id] || p.id) + (p.subs ? ' · ' + subsShort(p.subs) : '') + (p.verified ? ' ✓' : '') + (u ? '</a>' : '</span>');
+  }).join('');
+  return '<div class="ccard' + (c.hidden ? ' hidden' : '') + '">'
+    + '<div class="top">' + ava(k.name || c.owner, c.id) + '<div style="min-width:0"><b>' + esc(k.name || '(без имени)') + '</b>'
+    + '<span>владелец: <button type="button" class="linkish" data-user="' + c.user_id + '"><b style="font-weight:500">' + esc(c.owner) + '</b></button></span></div></div>'
+    + (plats ? '<div class="plist">' + plats + '</div>' : '')
+    + ((k.topics || []).length ? '<div class="mute">' + esc(k.topics.join(' · ')) + '</div>' : '')
+    + (k.msg ? '<div class="mute" style="border-left:2px solid var(--line2);padding-left:8px">' + esc(k.msg) + '</div>' : '')
+    + '<div class="row"><div>' + (k.priceFrom ? '<span class="price">от ' + money(k.priceFrom) + '</span>' : '<span class="mute">цена не указана</span>')
+    + '<div class="mute">обновлена ' + when(c.updated_at) + '</div></div>'
+    + '<div class="acts" style="justify-content:flex-end">'
+    + (c.owner_blocked ? '<span class="st blocked">владелец в блоке</span>' : '')
+    + (c.hidden ? '<span class="st off">скрыта</span><button type="button" class="btn ghost sm" data-cardhide="' + esc(c.id) + '" data-hidden="0">Вернуть</button>'
+                : '<button type="button" class="btn warn sm" data-cardhide="' + esc(c.id) + '" data-hidden="1">Скрыть</button>')
+    + '</div></div></div>';
+}
+function paintCards(){
+  var box = $('cardsGrid'); if(!box) return;
+  var q = C.q.toLowerCase();
+  var rows = C.rows.filter(function(c){
+    if(C.f === 'shown' && c.hidden) return false;
+    if(C.f === 'hidden' && !c.hidden) return false;
+    if(C.f === 'blocked' && !c.owner_blocked) return false;
+    if(!q) return true;
+    var k = c.card || {};
+    return String(k.name || '').toLowerCase().indexOf(q) >= 0 || String(c.owner || '').toLowerCase().indexOf(q) >= 0
+      || String(c.owner_email || '').toLowerCase().indexOf(q) >= 0 || String(c.id).toLowerCase() === q;
+  });
+  $('cardsCount').textContent = rows.length + ' из ' + C.rows.length;
+  box.innerHTML = rows.length ? rows.map(cardTile).join('') : '<div class="box" style="grid-column:1/-1"><div class="empty">Карточек нет</div></div>';
+}
+VIEWS.cards = function(first){
+  if(first || !$('cardsGrid')){
+    $('view').innerHTML = '<div class="head" style="margin-bottom:12px"><label class="search">' + ICON.search
+      + '<input class="inp" id="cq" type="search" placeholder="Имя на карточке или владелец" value="' + esc(C.q) + '" autocomplete="off"></label>'
+      + '<span class="mute" id="cardsCount" style="margin-left:auto"></span></div>'
+      + '<div class="chips">' + [['','Все'],['shown','На витрине'],['hidden','Скрытые'],['blocked','Владелец в блоке']].map(function(t){
+          return '<button type="button" class="chip' + (t[0] === C.f ? ' on' : '') + '" data-cfilter="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>'
+      + '<div class="cgrid" id="cardsGrid"><div class="box" style="grid-column:1/-1"><div class="empty">Загружаем…</div></div></div>'
+      + '<p class="note">Скрытая карточка исчезает из каталога у всех, но остаётся у автора — это снятие с витрины, а не удаление. '
+      + 'Карточки заблокированных людей из каталога убираются сами.</p>';
+  }
+  return api('GET', '/api/admin/cards').then(function(j){ C.rows = j.rows || []; if(SEC === 'cards') paintCards(); });
+};
+
+/* ── Поломки ── */
+var ERR_DAYS = 7;
+VIEWS.errors = function(first, seq){
+  var days = ERR_DAYS;
+  return api('GET', '/api/admin/errors?days=' + days).then(function(j){
+    if(SEC !== 'errors' || seq !== loadSeq || days !== ERR_DAYS) return;
+    var rows = j.rows || [];
+    var chips = '<div class="chips">' + [[1,'Сутки'],[7,'Неделя'],[30,'Месяц']].map(function(t){
+      return '<button type="button" class="chip' + (t[0] === ERR_DAYS ? ' on' : '') + '" data-errdays="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    $('view').innerHTML = chips + (!rows.length ? '<div class="box"><div class="empty">Ни одной ошибки за этот срок — и это хорошая новость</div></div>'
+      : '<div class="box"><table class="rt"><thead><tr><th>Что сломалось</th><th>Где</th><th class="num">Раз</th><th class="num">Людей</th><th>Последний раз</th></tr></thead><tbody>'
+      + rows.map(function(e){
+          var hot = e.people > 1;
+          return '<tr><td class="first"' + (hot ? ' style="color:var(--bad)"' : '') + '>' + esc(e.message) + '</td>'
+            + '<td class="req" data-l="Где">' + esc(e.where_at || '—') + '</td>'
+            + '<td class="num" data-l="Раз">' + e.n + '</td>'
+            + '<td class="num" data-l="Людей">' + (hot ? '<b>' + e.people + '</b>' : e.people) + '</td>'
+            + '<td class="mute" data-l="Последний раз" style="white-space:nowrap">' + when(e.last_at) + '</td></tr>';
+        }).join('') + '</tbody></table></div>')
+      + '<p class="note">Одинаковые ошибки собраны в одну строку: важно, <b>что</b> ломается и у <b>скольких людей</b>. '
+      + 'Красным — то, что случилось больше чем у одного человека: это уже не случайность, а поломка. Личных данных здесь нет — только текст ошибки и место в коде.</p>';
+  });
+};
+
+/* ── Площадки ── */
+var PROBE = {};      /* результат «Проверить» живёт до перезагрузки страницы */
+var PLATS_FORCE = false;
+VIEWS.plats = function(first){
+  /* фон не трогает раздел; ручное «Обновить» — перечитывает настройки,
+     а ответы «Проверить» (PROBE) живут отдельно и не теряются */
+  if(!first && !PLATS_FORCE && $('platsGrid')) return Promise.resolve();
+  PLATS_FORCE = false;
+  return fetch('/api/verify/config').then(function(r){ return r.json(); }).then(function(j){
+    if(SEC !== 'plats') return;
+    var p = (j && j.platforms) || {}, names = Object.keys(p);
+    $('view').innerHTML = !names.length ? '<div class="box"><div class="empty">Сервер не сообщил площадок</div></div>'
+      : '<div class="plats" id="platsGrid">' + names.map(function(k){
+          var it = p[k] || {}, pr = PROBE[k];
+          return '<div class="plat ' + (it.configured ? 'on' : 'off') + '"><b>' + esc(it.label || k) + '</b>'
+            + '<div class="state">' + (it.configured ? 'подключено' : 'ключи не заданы') + '</div>'
+            + '<span class="redir">адрес возврата: ' + esc(it.redirect || '') + '</span>'
+            + '<div class="acts"><button type="button" class="btn sm" data-copy="' + esc(it.redirect || '') + '">' + ICON.copy + 'Скопировать адрес</button>'
+            + '<button type="button" class="btn ghost sm" data-probe="' + esc(k) + '">Проверить</button></div>'
+            + '<div class="plat-out' + (pr ? ' ' + pr.cls : '') + '" id="plat-out-' + esc(k) + '">' + (pr ? esc(pr.text) : '') + '</div></div>';
+        }).join('') + '</div>'
+      + '<p class="note">Блогер подтверждает канал входом в TikTok или YouTube. Если ключи площадки не заданы, кнопка в приложении честно говорит «не подключено». '
+      + 'Неверный адрес возврата и лишние кавычки в ключе — две главные причины ошибки «client_key» на стороне площадки.</p>';
+  });
+};
+
+/* ── Журнал ── */
+var LOG_RU = {
+  'wd-take':'Заявка на вывод взята в работу', 'wd-paid':'Выплата отмечена', 'wd-reject':'Вывод отклонён',
+  'kyc-approve':'Личность подтверждена', 'kyc-reject':'Проверка личности отклонена', 'settle':'Спор решён',
+  'card-hide':'Карточка снята с витрины', 'card-show':'Карточка возвращена в каталог', 'channel-unlink':'Канал отвязан',
+  'user-block':'Пользователь заблокирован', 'user-unblock':'Пользователь разблокирован',
+};
+VIEWS.log = function(){
+  return api('GET', '/api/admin/log?limit=300').then(function(j){
+    if(SEC !== 'log') return;
+    var rows = j.rows || [];
+    $('view').innerHTML = !rows.length ? '<div class="box"><div class="empty">Пока ни одного действия. Здесь появятся выплаты, решения и блокировки.</div></div>'
+      : '<div class="box"><table class="rt"><thead><tr><th>Что</th><th>Кого касается</th><th>Подробности</th><th>Кто</th><th>Когда</th></tr></thead><tbody>'
+      + rows.map(function(r){
+          var uid = /^user (\d+)$/.exec(String(r.target || ''));
+          var target = uid ? '<button type="button" class="linkish" data-user="' + uid[1] + '"><b style="font-weight:500">' + esc(r.target) + '</b></button>' : esc(r.target || '—');
+          return '<tr><td class="first"><b style="font-weight:600">' + esc(LOG_RU[r.action] || r.action) + '</b></td>'
+            + '<td data-l="Кого">' + target + '</td>'
+            + '<td class="mute" data-l="Подробно">' + esc(r.detail || '') + '</td>'
+            + '<td data-l="Кто">' + esc(r.who || '—') + '</td>'
+            + '<td class="mute" data-l="Когда" style="white-space:nowrap">' + when(r.at) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+  });
+};
+
+/* ─────────────────────────── карточка человека ─────────────────────────── */
+var DR = { id:null };
+var KIND_RU = {
+  topup:'Пополнение', fee:'Комиссия', payout:'Выплата за работу', 'settle-payout':'По спору — исполнителю',
+  'settle-refund':'По спору — возврат', settle:'Спор: списание заморозки', 'wd-hold':'Вывод: заморозка',
+  'wd-paid':'Вывод выплачен', 'wd-reject':'Вывод отклонён', 'wd-cancel':'Вывод отменён', hold:'Заморозка под сделку',
+  release:'Снятие заморозки', refund:'Возврат', 'camp-hold':'Бюджет кампании', 'camp-release':'Возврат бюджета',
+};
+function closeDrawer(){
+  DR.id = null;
+  var d = document.querySelector('.drawer'), v = document.querySelector('.veil');
+  if(d){ d.classList.remove('on'); setTimeout(function(){ d.remove(); }, 260); }
+  if(v){ v.classList.remove('on'); setTimeout(function(){ v.remove(); }, 220); }
+}
+function openUser(id){
+  id = Number(id); if(!id) return;
+  DR.id = id;
+  var d = document.querySelector('.drawer');
+  if(!d){
+    var v = document.createElement('div'); v.className = 'veil'; v.addEventListener('click', closeDrawer);
+    d = document.createElement('aside'); d.className = 'drawer'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true');
+    document.body.appendChild(v); document.body.appendChild(d);
+    requestAnimationFrame(function(){ v.classList.add('on'); d.classList.add('on'); });
+  }
+  d.innerHTML = '<div class="dr-head"><div><h2>Загружаем…</h2></div><button type="button" class="x" data-act="drclose" aria-label="Закрыть">' + ICON.x + '</button></div>';
+  return paintUser(id);
+}
+function paintUser(id){
+  return api('GET', '/api/admin/user?id=' + id).then(function(j){
+    var d = document.querySelector('.drawer'); if(!d || DR.id !== id) return;
+    var u = j.user || {}, b = j.balance || { available:0, hold:0 }, k = j.kyc;
+    var flags = userFlags({ is_blocked:u.is_blocked, is_admin:u.is_admin, kyc:k && k.status, tg:u.tg, google:u.google });
+    var act = u.is_admin ? '<span class="mute">Владельца заблокировать нельзя</span>'
+      : (u.is_blocked ? '<button type="button" class="btn ghost sm" data-block="' + u.id + '" data-to="0" data-name="' + esc(u.name) + '">Разблокировать</button>'
+                      : '<button type="button" class="btn bad sm" data-block="' + u.id + '" data-to="1" data-name="' + esc(u.name) + '">Заблокировать</button>');
+    var head = '<div class="dr-head">' + ava(u.name, u.email) + '<div style="min-width:0"><h2>' + esc(u.name) + '</h2>'
+      + '<p>' + esc(u.email) + ' · id ' + u.id + ' · ' + roleRu(u.role) + ' · с ' + when(u.created_at) + '</p>' + flags
+      + '<div class="acts" style="margin-top:10px">' + act
+      + '<button type="button" class="btn ghost sm" data-copy="' + esc(u.email) + '">' + ICON.copy + 'Почта</button></div></div>'
+      + '<button type="button" class="x" data-act="drclose" aria-label="Закрыть">' + ICON.x + '</button></div>';
+    var kyc = '<div class="sec"><h3>Проверка личности</h3>' + (!k ? '<div class="mute">Документы не присылал</div>'
+      : '<div class="kv"><span>Статус</span><b><span class="st ' + esc(k.status) + '">' + kycRu(k.status) + '</span></b>'
+        + '<span>По анкете</span><b>' + esc(k.name) + '</b><span>Дата рождения</span><b>' + esc(k.birth) + '</b>'
+        + '<span>Прислана</span><b>' + when(k.created_at) + '</b>' + (k.note ? '<span>Причина</span><b>' + esc(k.note) + '</b>' : '') + '</div>'
+        + '<div style="margin-top:12px">' + kycButtons(k) + '</div>') + '</div>';
+    var chans = j.channels || [];
+    var chHtml = '<div class="sec"><h3>Подтверждённые каналы</h3>' + (!chans.length ? '<div class="mute">Нет подтверждённых каналов</div>'
+      : chans.map(function(c){
+          var url = safeUrl(c.url);
+          return '<div class="lrow"><div class="l"><b>' + esc(PL[c.platform] || c.platform) + ' · ' + esc(c.title || c.username || c.external_id) + '</b>'
+            + '<span>' + (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(url) + '</a> · ' : '')
+            + (c.subs ? subsShort(c.subs) + ' подписчиков · ' : '') + 'проверен ' + when(c.checked_at)
+            + (c.risk_level ? ' · риск: ' + esc(c.risk_level) : '') + '</span></div>'
+            + '<button type="button" class="btn bad sm" data-unlink="' + esc(c.platform) + '" data-ext="' + esc(c.external_id) + '" data-title="' + esc(c.title || c.username || c.external_id) + '">Отвязать</button></div>';
+        }).join('')) + '</div>';
+    var cards = j.cards || [];
+    var cHtml = '<div class="sec"><h3>Карточки в каталоге</h3>' + (!cards.length ? '<div class="mute">Карточек нет</div>'
+      : cards.map(function(c){
+          var kk = c.card || {};
+          return '<div class="lrow"><div class="l"><b>' + esc(kk.name || c.id) + '</b><span>'
+            + esc((kk.platforms || []).map(function(p){ return PL[p.id] || p.id; }).join(', ') || 'без площадок')
+            + (kk.priceFrom ? ' · от ' + money(kk.priceFrom) : '') + ' · ' + (c.hidden ? 'скрыта' : 'на витрине') + '</span></div>'
+            + (c.hidden ? '<button type="button" class="btn ghost sm" data-cardhide="' + esc(c.id) + '" data-hidden="0">Вернуть</button>'
+                        : '<button type="button" class="btn warn sm" data-cardhide="' + esc(c.id) + '" data-hidden="1">Скрыть</button>') + '</div>';
+        }).join('')) + '</div>';
+    var wds = j.withdrawals || [];
+    var wHtml = '<div class="sec"><h3>Выводы</h3>' + (!wds.length ? '<div class="mute">Заявок на вывод не было</div>'
+      : wds.map(function(w){
+          return '<div class="lrow"><div class="l"><b>' + money(w.net) + '</b><span>заявка ' + w.id + ' · ' + when(w.created_at) + (w.note ? ' · ' + esc(w.note) : '') + '</span></div>'
+            + '<span class="st ' + esc(w.status) + '">' + statusRu(w.status) + '</span></div>';
+        }).join('')) + '</div>';
+    var led = j.ledger || [];
+    var lHtml = '<div class="sec"><h3>Движение денег <span class="mute" style="text-transform:none;letter-spacing:0;font-weight:500">последние ' + led.length + '</span></h3>'
+      + (!led.length ? '<div class="mute">Движений нет</div>' : led.map(function(l){
+          var plus = Number(l.amount) > 0;
+          return '<div class="lrow"><div class="l"><b>' + esc(KIND_RU[l.kind] || l.kind) + '</b><span>' + (l.bucket === 'hold' ? 'заморозка · ' : '') + esc(l.ref || '') + (l.ref ? ' · ' : '') + when(l.created_at) + '</span></div>'
+            + '<span class="money ' + (plus ? 'plus' : 'minus') + '">' + (plus ? '+' : '−') + money(Math.abs(l.amount)) + '</span></div>';
+        }).join('')) + '</div>';
+    d.innerHTML = head + '<div class="dr-body">'
+      + '<div class="sec"><h3>Баланс</h3><div class="bal"><div><b>' + money(b.available) + '</b><i>доступно</i></div>'
+      + '<div><b>' + money(b.hold) + '</b><i>заморожено</i></div></div></div>'
+      + kyc + chHtml + cHtml + wHtml + lHtml + '</div>';
+  }).catch(function(e){
+    var d = document.querySelector('.drawer'); if(!d) return;
+    d.innerHTML = '<div class="dr-head"><div><h2>Не открылось</h2><p>' + esc(e.message) + '</p></div><button type="button" class="x" data-act="drclose" aria-label="Закрыть">' + ICON.x + '</button></div>';
+  });
+}
+/* после действия — перерисовать и раздел, и открытую карточку */
+function after(msg){
+  if(msg) say(msg);
+  load(false);
+  if(DR.id) paintUser(DR.id);
 }
 
-/* Все действия — через делегирование: список перерисовывается целиком. */
+/* ─────────────────────────── действия ─────────────────────────── */
+function doSettle(dealId, left, payeeId){
+  var camp = /^camp:/.test(dealId);
+  var body = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="stPre">'
+    + [0, 25, 50, 75, 100].map(function(p){ return '<button type="button" class="chip" data-share="' + p + '">' + p + '%</button>'; }).join('') + '</div>'
+    + '<input type="range" id="stRange" min="0" max="100" step="1" value="' + (payeeId ? 50 : 0) + '"' + (payeeId ? '' : ' disabled') + '>'
+    + '<div class="split"><div><b id="stB">—</b><i>исполнителю' + (payeeId ? ' (id ' + payeeId + ')' : '') + '</i></div><div><b id="stP">—</b><i>заказчику обратно</i></div></div>';
+  return ask({
+    title: 'Решить спор',
+    html: 'Сделка <b>' + esc(dealId) + '</b>. В заморозке осталось <b>' + money(left) + '</b>.'
+      + (payeeId ? '' : '\nИсполнитель не назначен — можно только вернуть остаток заказчику.' + (camp ? ' Это закроет бюджет кампании для всех её блогеров.' : '')),
+    body: body, ok: 'Разделить', danger: true,
+    onOpen: function(w){
+      var r = w.querySelector('#stRange');
+      function paint(){
+        var sh = Number(r.value) || 0, tb = Math.round(left * sh / 100);
+        w.querySelector('#stB').textContent = money(tb);
+        w.querySelector('#stP').textContent = money(left - tb);
+        Array.prototype.forEach.call(w.querySelectorAll('[data-share]'), function(c){ c.classList.toggle('on', Number(c.getAttribute('data-share')) === sh); });
+      }
+      r.addEventListener('input', paint);
+      w.querySelector('#stPre').addEventListener('click', function(e){
+        var c = e.target.closest('[data-share]'); if(!c) return;
+        var v = Number(c.getAttribute('data-share'));
+        if(!payeeId && v > 0){ w.querySelector('#dlgErr').textContent = 'Исполнитель не назначен — доля больше нуля невозможна'; return; }
+        r.value = v; paint();
+      });
+      paint();
+    },
+    check: function(v, w){ var sh = Number(w.querySelector('#stRange').value); if(!payeeId && sh > 0) return 'Исполнитель не назначен'; return ''; },
+  }).then(function(res){
+    if(!res.ok) return;
+    var share = Number(res.root.querySelector('#stRange').value) || 0;
+    return api('POST', '/api/deals/settle', { dealId: dealId, bloggerShare: share, toUserId: payeeId || undefined, opKey: opKey('settle', dealId) })
+      .then(function(r){ after('Разделено: исполнителю ' + money(r.исполнителю) + ', заказчику ' + money(r.плательщику)); });
+  });
+}
+
+document.addEventListener('keydown', function(e){
+  if(e.key !== 'Escape') return;
+  if(document.querySelector('.zoom')){ document.querySelector('.zoom').remove(); return; }
+  if(document.querySelector('.modal')){ closeModal(); return; }
+  if(document.querySelector('.drawer')) closeDrawer();
+});
+
 document.addEventListener('click', function(e){
-  var t = e.target;
-  if(!t || t.tagName !== 'BUTTON') return;
+  var t = e.target && e.target.closest ? e.target.closest('button,[data-user]') : null;
+  if(!t || (!t.closest('#app') && !t.closest('.drawer'))) return;
+  var ds = t.dataset;
 
-  if(t.dataset.sec){ switchSection(t.dataset.sec); return; }
+  if(ds.go){ go(ds.go); return; }
+  if(ds.act === 'leave'){ leave(); return; }
+  if(ds.act === 'reload'){ if(SEC === 'plats') PLATS_FORCE = true; load(false); return; }
+  if(ds.act === 'drclose'){ closeDrawer(); return; }
+  if(ds.act === 'umore'){ t.disabled = true; usersFetch(false).then(paintUsers).catch(function(er){ say(er.message, true); t.disabled = false; }); return; }
+  if(ds.wdtab !== undefined){ WD_TAB = ds.wdtab; load(true); return; }
+  if(ds.kyctab !== undefined){ KYC_TAB = ds.kyctab; load(true); return; }
+  if(ds.errdays){ ERR_DAYS = Number(ds.errdays) || 7; load(true); return; }
+  if(ds.ufilter !== undefined){ U.f = ds.ufilter; Array.prototype.forEach.call(document.querySelectorAll('[data-ufilter]'), function(c){ c.classList.toggle('on', c === t); });
+    usersFetch(true).then(paintUsers).catch(function(er){ say(er.message, true); }); return; }
+  if(ds.cfilter !== undefined){ C.f = ds.cfilter; Array.prototype.forEach.call(document.querySelectorAll('[data-cfilter]'), function(c){ c.classList.toggle('on', c === t); }); paintCards(); return; }
+  if(ds.copy !== undefined){ copyText(ds.copy); return; }
+  if(ds.user){ openUser(ds.user); return; }
 
-  if(t.dataset.kycPhoto){
+  if(ds.kycphoto){
     t.disabled = true;
-    api('GET', '/api/admin/kyc/photo?id=' + Number(t.dataset.kycPhoto) + (t.dataset.kind === 'selfie' ? '&kind=selfie' : ''))
-      .then(function(j){ t.disabled = false; if(j.photo) openZoom(j.photo); else say('Фото не найдено', true); })
-      .catch(function(err){ say(err.message, true); t.disabled = false; });
+    api('GET', '/api/admin/kyc/photo?id=' + Number(ds.kycphoto) + (ds.kind === 'selfie' ? '&kind=selfie' : ''))
+      .then(function(j){
+        if(j.updated_at && !KYC_SEEN[ds.kycphoto]) KYC_SEEN[ds.kycphoto] = j.updated_at;
+        if(j.photo && /^data:image\//.test(j.photo)) openZoom(j.photo); else say('Фото не найдено', true);
+      })
+      .catch(function(er){ say(er.message, true); })
+      .then(function(){ t.disabled = false; });
     return;
   }
-
-  if(t.dataset.kycOk){
-    var kid = Number(t.dataset.kycOk);
-    if(!window.confirm('Подтвердить личность: ' + t.dataset.name + '?\n\n'
-        + 'После этого человеку откроется вывод денег.')) return;
+  if(ds.kycok){
+    ask({ title:'Подтвердить личность', html:'Подтвердить: <b>' + esc(ds.name) + '</b>?\nПосле этого человеку откроется вывод денег.', ok:'Подтвердить', okClass:'ok' })
+      .then(function(r){
+        if(!r.ok) return;
+        return api('POST', '/api/admin/kyc/approve', { requestId: Number(ds.kycok), seenAt: KYC_SEEN[ds.kycok] || ds.seen }).then(function(){ after('Личность подтверждена'); });
+      }).catch(function(er){ say(er.message, true); after(); });
+    return;
+  }
+  if(ds.kycno){
+    ask({ title:'Отклонить проверку', text:'Причину увидит человек в приложении и сможет прислать документы заново.', input:'area', required:'Напишите причину',
+          placeholder:'Например: фото не читается', sugg:['Фото не читается', 'Лицо на селфи не совпадает с паспортом', 'Нет селфи с паспортом в руках', 'ФИО или дата рождения не совпадают с анкетой'],
+          ok:'Отклонить', danger:true })
+      .then(function(r){
+        if(!r.ok) return;
+        return api('POST', '/api/admin/kyc/reject', { requestId: Number(ds.kycno), note: r.value, seenAt: KYC_SEEN[ds.kycno] || ds.seen }).then(function(){ after('Отклонена — человек сможет прислать документы заново'); });
+      }).catch(function(er){ say(er.message, true); after(); });
+    return;
+  }
+  if(ds.settle){ doSettle(ds.settle, Number(ds.left), Number(ds.payee) || null).catch(function(er){ say(er.message, true); }); return; }
+  if(ds.take){
     t.disabled = true;
-    api('POST', '/api/admin/kyc/approve', { requestId: kid, seenAt: t.dataset.seen })
-      .then(function(){ say('Личность подтверждена'); refresh(); })
-      .catch(function(err){ say(err.message, true); t.disabled = false; refresh(); });
+    api('POST', '/api/admin/withdrawals/take', { withdrawalId: Number(ds.take) })
+      .then(function(){ after('Заявка взята в работу — теперь её не отменят'); })
+      .catch(function(er){ say(er.message, true); t.disabled = false; });
     return;
   }
-
-  if(t.dataset.kycNo){
-    var knid = Number(t.dataset.kycNo);
-    var kwhy = window.prompt('Причина отказа — её увидит человек в приложении:', 'Фото не читается');
-    if(kwhy === null) return;
-    t.disabled = true;
-    api('POST', '/api/admin/kyc/reject', { requestId: knid, note: kwhy, seenAt: t.dataset.seen })
-      .then(function(){ say('Отклонена — человек сможет прислать документы заново'); refresh(); })
-      .catch(function(err){ say(err.message, true); t.disabled = false; refresh(); });
+  if(ds.paid){
+    var id = Number(ds.paid);
+    ask({ title:'Отметить выплату', html:'Вы уже перевели <b>' + money(ds.net) + '</b> получателю <b>' + esc(ds.name) + '</b>?\n'
+            + 'Реквизиты: ' + esc(ds.req) + '\n\nОтметка необратима: сумма спишется с заморозки, комиссия зачтётся сервису.',
+          ok:'Да, перевёл', okClass:'ok' })
+      .then(function(r){
+        if(!r.ok) return;
+        return api('POST', '/api/admin/withdrawals/paid', { withdrawalId: id, opKey: opKey('paid', id) }).then(function(){ after('Отмечено: выплачено'); });
+      }).catch(function(er){ say(er.message, true); });
     return;
   }
-
-  if(t.dataset.settle){
-    settleDialog(t.dataset.settle, Number(t.dataset.left), Number(t.dataset.payee) || null);
+  if(ds.reject){
+    var rid = Number(ds.reject);
+    ask({ title:'Отклонить вывод', html:'<b>' + money(ds.amount) + '</b> вернутся человеку на баланс. Причину он увидит в приложении.', input:'area', required:'Напишите причину',
+          placeholder:'Например: реквизиты не принадлежат владельцу аккаунта', sugg:['Реквизиты указаны с ошибкой', 'Реквизиты не принадлежат владельцу аккаунта', 'Подозрение на мошенничество — напишите в поддержку'],
+          ok:'Отклонить', danger:true })
+      .then(function(r){
+        if(!r.ok) return;
+        return api('POST', '/api/admin/withdrawals/reject', { withdrawalId: rid, note: r.value, opKey: opKey('rej', rid) }).then(function(){ after('Отклонена, деньги вернулись на баланс'); });
+      }).catch(function(er){ say(er.message, true); });
     return;
   }
-
-  if(t.dataset.t !== undefined){ TAB = t.dataset.t; renderTabs(); refresh(); return; }
-
-  if(t.dataset.probe){
-    var pk = t.dataset.probe, box = $('plat-out-' + pk);
-    t.disabled = true; if(box) box.textContent = 'Спрашиваем площадку…';
+  if(ds.block){
+    var toBlock = ds.to === '1';
+    ask(toBlock
+      ? { title:'Заблокировать', html:'Заблокировать <b>' + esc(ds.name) + '</b>?\nЧеловек сразу потеряет вход, его карточка уйдёт из каталога и рейтинга. Деньги и заявки не трогаются.',
+          input:'area', placeholder:'Причина — для журнала', sugg:['Накрутка подписчиков', 'Мошенничество', 'Жалобы рекламодателей', 'Спам'], ok:'Заблокировать', danger:true }
+      : { title:'Разблокировать', html:'Вернуть <b>' + esc(ds.name) + '</b> вход и карточку в каталоге?', ok:'Разблокировать' })
+      .then(function(r){
+        if(!r.ok) return;
+        return api('POST', '/api/admin/users/block', { userId: Number(ds.block), blocked: toBlock, reason: r.value || '' })
+          .then(function(){ after(toBlock ? 'Заблокирован' : 'Разблокирован'); });
+      }).catch(function(er){ say(er.message, true); });
+    return;
+  }
+  if(ds.cardhide){
+    var hide = ds.hidden === '1';
+    var doIt = function(){
+      t.disabled = true;
+      return api('POST', '/api/admin/cards/hide', { id: ds.cardhide, hidden: hide })
+        .then(function(){ after(hide ? 'Карточка снята с витрины' : 'Карточка вернулась в каталог'); })
+        .catch(function(er){ say(er.message, true); t.disabled = false; });
+    };
+    if(!hide){ doIt(); return; }
+    ask({ title:'Скрыть карточку', text:'Карточка исчезнет из каталога у всех, но останется у автора. Вернуть можно в любой момент.', ok:'Скрыть', danger:true })
+      .then(function(r){ if(r.ok) return doIt(); });
+    return;
+  }
+  if(ds.unlink){
+    ask({ title:'Отвязать канал', html:'Отвязать <b>' + esc(PL[ds.unlink] || ds.unlink) + ' · ' + esc(ds.title) + '</b> от ВСЕХ аккаунтов, где он подтверждён?\nНужно, если канал продан или привязан по ошибке. Владельцу канала придётся подтвердить его заново.', ok:'Отвязать', danger:true })
+      .then(function(r){
+        if(!r.ok) return;
+        return api('POST', '/api/admin/verify/unlink', { platform: ds.unlink, externalId: ds.ext }).then(function(){ after('Канал отвязан'); });
+      }).catch(function(er){ say(er.message, true); });
+    return;
+  }
+  if(ds.probe){
+    var pk = ds.probe, box = $('plat-out-' + pk);
+    t.disabled = true; if(box){ box.textContent = 'Спрашиваем площадку…'; box.className = 'plat-out'; }
     api('GET', '/api/admin/verify/probe?platform=' + encodeURIComponent(pk))
       .then(function(r){
-        t.disabled = false;
-        if(!box) return;
-        var lines = [r.verdict];
-        lines.push('ключи: ' + (r.keys ? 'заданы' : 'НЕ заданы')
-          + ' · адрес площадки с сервера: ' + (r.apiReachable ? 'открывается' : 'НЕ открывается')
-          + ' · права: ' + r.scope);
-        box.textContent = lines.join('\n');
-        box.className = 'plat-out ' + (/в порядке/.test(r.verdict || '') ? 'good' : 'warn');
+        var text = (r.verdict || '') + '\nключи: ' + (r.keys ? 'заданы' : 'НЕ заданы')
+          + ' · адрес площадки с сервера: ' + (r.apiReachable ? 'открывается' : 'НЕ открывается') + ' · права: ' + r.scope;
+        PROBE[pk] = { text: text, cls: /в порядке/.test(r.verdict || '') ? 'good' : 'warn' };
       })
-      .catch(function(err){
+      .catch(function(er){ PROBE[pk] = { text: er.message, cls:'warn' }; })
+      .then(function(){
         t.disabled = false;
-        if(box){ box.textContent = err.message; box.className = 'plat-out warn'; }
+        var b2 = $('plat-out-' + pk); if(b2 && PROBE[pk]){ b2.textContent = PROBE[pk].text; b2.className = 'plat-out ' + PROBE[pk].cls; }
       });
     return;
-  }
-
-  if(t.dataset.copy){
-    var text = t.dataset.copy;
-    (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject())
-      .then(function(){ say('Скопировано'); })
-      .catch(function(){ window.prompt('Скопируйте', text); });
-    return;
-  }
-
-  if(t.dataset.take){
-    t.disabled = true;
-    api('POST', '/api/admin/withdrawals/take', { withdrawalId: Number(t.dataset.take) })
-      .then(function(){ say('Заявка взята в работу — теперь её не отменят'); refresh(); })
-      .catch(function(err){ say(err.message, true); t.disabled = false; });
-    return;
-  }
-
-  if(t.dataset.paid){
-    var id = Number(t.dataset.paid);
-    /* Это необратимо: деньги списываются с заморозки, комиссия уходит
-       сервису. Спрашиваем прямо, без бодрых формулировок. */
-    if(!window.confirm('Вы уже перевели ' + money(t.dataset.net) + ' получателю ' + t.dataset.name + '?\n\n'
-        + 'Отметка необратима: сумма спишется с заморозки, комиссия зачтётся сервису.')) return;
-    t.disabled = true;
-    api('POST', '/api/admin/withdrawals/paid', { withdrawalId: id, opKey: opKey('paid', id) })
-      .then(function(){ say('Отмечено: выплачено'); refresh(); })
-      .catch(function(err){ say(err.message, true); t.disabled = false; });
-    return;
-  }
-
-  if(t.dataset.reject){
-    var rid = Number(t.dataset.reject);
-    var why = window.prompt('Причина отказа — её увидит человек в приложении:', '');
-    if(why === null) return;
-    t.disabled = true;
-    api('POST', '/api/admin/withdrawals/reject', { withdrawalId: rid, note: why, opKey: opKey('rej', rid) })
-      .then(function(){ say('Отклонена, деньги вернулись на баланс'); refresh(); })
-      .catch(function(err){ say(err.message, true); t.disabled = false; });
   }
 });
 
 $('enter').addEventListener('click', enter);
-$('leave').addEventListener('click', leave);
 $('key').addEventListener('keydown', function(e){ if(e.key === 'Enter') enter(); });
 
-/* Первым делом спрашиваем сервер: пустит ли он без ключа. Пустит, если
-   владелец уже вошёл своей почтой в приложении или вводил ключ раньше —
-   тогда пульт открывается сразу, второй раз ключ никто не спрашивает.
-   Прежний путь (ключ в sessionStorage вкладки) больше не нужен: сессия
-   живёт на сервере, а не в странице. */
+/* Вход почтой владельца: обычный вход в аккаунт даёт токен, токен меняется
+   на сессию пульта (с вашим именем для журнала), а сам токен сразу
+   гасится — пульту он больше не нужен. */
+function mailEnter(){
+  var b = $('mailEnter'); if(b.disabled) return;
+  var email = $('mail').value.trim(), pass = $('mailPass').value;
+  if(!email || !pass){ $('mailErr').textContent = 'Введите почту и пароль'; return; }
+  $('mailErr').textContent = ''; b.disabled = true;
+  var token = '';
+  fetch('/api/login', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ email: email, password: pass }) })
+    .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){
+      if(!r.ok || !j.token) throw new Error(j.error || 'Почта или пароль не подошли');
+      token = j.token;
+      return fetch('/api/admin/session', { method:'POST', credentials:'same-origin',
+        headers:{ 'Content-Type':'application/json', 'X-Admin-Session':'1', 'Authorization':'Bearer ' + token }, body:'{}' });
+    }); })
+    .then(function(r){ return r.json().catch(function(){ return {}; }).then(function(j){
+      if(!r.ok) throw new Error(r.status === 403 ? 'Этот аккаунт не владелец площадки' : (j.error || 'Не получилось войти'));
+    }); })
+    .then(function(){ $('mailPass').value = ''; openConsole(); })
+    .catch(function(e){
+      var m = String(e && e.message || '');
+      $('mailErr').textContent = /Failed to fetch|NetworkError/.test(m) ? 'Сервер не отвечает — он запущен?' : m;
+    })
+    .then(function(){
+      b.disabled = false;
+      if(token) fetch('/api/logout', { method:'POST', headers:{ 'Authorization':'Bearer ' + token } }).catch(function(){});
+    });
+}
+$('mailEnter').addEventListener('click', mailEnter);
+$('mailPass').addEventListener('keydown', function(e){ if(e.key === 'Enter') mailEnter(); });
+
+/* Первым делом — пустит ли сервер без ключа: владелец мог уже войти почтой
+   или ключом раньше (сессия живёт 12 часов). Пришли по ссылке с билетом —
+   меняем его на сессию и сразу убираем из адреса. */
 try{ sessionStorage.removeItem('bp_op_key'); }catch(e){}
 (function(){
-  /* Пришли из приложения по ссылке с билетом — меняем его на сессию и
-     сразу убираем из адреса, чтобы он не осел в истории браузера. */
   var m = /(?:^|[#&])t=([\w.]+)/.exec(String(location.hash || ''));
   var ticket = m ? m[1] : '';
   if(ticket){
     try{ history.replaceState(null, '', location.pathname + location.search
       + String(location.hash || '').replace(/(?:^|[#&])t=[\w.]+/, '').replace(/^&/, '#')); }catch(e){}
   }
-  function ask(){
-    return fetch('/api/admin/session', { credentials: 'same-origin', headers: { 'X-Admin-Session': '1' } })
+  function ask0(){
+    return fetch('/api/admin/session', { credentials:'same-origin', headers:{ 'X-Admin-Session':'1' } })
       .then(function(r){ return r.json(); })
-      .then(function(j){ if(j && j.ok){ openConsole(); return true; } return false; });
+      .then(function(j){ if(j && j.ok) openConsole(); else showGate(''); })
+      .catch(function(){ showGate('Сервер не отвечает — обновите страницу'); });
   }
   var start = ticket
-    ? fetch('/api/admin/session', {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Session': '1' },
-        body: JSON.stringify({ ticket: ticket }),
-      }).then(function(r){ return r.ok; }).catch(function(){ return false; })
+    ? fetch('/api/admin/session', { method:'POST', credentials:'same-origin',
+        headers:{ 'Content-Type':'application/json', 'X-Admin-Session':'1' }, body: JSON.stringify({ ticket: ticket }) })
+        .then(function(r){ return r.ok; }).catch(function(){ return false; })
     : Promise.resolve(false);
-  start.then(function(done){ if(done) openConsole(); else ask(); }).catch(function(){});
+  start.then(function(done){ if(done) openConsole(); else ask0(); });
 })();
 
-setInterval(function(){ if(!$('app').hidden) refresh(); }, 20000);
+/* Фоновое обновление: только открытый раздел, только когда вкладка на
+   экране и человек не держит открытым диалог. */
+setInterval(function(){
+  if(!opened || document.hidden || document.querySelector('.modal') || document.querySelector('.zoom')) return;
+  load(false);
+}, 20000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden && opened) load(false); });
 </script>
 </body>
 </html>
