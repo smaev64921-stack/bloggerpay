@@ -59875,6 +59875,14 @@ function bpSetStat(cardEl, label, value){
     for(var k = 0; k < q.length; k++) if(q[k].el === v){ q.splice(k, 1); break; }
     q.push({ el:v, from:start, to:to.raw, t:to, last:v.textContent });
     if(cardEl.__bpTwRun){ cancelAnimationFrame(cardEl.__bpTwRun); cardEl.__bpTwRun = 0; }
+    /* bp-card8: перезапуск общего цикла (добавилась ещё одна ячейка) раньше
+       отбрасывал уже едущие цифры к их исходным значениям — полоса прыгала
+       40K → 61K → 45K → 66K. Теперь каждая продолжает с того, что на экране. */
+    for(var rb = 0; rb < q.length; rb++){
+      if(q[rb].el === v) continue;
+      var now0 = bpStatParse(q[rb].last);
+      if(now0 && now0.suf === q[rb].t.suf) q[rb].from = now0.raw;
+    }
     var t0 = performance.now(), DUR = 360;   /* bp-card8: было 520 */
     /* СТРАХОВКА ОТ ЗАСТРЯВШЕЙ АНИМАЦИИ.
        Кадры могут не идти вовсе: вкладка не рисуется, экономия батареи,
@@ -59904,7 +59912,9 @@ function bpSetStat(cardEl, label, value){
     cardEl.__bpTwSafe = setTimeout(safe, 260);
     var tick = function(now){
       cardEl.__bpTwSeen = 1;               /* кадр был — страховке ждать дальше */
-      var p = (now - t0) / DUR; if(p > 1) p = 1;
+      /* Метка кадра бывает раньше t0 (кадр начался до вызова) — без нижней
+         границы прогресс уходил в минус, и цифры в первом кадре шли назад. */
+      var p = (now - t0) / DUR; if(p < 0) p = 0; if(p > 1) p = 1;
       /* bp-card8: промежуточные кадры — через один; конечный — всегда */
       cardEl.__bpTwF = (cardEl.__bpTwF | 0) + 1;
       if(p < 1 && (cardEl.__bpTwF % 2)){ cardEl.__bpTwRun = requestAnimationFrame(tick); return; }
@@ -59923,6 +59933,8 @@ function bpSetStat(cardEl, label, value){
   }
 }
 
+/* bp-card8: твин цифр — наружу, для ячейки CPM (её пишет bp-card6). */
+window.bpSetStatTw = function(a, b, c){ return bpSetStat(a, b, c); };
 function bpChSelect(cardEl, idx, quiet){
   var sw = cardEl.__bpCh;
   if(!sw || !sw.items[idx]) return;
@@ -59938,7 +59950,9 @@ function bpChSelect(cardEl, idx, quiet){
   bpSetStat(cardEl, 'подписчики', st.subs);
   bpSetStat(cardEl, 'просмотры',  st.reach);
   bpSetStat(cardEl, 'er',         st.er);
-  bpSetStat(cardEl, 'cpm',        st.cpv);
+  /* bp-card8: у карточки каталога CPM пишет bp-card6 — по выбранному
+     размещению. Две записи в одну ячейку и давали мигание цифры. */
+  if(!cardEl.classList.contains('bpc6')) bpSetStat(cardEl, 'cpm', st.cpv);
 
   if(sw.line){
     sw.line.className = 'bp-ch-line ch-' + it.tone;
@@ -59966,6 +59980,10 @@ function bpChSelect(cardEl, idx, quiet){
     }
   }
   if(!quiet){ try{ if(navigator.vibrate) navigator.vibrate(8); }catch(e){} }
+  /* bp-card8: цена, размещения и аудитория канала — в том же кадре, что
+     и цифры. Раньше их перерисовывали через 80 мс, и было видно, как
+     карточка меняется в два приёма. */
+  try{ if(typeof window.bpAfterChSelect === 'function') window.bpAfterChSelect(cardEl, it.pid); }catch(e){}
 }
 
 function bpEnhanceCard(cardEl, storeOverride){
@@ -80825,6 +80843,11 @@ function outbound(c){
     var p = c.platData[pid]; if(!p) return;
     o.platData[pid] = { url:p.url || '', subs:p.subs || 0, er:p.er || 0, reach:p.reach || 0,
       verified:!!p.verified, enabled:p.enabled !== false };
+    /* bp-abc4: тематики и аудитория канала */
+    if(Array.isArray(p.topics)) o.platData[pid].topics = p.topics.slice(0, 5);
+    if(typeof p.genderF === 'number') o.platData[pid].genderF = p.genderF;
+    if(p.showGender != null) o.platData[pid].showGender = !!p.showGender;
+    if(p.kids != null) o.platData[pid].kids = !!p.kids;
   });
   o.integrations = {};
   if(c.integrations) PLATS.forEach(function(pid){
@@ -84545,6 +84568,135 @@ function paintHead(el, card, pid){
 }
 
 /* ── деньги: форматы и цена ─────────────────────────────────────── */
+/* ── bp-card8/bp-abc4 · аудитория канала: тематики, пол, «для детей» ──
+   Мастер карты теперь хранит их у каждого канала (platData[pid]). Здесь
+   карточка показывает те, что у выбранного канала. Все тематики всех
+   каналов остаются в .blc-cats (лишние скрыты), потому что фильтр
+   каталога ищет по тексту этого блока. У старых карт своих тематик у
+   канала нет — тогда ничего не трогаем, работает прежняя строка. */
+var KIDS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<circle cx="12" cy="13" r="8"/><path d="M9.4 12.2h.01M14.6 12.2h.01"/><path d="M9.6 15.6a3.2 3.2 0 0 0 4.8 0"/><path d="M12 5c-1.4-1.7-.1-3.2 1.4-2.7"/></svg>';
+/* Строки тематик приходят с сервера от других людей как есть. Показываем
+   только известные тематики (по id или по подписи) и экранируем сами. */
+function h(v){
+  return String(v == null ? '' : v).replace(/[<>&"']/g, function(c){
+    return { '<':'&lt;', '>':'&gt;', '&':'&amp;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+var _tl = null, _tlab = null;
+function topicLabel(x){
+  if(!_tl){
+    _tl = {}; _tlab = {};
+    try{ ((typeof ABC_TOPICS !== 'undefined' && ABC_TOPICS) || []).forEach(function(t){ _tl[t.id] = t.label; _tlab[t.label] = 1; }); }catch(e){}
+  }
+  var v = String(x == null ? '' : x).trim();
+  return _tl[v] || (_tlab[v] ? v : '');
+}
+function chanAud(card, pid){
+  var pd = (card && card.platData && card.platData[pid]) || {};
+  return {
+    topics: (Array.isArray(pd.topics) && pd.topics.length) ? pd.topics.map(topicLabel).filter(Boolean) : null,
+    showGender: (pd.showGender != null) ? !!pd.showGender : !!(card && card.showGender),
+    genderF: (typeof pd.genderF === 'number') ? pd.genderF
+           : ((card && typeof card.genderF === 'number') ? card.genderF : 50),
+    kids: (pd.kids != null) ? !!pd.kids : !!(card && card.kids && card.showKids)
+  };
+}
+function paintAud(el, card, pid){
+  try{
+    var a = chanAud(card, pid);
+    var box = el.querySelector('.bpc5-aud') || el.querySelector('.bpc5-low');
+    if(!box) return;
+
+    var cats = el.querySelector('.blc-cats');
+    var union = [];
+    ((card && card.platforms) || []).forEach(function(p){
+      var d = card.platData && card.platData[p];
+      ((d && Array.isArray(d.topics)) ? d.topics : []).forEach(function(t){
+        var l = topicLabel(t); if(l && union.indexOf(l) < 0) union.push(l);
+      });
+    });
+    if(cats && union.length){
+      var sig = union.join('|');
+      if(cats.__u !== sig){
+        cats.__u = sig; cats.__bpc5 = 1; cats.hidden = false;
+        cats.innerHTML = union.map(function(l){
+          return '<span class="bpc5-tag" data-t="' + h(l) + '">' + h(l) + '</span>';
+        }).join('');
+      }
+      var want = a.topics || union;
+      Array.prototype.forEach.call(cats.children, function(t){
+        var on = want.indexOf(t.getAttribute('data-t')) >= 0;
+        if(t.hidden === on) t.hidden = !on;
+      });
+    }
+
+    var g = el.querySelector('.blc-aud');
+    if(a.showGender){
+      if(!g){
+        g = document.createElement('div');
+        g.className = 'blc-aud';
+        g.innerHTML = '<div class="blc-aud-row"><span class="blc-aud-k">Аудитория</span>'
+          + '<span class="blc-aud-bar"><span class="blc-aud-f"></span></span><span class="blc-aud-v"></span></div>';
+        box.appendChild(g);
+      }
+      var f = Math.max(0, Math.min(100, Math.round(Number(a.genderF) || 0)));
+      var fe = g.querySelector('.blc-aud-f'), ve = g.querySelector('.blc-aud-v');
+      if(fe && fe.style.width !== f + '%') fe.style.width = f + '%';
+      var txt = f + '% Ж · ' + (100 - f) + '% М';
+      if(ve && ve.textContent !== txt) ve.textContent = txt;
+      if(g.hidden) g.hidden = false;
+    } else if(g && !g.hidden) g.hidden = true;
+
+    var k = el.querySelector('.bpc9-kids');
+    if(a.kids){
+      if(!k){
+        k = document.createElement('div');
+        k.className = 'bpc9-kids';
+        k.innerHTML = KIDS_SVG + '<span>Контент для детей</span>';
+        box.appendChild(k);
+      }
+      if(k.hidden) k.hidden = false;
+    } else if(k && !k.hidden) k.hidden = true;
+  }catch(e){ E(e); }
+}
+
+/* Цена докручивается от прежнего числа к новому — так смена формата или
+   канала видна, но ничего не пропадает и не вспыхивает. Пишем в
+   текстовый узел, а не заменяем его: наблюдатели соседних слоёв на это
+   не просыпаются. */
+var _rm = false;
+try{ _rm = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){}
+function roll(b, from, to){
+  try{
+    if(!b || _rm || !window.requestAnimationFrame) return;
+    var node = b.firstChild;
+    if(!node || node.nodeType !== 3) return;
+    var tok = {}, t0 = 0, D = 320;
+    b.__roll = tok;
+    var fin = function(){ if(b.__roll === tok){ node.data = money(to) + ' ₽'; b.__roll = null; } };
+    var safe = setTimeout(fin, D + 300);
+    node.data = money(from) + ' ₽';
+    var tick = function(now){
+      if(b.__roll !== tok) return;
+      if(!t0) t0 = now;
+      var p = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - p, 3);
+      if(p >= 1){ clearTimeout(safe); fin(); return; }
+      node.data = money(from + (to - from) * e) + ' ₽';
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }catch(e){ E(e); }
+}
+
+/* ── деньги: форматы и цена ─────────────────────────────────────────
+   bp-card8: вся строка рисуется сразу в конечном виде. Раньше чипы
+   форматов на миг показывали цену («Реклама в начале · 15 000 ₽»), а под
+   ценой мелькало «· CPM 1 234 ₽» — через 140 мс их убирал слой bp-card6,
+   и человек видел, как текст появляется и исчезает. Теперь в чипе только
+   название (цена — в подписи для экранного диктора), а CPM сразу лежит в
+   скрытом исходнике, откуда его забирает полоса чисел. Перерисовка
+   идемпотентна: одинаковая разметка второй раз не пишется. */
 function paintDeal(el){
   try{
     var card = cardOf(el.getAttribute('data-cardid'));
@@ -84553,68 +84705,74 @@ function paintDeal(el){
     if(!deal) return;
     var pid = activePlat(el, card);
     paintHead(el, card, pid);
+    paintAud(el, card, pid);
 
     var fs = pid ? fmtsOf(card, pid) : [];
     var price = el.querySelector('.bpc5-price');
     var reach = reachOf(card, pid);
 
     if(price){
+      var html, now = '', to = 0;
       if(!fs.length){
         /* Цены нет — не оставляем дыру: говорим, что делать дальше. */
-        price.innerHTML = '<span class="ask">Цену обсудите в переписке</span>';
+        html = '<span class="ask">Цену обсудите в переписке</span>';
       } else {
         var pick = String(el.__fmt || ''), cur = null;
         for(var i = 0; i < fs.length; i++) if(fs[i].id === pick) cur = fs[i];
-        /* Показываем ОДНУ цену и всегда называем формат. Вилки
-           «дешёвое – дорогое» здесь больше нет: два числа без имени не
-           отвечали ни на один вопрос рекламодателя, а «от» обещало, что
-           бывает дешевле. По умолчанию — первое размещение из списка
-           блогера, дальше он переключает чипами. */
+        /* Показываем ОДНУ цену и всегда называем формат: первое
+           размещение из списка блогера, дальше он переключает чипами. */
         if(!cur) cur = fs[0];
         var cpm = cpmOf(cur.price, reach);
         var med = medians()[pid] || 0;
         var win = (med && cpm && cpm < med) ? Math.round((1 - cpm / med) * 100) : 0;
-        var line = [esc(cur.name)];
-        if(cpm) line.push('CPM ' + money(cpm) + ' ₽');
-        if(win >= 12) line.push('<span class="bpc5-deal-badge">−' + win + '% к медиане</span>');
-        var was = price.getAttribute('data-v') || '';
-        var now = String(cur.id) + ':' + cur.price;
-        price.innerHTML = '<b>' + money(cur.price) + ' ₽</b>'
-          + '<small>' + line.join(' · ') + '</small>';
+        html = '<b>' + money(cur.price) + ' ₽</b><small>' + esc(cur.name)
+          + (win >= 12 ? ' · <span class="bpc5-deal-badge">−' + win + '% к медиане</span>' : '')
+          + (cpm ? '<span class="bpc6-cpm-src">CPM ' + money(cpm) + ' ₽</span>' : '')
+          + '</small>';
+        now = String(cur.id) + ':' + cur.price; to = cur.price;
+      }
+      if(price.__html !== html){
+        var oldB = price.querySelector('b');
+        var from = oldB ? num(oldB.textContent) : 0;
+        price.innerHTML = html;
+        price.__html = html;
         price.setAttribute('data-v', now);
-        /* Цена сменилась от нажатия — показываем это движением, иначе
-           переключение форматов выглядит как «ничего не произошло». */
-        if(was && was !== now){
-          price.classList.remove('bpc5-swap');
-          void price.offsetWidth;
-          price.classList.add('bpc5-swap');
-        }
+        if(to && from && from !== to) price.__roll = { from: from, to: to };
       }
     }
 
     var row = el.querySelector('.bpc5-fmt');
-    if(fs.length < 2){ if(row) row.remove(); return; }
-    if(!row){
-      row = document.createElement('div');
-      row.className = 'bpc5-fmt';
-      row.addEventListener('click', function(ev){
-        var b = ev.target && ev.target.closest ? ev.target.closest('button[data-fmt]') : null;
-        if(!b) return;
-        ev.preventDefault(); ev.stopPropagation();
-        var id = b.getAttribute('data-fmt');
-        el.__fmt = (el.__fmt === id) ? '' : id;
-        paintDeal(el);
-      });
-      deal.insertBefore(row, deal.firstChild);
+    if(fs.length < 2){
+      if(row) row.remove();
+    } else {
+      if(!row){
+        row = document.createElement('div');
+        row.className = 'bpc5-fmt';
+        row.addEventListener('click', function(ev){
+          var b = ev.target && ev.target.closest ? ev.target.closest('button[data-fmt]') : null;
+          if(!b) return;
+          ev.preventDefault(); ev.stopPropagation();
+          var id = b.getAttribute('data-fmt');
+          el.__fmt = (el.__fmt === id) ? '' : id;
+          paintDeal(el);
+        });
+        deal.insertBefore(row, deal.firstChild);
+      }
+      var mark = pid + '|' + fs.map(function(f){ return f.id + ':' + f.price; }).join(',') + '|' + (el.__fmt || '');
+      if(row.__m !== mark){
+        row.__m = mark;
+        row.innerHTML = fs.map(function(f){
+          return '<button type="button" data-fmt="' + esc(f.id) + '" aria-pressed="'
+            + (String(el.__fmt || '') === f.id ? 'true' : 'false') + '"'
+            + ' aria-label="' + esc(f.name + ', ' + money(f.price) + ' ₽') + '">'
+            + esc(f.name) + '</button>';
+        }).join('');
+      }
     }
-    var mark = pid + '|' + fs.map(function(f){ return f.id + ':' + f.price; }).join(',') + '|' + (el.__fmt || '');
-    if(row.__m === mark) return;
-    row.__m = mark;
-    row.innerHTML = fs.map(function(f){
-      return '<button type="button" data-fmt="' + esc(f.id) + '" aria-pressed="'
-        + (String(el.__fmt || '') === f.id ? 'true' : 'false') + '">'
-        + esc(f.name) + ' · <b>' + money(f.price) + ' ₽</b></button>';
-    }).join('');
+    try{ if(typeof window.bpCard6One === 'function') window.bpCard6One(el); }catch(e2){ E(e2); }
+    /* Докрутку цены запускаем ПОСЛЕ доводки: fitPrice меряет длину
+       конечной цены, а не промежуточной. */
+    if(price && price.__roll){ var pr0 = price.__roll; price.__roll = null; roll(price.querySelector('b'), pr0.from, pr0.to); }
   }catch(e){ E(e); }
 }
 
@@ -84760,6 +84918,10 @@ function all(){
   }catch(e){ E(e); }
 }
 window.bpCard5 = all;
+/* bp-card8: зовётся переключателем каналов сразу после смены канала. */
+window.bpAfterChSelect = function(cardEl){
+  try{ if(cardEl && cardEl.__bpc5){ cardEl.__head = ''; paintDeal(cardEl); } }catch(e){ E(e); }
+};
 
 function watch(){
   try{
@@ -86961,7 +87123,16 @@ function moveCpm(el){
        показывали в этой ячейке СРЕДНЮЮ ЦЕНУ ИНТЕГРАЦИИ, подписанную как
        CPM. Прочерк честнее: величины просто нет. */
     if(!got) got = '—';
-    if(val.textContent.trim() !== got) val.textContent = got;
+    /* bp-card8: число докручивается вместе с соседними ячейками, а не
+       подменяется. Сравниваем без пробелов: твин пишет неразрывные. */
+    var nrm = function(x){ return String(x || '').replace(/[\s\u00a0\u202f]/g, ''); };
+    var going = !!(el.__bpTwQ && el.__bpTwQ.length && val.__twTo === nrm(got));
+    if(!going && nrm(val.textContent) !== nrm(got)){
+      if(typeof window.bpSetStatTw === 'function' && /\d/.test(got) && /\d/.test(val.textContent)){
+        val.__twTo = nrm(got);
+        window.bpSetStatTw(el, 'cpm', got);
+      } else val.textContent = got;
+    }
   }catch(e){ E(e); }
 }
 
@@ -87135,6 +87306,9 @@ setTimeout(later, 2600);
 setInterval(function(){ if(!document.hidden){ watch(); later(); } }, 4000);
 
 window.bpCard6Now = function(){ sweep(); };
+/* bp-card8: разовая доводка одной карточки — зовёт bp-card5 сразу после
+   своей перерисовки, чтобы CPM и размер цены встали в том же кадре. */
+window.bpCard6One = function(el){ try{ moveCpm(el); trimFmt(el); fitPrice(el); }catch(e){ E(e); } };
 })();
 </script>
 
@@ -87703,8 +87877,8 @@ var IC = {
 };
 
 var STEPS = [
-  { title:'Карта блогера', sub:'Каналы, цифры и цены' },
-  { title:'О канале',      sub:'Тематики и аудитория' },
+  { title:'Карта блогера', sub:'Каналы, цены и тематики' },
+  { title:'О вас',         sub:'Пара слов для рекламодателей' },
   { title:'Проверка',      sub:'Так вас увидят рекламодатели' }
 ];
 
@@ -87826,6 +88000,15 @@ function knownFmt(pid){
 function topicsAll(){
   try{ return (typeof ABC_TOPICS !== 'undefined' && ABC_TOPICS) || []; }catch(e){ return []; }
 }
+/* Тематики приходят то id ('games'), то подписью ('Игры'), бывает с
+   повторами. Приводим к id, не больше пяти. */
+function normTopics(list){
+  var byLabel = {}, known = {};
+  topicsAll().forEach(function(t){ byLabel[t.label] = t.id; known[t.id] = 1; });
+  return uniq((Array.isArray(list) ? list : []).map(function(x){
+    var v = String(x == null ? '' : x).trim(); return known[v] ? v : (byLabel[v] || '');
+  }).filter(Boolean)).slice(0, 5);
+}
 function me(){ try{ return (typeof currentUser !== 'undefined' && currentUser) || null; }catch(e){ return null; } }
 function mySrv(){
   try{
@@ -87886,12 +88069,14 @@ function uniq(a){
 var S = null, step = 1, opened = false, _doneT = null, _wantId = '';
 function blankChan(){
   return { url:'', subs:0, reach:0, er:0, fmts:{}, sel:{}, keep:{}, names:{},
-           touched:0, bad:0, where:0, vfy:0, wait:0, nick:'' };
+           touched:0, bad:0, where:0, vfy:0, wait:0, nick:'',
+           /* bp-abc4: у каждого канала свои тематики и аудитория */
+           topics:[], genderF:50, showGender:false, kids:false };
 }
 function blank(){
   return { id:'', chans:{}, order:[], topics:[], genderF:50, showGender:false,
            kids:false, showKids:false, msg:'', open:'', find:'', tried:0, done:0,
-           addOpen:false, topicsOpen:false };
+           addOpen:false, topicsOpen:false, edit:'', pv:'' };
 }
 function chanOf(pid){ return S && S.chans[pid]; }
 
@@ -87938,6 +88123,16 @@ function fromCard(c){
   if(typeof c.genderF === 'number') s.genderF = Math.max(0, Math.min(100, c.genderF));
   s.showGender = !!c.showGender; s.kids = !!c.kids; s.showKids = !!c.showKids;
   s.msg = String(c.msg || '');
+  /* bp-abc4: тематики и аудитория — у каждого канала свои. Старые карты
+     хранили их одним списком на всю карту: раздаём его каждому каналу,
+     дальше человек поправит там, где аудитория другая. */
+  s.order.forEach(function(pid){
+    var ch = s.chans[pid], p = pd[pid] || stash[pid] || {};
+    ch.topics = (Array.isArray(p.topics) && p.topics.length) ? normTopics(p.topics) : s.topics.slice();
+    ch.genderF = (typeof p.genderF === 'number') ? Math.max(0, Math.min(100, Math.round(p.genderF))) : s.genderF;
+    ch.showGender = (p.showGender != null) ? !!p.showGender : s.showGender;
+    ch.kids = (p.kids != null) ? !!p.kids : s.kids;
+  });
   return s;
 }
 function sign(st){
@@ -87946,7 +88141,8 @@ function sign(st){
       c: (st.order || []).slice().sort().map(function(p){
         var c = st.chans[p] || {};
         return [p, normUrl(c.url), numInt(c.subs), numInt(c.reach), numEr(c.er),
-                Object.keys(c.fmts || {}).sort().map(function(k){ return k + ':' + numInt(c.fmts[k], MAXP); })];
+                Object.keys(c.fmts || {}).sort().map(function(k){ return k + ':' + numInt(c.fmts[k], MAXP); }),
+                (c.topics || []).slice().sort(), c.showGender ? c.genderF : -1, !!c.kids];
       }),
       t: uniq(st.topics || []).slice().sort(),
       g: st.showGender ? st.genderF : -1, k: !!st.kids, m: String(st.msg || '')
@@ -87993,6 +88189,10 @@ function loadDraft(id){
           ch.names[k] = String(c.names[k]).slice(0, 60);
         });
         ch.touched = c.touched ? 1 : 0;
+        ch.topics = Array.isArray(c.topics) ? normTopics(c.topics) : null;
+        if(typeof c.genderF === 'number') ch.genderF = Math.max(0, Math.min(100, Math.round(c.genderF)));
+        ch.showGender = (c.showGender != null) ? !!c.showGender : null;
+        ch.kids = (c.kids != null) ? !!c.kids : null;
         s.chans[pid] = ch;
       });
     }
@@ -88001,6 +88201,14 @@ function loadDraft(id){
     if(typeof d.genderF === 'number') s.genderF = Math.max(0, Math.min(100, d.genderF));
     s.showGender = !!d.showGender; s.kids = !!d.kids; s.showKids = !!d.showKids;
     s.msg = String(d.msg || '').slice(0, 500);
+    /* Черновик старого вида: тематики и аудитория были общими — раздаём. */
+    s.order.forEach(function(p){
+      var ch = s.chans[p];
+      if(!Array.isArray(ch.topics)) ch.topics = s.topics.slice();
+      if(ch.showGender == null) ch.showGender = s.showGender;
+      if(ch.kids == null) ch.kids = s.kids;
+      if(!(d.chans[p] && typeof d.chans[p].genderF === 'number')) ch.genderF = s.genderF;
+    });
     return s;
   }catch(e){ return null; }
 }
@@ -88014,12 +88222,12 @@ function lowPrice(pid){
 }
 function chanReady(pid){
   var c = chanOf(pid); if(!c) return false;
-  return urlOk(pid, c.url) && lowPrice(pid) > 0;
+  return urlOk(pid, c.url) && lowPrice(pid) > 0 && (c.topics || []).length > 0;
 }
 function chanStarted(pid){
   var c = chanOf(pid); if(!c) return false;
   return !!String(c.url || '').trim() || !!numInt(c.subs) || !!numInt(c.reach) || !!numEr(c.er)
-    || Object.keys(c.fmts).length > 0;
+    || Object.keys(c.fmts).length > 0 || (c.topics || []).length > 0;
 }
 function readyChans(){ return S.order.filter(chanReady); }
 /* Начатые, но не готовые каналы: в каталог не уедут — про них надо
@@ -88033,11 +88241,12 @@ function chanWarn(pid){
   if(!c.touched && !S.tried) return '';
   if(!urlOk(pid, c.url)) return String(c.url || '').trim() ? 'проверьте ссылку на канал' : 'нужна ссылка на канал';
   if(!lowPrice(pid)) return 'нужна цена хотя бы за один формат';
+  if(!(c.topics || []).length) return 'выберите тематику';
   return '';
 }
 function stepNeed(n){
-  if(n === 1) return readyChans().length ? '' : 'Добавьте хотя бы один канал: ссылка и цена за формат';
-  if(n === 2) return S.topics.length >= 3 ? '' : 'Выберите минимум 3 тематики — по ним вас найдут';
+  if(n === 1) return readyChans().length ? '' : 'Настройте хотя бы один канал: ссылка, цена и тематика';
+  if(n === 2) return '';
   return '';
 }
 /* Ничью между площадками ломаем осознанно: сначала подписчики, потом
@@ -88213,60 +88422,229 @@ function chanSub(pid){
   if(lowPrice(pid)) bits.push('от ' + money(lowPrice(pid)) + ' ₽');
   return bits.join(' · ') || 'заполните канал';
 }
+/* ── bp-abc4 · у каждого канала свои настройки ───────────────────────
+   Владелец (14.09.2026): «добавил TikTok и YouTube — показывает кнопку
+   «Настроить», а там выбор тематики, цена, % женщин и мужчин и значок
+   детского контента». Раньше тематики и аудитория были одни на всю
+   карту. Но один и тот же человек ведёт игровой YouTube и кулинарный
+   TikTok — и общий список тематик врал про один из каналов, а полоса
+   пола показывала среднее по двум разным аудиториям.
+   Теперь в списке каналов — короткая сводка и кнопка «Настроить»;
+   настройка открывается своим экраном из четырёх разделов: канал,
+   форматы и цены, тематики, аудитория. Готовность канала: ссылка,
+   цена хотя бы за один формат и хотя бы одна тематика. */
+var KIDS_IC = svg('<circle cx="12" cy="13" r="8"/><path d="M9.4 12.2h.01M14.6 12.2h.01"/><path d="M9.6 15.6a3.2 3.2 0 0 0 4.8 0"/><path d="M12 5c-1.4-1.7-.1-3.2 1.4-2.7"/>');
+var GEAR_IC = svg('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>');
+var PLUS_IC = svg('<path d="M12 5v14M5 12h14"/>');
+
+function topicsOf(pid){ var c = chanOf(pid); return (c && Array.isArray(c.topics)) ? c.topics : []; }
+function labelsOf(ids){
+  var byId = {}; topicsAll().forEach(function(t){ byId[t.id] = t.label; });
+  return (ids || []).map(function(id){ return byId[id] || id; });
+}
+/* Готовность разделов: [канал, цены, тематики, аудитория]. Аудитория
+   необязательна — в счёт «готово» не входит. */
+function secDone(pid){
+  var c = chanOf(pid); if(!c) return [0, 0, 0, 0];
+  return [ urlOk(pid, c.url) ? 1 : 0, lowPrice(pid) ? 1 : 0, topicsOf(pid).length ? 1 : 0,
+           (c.showGender || c.kids) ? 1 : 0 ];
+}
+function doneCount(pid){ var d = secDone(pid); return d[0] + d[1] + d[2]; }
+/* Чего не хватает до каталога — словами, в порядке разделов. */
+function missOf(pid){
+  var c = chanOf(pid); if(!c) return [];
+  var out = [];
+  if(!urlOk(pid, c.url)) out.push(String(c.url || '').trim() ? 'верная ссылка' : 'ссылка');
+  if(!lowPrice(pid)) out.push('цена');
+  if(!topicsOf(pid).length) out.push('тематика');
+  return out;
+}
+
+/* Карточка канала в списке. Не добавленная площадка — строка-приглашение:
+   касание добавляет канал и сразу открывает его настройку. */
 function chanCard(pid){
   var p = PLAT[pid], c = chanOf(pid);
-  var on = !!c, open = on && S.open === pid, done = on && chanReady(pid);
-  var warn = on ? chanWarn(pid) : '';
-  var handle = on ? nickOf(pid) : '';
-  var html = '<div class="a3-task' + (on ? ' on' : '') + (open ? ' open' : '') + (done ? ' done' : '') + '" data-p="' + pid + '">'
-    + '<button type="button" class="a3-task-h" data-act="toggle" aria-expanded="' + (open ? 'true' : 'false') + '">'
+  if(!c){
+    return '<div class="a3-task a4-pick" data-p="' + pid + '">'
+      + '<button type="button" class="a3-task-h" data-act="add" aria-label="Добавить ' + esc(p.name) + '">'
+      +   icoBox(pid, 'a3-task-ic')
+      +   '<span class="a3-task-txt"><b>' + esc(p.name) + '</b><i>' + esc(p.sub) + '</i></span>'
+      +   '<span class="a4-addic">' + PLUS_IC + '</span>'
+      + '</button></div>';
+  }
+  var done = chanReady(pid), miss = missOf(pid), handle = nickOf(pid);
+  var warn = !!((c.touched || S.tried) && miss.length);
+  var bits = [];
+  if(numInt(c.subs)) bits.push(short(c.subs) + ' ' + plural(c.subs, 'подписчик', 'подписчика', 'подписчиков'));
+  if(lowPrice(pid)) bits.push('от ' + money(lowPrice(pid)) + ' ₽');
+  var sub = warn ? 'не хватает: ' + miss.join(', ')
+          : (bits.join(' · ') || 'канал добавлен — осталось настроить');
+  var tags = labelsOf(topicsOf(pid));
+  var meta = '';
+  if(c.showGender) meta += '<span class="a4-gm"><span class="a4-g"><i style="width:' + c.genderF + '%"></i></span>'
+    + c.genderF + '% Ж · ' + (100 - c.genderF) + '% М</span>';
+  if(c.kids) meta += '<span class="a4-kid">' + KIDS_IC + 'для детей</span>';
+  var d = secDone(pid);
+  /* Отметки — только три обязательных раздела: аудитория необязательна и
+     уже видна строкой выше. У готового канала строка скрыта стилем. */
+  var steps = ['Канал', 'Цены', 'Тематики'].map(function(t, i){
+    return '<span class="' + (d[i] ? 'on' : '') + '">' + (d[i] ? IC.tick2 : '') + esc(t) + '</span>';
+  }).join('');
+  return '<div class="a3-task a4-ch' + (done ? ' done' : '') + '" data-p="' + pid + '">'
+    + '<button type="button" class="a3-task-h" data-act="edit" aria-label="Настроить ' + esc(p.name) + '">'
     +   icoBox(pid, 'a3-task-ic')
     +   '<span class="a3-task-txt"><b>' + esc(p.name) + (handle ? '<em>' + esc(handle) + '</em>' : '') + '</b>'
-    +     '<i class="' + (warn ? 'warn' : '') + '">' + esc(on ? chanSub(pid) : p.sub) + '</i></span>'
+    +     '<i class="' + (warn ? 'warn' : '') + '">' + esc(sub) + '</i></span>'
     +   '<span class="a3-tick">' + IC.tick + '</span>'
-    /* Шеврон рисуем ВСЕГДА. Пока он появлялся только у заполненного
-       канала, нетронутая карточка выглядела строкой без действия:
-       ничто не подсказывало, что она раскрывается. */
-    +   IC.chev
-    + '</button>';
-  if(on){
-    var bad = !!c.bad;
-    var cpm = cpmText(pid), low = lowPrice(pid);
-    html += '<div class="a3-task-b">'
-      + '<div class="a3-field"><div class="a3-lbl">Ссылка на канал'
-      +   (c.vfy ? '<em class="a3-vok">' + IC.tick2 + 'подтверждён входом</em>' : '') + '</div>'
-      +   '<input class="a3-inp' + (bad ? ' bad' : '') + '" data-f="url" type="url" inputmode="url" enterkeyhint="done"'
-      +     ' autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Ссылка на канал ' + esc(p.name) + '"'
-      +     ' placeholder="' + esc(p.ph) + '" value="' + esc(c.url) + '">'
-      +   '<div class="a3-help' + (bad ? ' bad' : '') + '" data-h="url">'
-      +     (bad ? 'Это не похоже на ' + esc(p.name) + ' — ждём адрес вида ' + esc(p.ph)
-                 : 'По ней рекламодатель откроет канал и проверит цифры.') + '</div>'
-      +   (c.wait ? '<div class="a3-help">Ждём ответа от ' + esc(p.name) + ' — войдите в открывшемся окне.</div>'
-                  : (vfyOn(pid) && !c.vfy
-                      ? '<button type="button" class="a3-vfy" data-act="vfy">' + (pid === 'youtube' ? IC.yt : IC.tt)
-                        + 'Войти через ' + esc(p.name) + '</button>'
-                        + '<div class="a3-help">После входа ссылку и подписчиков возьмём у самой площадки, '
-                        + 'а рекламодатель увидит <b>подтверждён входом</b> вместо «со слов блогера».</div>'
-                      : ''))
-      + '</div>'
-      + '<div class="a3-field"><div class="a3-three">'
-      +   '<div><div class="a3-lbl">Подписчики</div><input class="a3-inp" data-f="subs" inputmode="numeric" enterkeyhint="next" aria-label="Подписчики" placeholder="0" value="' + (numInt(c.subs) ? esc(money(c.subs)) : '') + '"></div>'
-      +   '<div><div class="a3-lbl">Просмотры</div><input class="a3-inp" data-f="reach" inputmode="numeric" enterkeyhint="next" aria-label="Просмотры" placeholder="0" value="' + (numInt(c.reach) ? esc(money(c.reach)) : '') + '"></div>'
-      +   '<div><div class="a3-lbl">ER, %</div><input class="a3-inp" data-f="er" inputmode="decimal" enterkeyhint="done" aria-label="ER в процентах" placeholder="0" value="' + (numEr(c.er) ? esc(dec(String(numEr(c.er)))) : '') + '"></div>'
-      + '</div>'
-      +   '<div class="a3-help" data-h="num">' + esc(numsHelp(pid))
-      +     ' <button type="button" data-act="where">' + (c.where ? 'Скрыть' : 'Где посмотреть') + '</button></div>'
-      +   (c.where ? '<div class="a3-help"><b>' + esc(WHERE[pid]) + '</b></div>' : '')
-      + '</div>'
-      + '<div class="a3-field"><div class="a3-lbl">Форматы и цены<em>отметьте, что делаете</em></div>'
-      +   '<div class="a3-rows">' + fmtRows(pid, c) + '</div>'
-      +   '<div class="a3-help" data-h="fmt">' + esc(fmtHelp(pid, low)) + '</div>'
-      +   (cpm ? '<div class="a3-cpm" data-cpm="1"><b>' + esc(cpm) + '</b><span>цена за тысячу просмотров — по ней рекламодатели сравнивают каналы</span></div>' : '')
-      + '</div>'
-      + '<button type="button" class="a3-ghost" data-act="del">Убрать канал</button>'
-      + '</div>';
+    + '</button>'
+    + ((tags.length || meta) ? '<div class="a4-sum">'
+        + (tags.length ? '<div class="a4-tags">' + tags.map(function(t){ return '<span>' + esc(t) + '</span>'; }).join('') + '</div>' : '')
+        + (meta ? '<div class="a4-meta">' + meta + '</div>' : '')
+      + '</div>' : '')
+    + '<div class="a4-steps" aria-hidden="true">' + steps + '</div>'
+    + '<button type="button" class="a4-cfg" data-act="edit">' + GEAR_IC + 'Настроить</button>'
+    + '</div>';
+}
+
+/* Экран настройки одного канала. Контейнер несёт .a3-task[data-p] —
+   так прежние обработчики ввода (ссылка, цифры, форматы, вход через
+   площадку, «убрать канал») находят свой канал без переделки.
+   Порядок трёх .a3-field (ссылка, цифры, форматы) важен: paintHelp
+   вставляет строку CPM в третий из них. */
+function edHtml(pid){
+  var p = PLAT[pid], c = chanOf(pid); if(!c) return '';
+  var bad = !!c.bad, cpm = cpmText(pid), low = lowPrice(pid), d = secDone(pid);
+  var tp = topicsOf(pid), full = tp.length >= 5;
+  function hd(n, title, st, extra){
+    return '<div class="a4-h"><span class="a4-n' + (st ? ' ok' : '') + '" data-s="' + n + '">' + (st ? IC.tick2 : n) + '</span>'
+      + '<b>' + esc(title) + '</b>' + (extra || '') + '</div>';
   }
-  return html + '</div>';
+  /* Тематики и аудиторию другого канала — одним касанием: чаще всего
+     они совпадают, и выбирать всё заново незачем. */
+  var donor = S.order.filter(function(x){ return x !== pid && topicsOf(x).length; })[0];
+  var copy = (donor && !tp.length)
+    ? '<button type="button" class="a4-copy" data-act="copyaud" data-from="' + donor + '">'
+      + icoBox(donor, 'a4-copy-ic') + '<span>Как у ' + esc(PLAT[donor].name) + ': '
+      + esc(labelsOf(topicsOf(donor)).slice(0, 3).join(', ')) + (topicsOf(donor).length > 3 ? '…' : '') + '</span></button>'
+    : '';
+  var chips = topicsAll().map(function(t){
+    var on = tp.indexOf(t.id) >= 0;
+    return '<button type="button" class="a3-chip' + (!on && full ? ' dim' : '') + '" data-act="ctopic" data-id="' + esc(t.id) + '"'
+      + ' aria-pressed="' + (on ? 'true' : 'false') + '">' + esc(t.label) + '</button>';
+  }).join('');
+  var g = Math.max(0, Math.min(100, Math.round(Number(c.genderF) || 0)));
+  return '<div class="a3-page a4-ed">'
+    + '<div class="a3-task a4-edbox" data-p="' + pid + '">'
+
+    + '<section class="a4-sec">' + hd(1, 'Канал', d[0])
+    + '<div class="a3-field"><div class="a3-lbl">Ссылка на канал'
+    +   (c.vfy ? '<em class="a3-vok">' + IC.tick2 + 'подтверждён входом</em>' : '') + '</div>'
+    +   '<input class="a3-inp' + (bad ? ' bad' : '') + '" data-f="url" type="url" inputmode="url" enterkeyhint="done"'
+    +     ' autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Ссылка на канал ' + esc(p.name) + '"'
+    +     ' placeholder="' + esc(p.ph) + '" value="' + esc(c.url) + '">'
+    +   '<div class="a3-help' + (bad ? ' bad' : '') + '" data-h="url">'
+    +     (bad ? 'Это не похоже на ' + esc(p.name) + ' — ждём адрес вида ' + esc(p.ph)
+               : 'По ней рекламодатель откроет канал и проверит цифры.') + '</div>'
+    +   (c.wait ? '<div class="a3-help">Ждём ответа от ' + esc(p.name) + ' — войдите в открывшемся окне.</div>'
+                : (vfyOn(pid) && !c.vfy
+                    ? '<button type="button" class="a3-vfy" data-act="vfy">' + (pid === 'youtube' ? IC.yt : IC.tt)
+                      + 'Войти через ' + esc(p.name) + '</button>'
+                      + '<div class="a3-help">После входа ссылку и подписчиков возьмём у самой площадки, '
+                      + 'а рекламодатель увидит <b>подтверждён входом</b> вместо «со слов блогера».</div>'
+                    : ''))
+    + '</div>'
+    + '<div class="a3-field"><div class="a3-three">'
+    +   '<div><div class="a3-lbl">Подписчики</div><input class="a3-inp" data-f="subs" inputmode="numeric" enterkeyhint="next" aria-label="Подписчики" placeholder="0" value="' + (numInt(c.subs) ? esc(money(c.subs)) : '') + '"></div>'
+    +   '<div><div class="a3-lbl">Просмотры</div><input class="a3-inp" data-f="reach" inputmode="numeric" enterkeyhint="next" aria-label="Просмотры" placeholder="0" value="' + (numInt(c.reach) ? esc(money(c.reach)) : '') + '"></div>'
+    +   '<div><div class="a3-lbl">ER, %</div><input class="a3-inp" data-f="er" inputmode="decimal" enterkeyhint="done" aria-label="ER в процентах" placeholder="0" value="' + (numEr(c.er) ? esc(dec(String(numEr(c.er)))) : '') + '"></div>'
+    + '</div>'
+    +   '<div class="a3-help" data-h="num">' + esc(numsHelp(pid))
+    +     ' <button type="button" data-act="where">' + (c.where ? 'Скрыть' : 'Где посмотреть') + '</button></div>'
+    +   (c.where ? '<div class="a3-help"><b>' + esc(WHERE[pid]) + '</b></div>' : '')
+    + '</div>'
+    + '</section>'
+
+    + '<section class="a4-sec">' + hd(2, 'Форматы и цены', d[1], '<em>отметьте, что делаете</em>')
+    + '<div class="a3-field">'
+    +   '<div class="a3-rows">' + fmtRows(pid, c) + '</div>'
+    +   '<div class="a3-help" data-h="fmt">' + esc(fmtHelp(pid, low)) + '</div>'
+    +   (cpm ? '<div class="a3-cpm" data-cpm="1"><b>' + esc(cpm) + '</b><span>цена за тысячу просмотров — по ней рекламодатели сравнивают каналы</span></div>' : '')
+    + '</div>'
+    + '</section>'
+
+    + '<section class="a4-sec">' + hd(3, 'Тематики', d[2], '<em id="a4-tcnt"' + (tp.length ? ' class="on"' : '') + '>' + tp.length + ' из 5</em>')
+    + '<div class="a3-help a4-lead">По ним рекламодатели ищут в каталоге. Хватит 1–3 главных, максимум 5.</div>'
+    + copy
+    /* Тематик больше тридцати — стеной они занимали весь экран. Как и
+       раньше в мастере: выбранные видны одной строкой, список — по
+       нажатию. Пока ничего не выбрано, список открыт сразу. */
+    + '<div class="a3-fold a4-tfold' + (S.tOpen ? ' open' : '') + '">'
+    +   '<button type="button" class="a3-fold-h" data-act="ctfold" aria-expanded="' + (S.tOpen ? 'true' : 'false') + '">'
+    +     '<span class="a3-fold-t">' + (tp.length ? esc(labelsOf(tp).join(' · ')) : 'Выберите тематики') + '</span>' + IC.chev
+    +   '</button>'
+    +   '<div class="a3-fold-b"><div class="a3-chips" id="a3-chips">' + chips + '</div></div>'
+    + '</div>'
+    + '</section>'
+
+    + '<section class="a4-sec">' + hd(4, 'Аудитория', d[3], '<em>необязательно</em>')
+    + '<div class="a3-sw"><div class="lb" id="a4-sw-g">Пол аудитории<small>В карточке будет полоса: доля женщин и мужчин</small></div>'
+    +   '<button type="button" class="a3-tg" role="switch" aria-checked="' + (c.showGender ? 'true' : 'false') + '" data-act="csw" data-k="showGender" aria-labelledby="a4-sw-g"></button></div>'
+    + (c.showGender ? '<div class="a3-gender"><div class="a3-gwrap">'
+        + '<div class="a3-gbar"><i style="width:' + g + '%"></i></div>'
+        + '<span class="a3-gknob" style="left:' + g + '%"></span>'
+        + '<input class="a3-range" type="range" min="0" max="100" step="5" value="' + g + '" data-act="gender" aria-label="Доля женщин в аудитории"></div>'
+        + '<div class="a3-grow"><span>' + g + '% женщины</span><span>' + (100 - g) + '% мужчины</span></div></div>' : '')
+    + '<div class="a3-sw a4-kidsw"><span class="a4-kidic">' + KIDS_IC + '</span>'
+    +   '<div class="lb" id="a4-sw-k">Контент для детей<small>Рекламодатель увидит значок и учтёт ограничения рекламы для несовершеннолетних</small></div>'
+    +   '<button type="button" class="a3-tg" role="switch" aria-checked="' + (c.kids ? 'true' : 'false') + '" data-act="csw" data-k="kids" aria-labelledby="a4-sw-k"></button></div>'
+    + '</section>'
+
+    + '<button type="button" class="a3-ghost" data-act="del">Убрать канал</button>'
+    + '</div>'
+    + '</div>';
+}
+/* Точечная перерисовка настройки: отметки разделов, счётчик в шапке,
+   счётчик тематик, кнопка. Полная перерисовка на каждую букву увела бы
+   курсор из поля. */
+function paintEd(){
+  try{
+    if(!S || !S.edit || !root || !chanOf(S.edit)) return;
+    var pid = S.edit, d = secDone(pid), n = d[0] + d[1] + d[2];
+    var cnt = root.querySelector('#a4-cnt');
+    if(cnt){ cnt.textContent = n + ' / 3'; cnt.setAttribute('aria-label', 'Готово разделов: ' + n + ' из 3'); }
+    var segs = root.querySelectorAll('#a4-segs .a3-seg');
+    for(var i = 0; i < segs.length; i++) segs[i].classList.toggle('done', !!d[i]);
+    Array.prototype.forEach.call(root.querySelectorAll('.a4-n[data-s]'), function(el){
+      var k = parseInt(el.getAttribute('data-s'), 10) - 1, on = !!d[k];
+      if(el.classList.contains('ok') !== on){ el.classList.toggle('ok', on); el.innerHTML = on ? IC.tick2 : String(k + 1); }
+    });
+    var tc = root.querySelector('#a4-tcnt');
+    if(tc){ var l = topicsOf(pid).length; tc.textContent = l + ' из 5'; tc.classList.toggle('on', !!l); }
+    paintFoot();
+  }catch(e){ E(e); }
+}
+var _edSure = 0;
+function openEd(pid){
+  if(!chanOf(pid)) return;
+  S.edit = pid; S.addOpen = false; _edSure = 0;
+  S.tOpen = !topicsOf(pid).length;
+  render(); scrollTop();
+}
+function closeEd(){
+  var pid = S.edit;
+  S.edit = ''; _edSure = 0;
+  render();
+  try{
+    var box = root && root.querySelector('.a4-ch[data-p="' + pid + '"]');
+    if(!box){ scrollTop(); return; }
+    setTimeout(function(){
+      try{
+        box.scrollIntoView({ block:'center', behavior:'auto' });
+        box.classList.add('a4-flash');
+        setTimeout(function(){ try{ box.classList.remove('a4-flash'); }catch(e){} }, 900);
+      }catch(e){}
+    }, 20);
+  }catch(e){ E(e); }
 }
 function numsHelp(pid){
   var c = chanOf(pid);
@@ -88284,10 +88662,9 @@ function shownChans(){
   return S.order.length ? S.order.slice() : ORDER.slice();
 }
 function step1Html(){
-  /* Раньше здесь всегда висели ВСЕ три площадки, даже когда канал один
-     и давно заполнен: человек каждый раз выбирал заново из списка, где
-     выбирать нечего. Теперь показываем только СВОИ каналы, а остальные
-     прячем за неприметной кнопкой «Добавить канал». */
+  /* Показываем только СВОИ каналы, остальные площадки — за кнопкой
+     «Добавить канал». Пока своих нет, все три стоят строками-
+     приглашениями: касание добавляет канал и открывает его настройку. */
   var mine = S.order.slice();
   var rest = ORDER.filter(function(p){ return mine.indexOf(p) < 0; });
   var empty = !mine.length;
@@ -88297,17 +88674,25 @@ function step1Html(){
   var addBtn = (!empty && rest.length)
     ? '<button type="button" class="a3-add-ch' + (S.addOpen ? ' on' : '') + '" data-act="more">'
       + (S.addOpen ? 'Скрыть' : '+ Добавить канал') + '</button>' : '';
+  var nReady = readyChans().length;
   return '<div class="a3-page">'
-    + '<div class="a3-intro">' + IC.info + '<div><b>Три шага:</b> каналы и цены → тематики и аудитория → проверка. Черновик сохраняется сам — можно выйти и вернуться.</div></div>'
-    + '<div class="a3-sec">' + (empty ? 'Где вы публикуетесь' : 'Ваши каналы')
-    +   '<i' + (mine.length ? ' class="on"' : '') + '>' + (mine.length ? mine.length + ' из 3' : 'можно все три') + '</i></div>'
+    + '<div class="a3-intro">' + IC.info + '<div>' + (empty
+        ? '<b>Где вы публикуетесь?</b> Выберите площадку. У каждого канала будут свои цены, тематики и аудитория. Черновик сохраняется сам.'
+        : '<b>У каждого канала свои настройки</b> — цены, тематики и аудитория. Нажмите «Настроить» у канала. Черновик сохраняется сам.')
+    + '</div></div>'
+    + '<div class="a3-sec">' + (empty ? 'Площадки' : 'Ваши каналы')
+    +   '<i' + (nReady ? ' class="on"' : '') + '>' + (mine.length ? nReady + ' из ' + mine.length + ' готово' : 'можно все три') + '</i></div>'
     + '<div class="a3-list" data-mark="' + esc(show.join(',') + '|' + (S.addOpen ? 1 : 0)) + '">' + show.map(chanCard).join('') + '</div>'
     + addBtn + picker
     + '<div class="a3-need" id="a3-need" role="alert" aria-live="polite"></div>'
     + '</div>';
 }
 
-/* ── Шаг 2 · о канале ─────────────────────────────────────────────── */
+/* ── Шаг 2 · о вас ────────────────────────────────────────────────── */
+/* Тематики и аудитория переехали в настройку каждого канала (bp-abc4).
+   Здесь — общее для всей карты: пара слов для рекламодателей. Поле было
+   в старом мастере и потерялось при переделке: у старых карт слово
+   блогера в каталоге есть, а у новых его негде было написать. */
 function chipsHtml(){
   var list = topicsAll();
   if(!list.length) return '';
@@ -88318,35 +88703,26 @@ function chipsHtml(){
       + ' aria-pressed="' + (on ? 'true' : 'false') + '">' + esc(t.label) + '</button>';
   }).join('');
 }
+var TPL = ['Отвечаю в течение часа', 'Сценарий пишу сам', 'Работаю по договору',
+           'Пришлю статистику после выхода', 'Интеграция в первые 30 секунд'];
+function tplChips(){
+  var m = String(S.msg || '');
+  return TPL.map(function(x){
+    var on = m.indexOf(x) >= 0;
+    return '<button type="button" class="a3-chip" data-act="tpl" aria-pressed="' + (on ? 'true' : 'false') + '">' + esc(x) + '</button>';
+  }).join('');
+}
 function step2Html(){
-  var byId = {}; topicsAll().forEach(function(t){ byId[t.id] = t.label; });
-  var chosen = S.topics.map(function(id){ return byId[id] || id; });
-  var open = S.topicsOpen || !S.topics.length;
+  var m = String(S.msg || '');
   return '<div class="a3-page">'
-    + '<div class="a3-intro">' + IC.info + '<div>По тематикам рекламодатели ищут в каталоге. Выберите <b>от 3 до 5</b> самых точных — лишние только размывают.</div></div>'
-    + '<div class="a3-sec">Тематики<i' + (S.topics.length ? ' class="on"' : '') + '>' + S.topics.length + ' из 5</i></div>'
-    /* Тридцать чипов стеной занимали весь экран, и шаг начинался с
-       перечисления. Теперь это одна строка: что выбрано — видно, список
-       открывается нажатием. Поиска нет: он был нужен только потому, что
-       список был всегда развёрнут. */
-    + '<div class="a3-fold' + (open ? ' open' : '') + '">'
-    +   '<button type="button" class="a3-fold-h" data-act="topics" aria-expanded="' + (open ? 'true' : 'false') + '">'
-    +     '<span class="a3-fold-t">' + (chosen.length ? esc(chosen.join(' · ')) : 'Выберите тематики') + '</span>'
-    +     IC.chev
-    +   '</button>'
-    +   '<div class="a3-fold-b"><div class="a3-chips" id="a3-chips">' + chipsHtml() + '</div>'
-    +   '<div class="a3-need" id="a3-need" role="alert" aria-live="polite"></div></div>'
-    + '</div>'
-    + '<div class="a3-sec">Аудитория<i>необязательно</i></div>'
-    + '<div class="a3-group">'
-    +   '<div class="a3-sw"><div class="lb" id="a3-sw-g">Показывать пол аудитории<small>Помогает подобрать подходящий оффер</small></div>'
-    +     '<button type="button" class="a3-tg" role="switch" aria-checked="' + (S.showGender ? 'true' : 'false') + '" data-act="sw" data-k="showGender" aria-labelledby="a3-sw-g"></button></div>'
-    +   (S.showGender ? '<div class="a3-gender"><div class="a3-gwrap">'
-    +     '<div class="a3-gbar"><i style="width:' + S.genderF + '%"></i></div>'
-    +     '<span class="a3-gknob" style="left:' + S.genderF + '%"></span>'
-    +     '<input class="a3-range" type="range" min="0" max="100" step="5" value="' + S.genderF + '" data-act="gender" aria-label="Доля женщин в аудитории"></div>'
-    +     '<div class="a3-grow"><span>' + S.genderF + '% женщины</span><span>' + (100 - S.genderF) + '% мужчины</span></div></div>' : '')
-    + '</div>'
+    + '<div class="a3-intro">' + IC.msg + '<div><b>Пара слов для рекламодателей:</b> как с вами работать, что вы делаете сами, как быстро отвечаете. Покажем в карточке под тематиками. Шаг можно пропустить.</div></div>'
+    + '<div class="a3-sec">Слово блогера<i>необязательно</i></div>'
+    + '<div class="a3-tawrap"><textarea class="a3-ta" data-act="msg" maxlength="500" rows="5" enterkeyhint="done"'
+    +   ' aria-label="Слово блогера для рекламодателей"'
+    +   ' placeholder="Например: делаю нативные интеграции, отвечаю в течение часа, работаю по договору">' + esc(m) + '</textarea>'
+    +   '<span class="a3-cnt" id="a3-cnt">' + m.length + ' / 500</span></div>'
+    + '<div class="a3-sec a4-sec2">Добавить одним касанием</div>'
+    + '<div class="a3-chips" id="a4-tpl">' + tplChips() + '</div>'
     + '</div>';
 }
 
@@ -88383,11 +88759,13 @@ function sanityHtml(pid){
    11/500, указатель 52×3, значения справа. Владелец сравнил превью с
    главной и увидел разницу — значит, обещание «так она будет выглядеть
    в каталоге» было неправдой. */
-function audRow(){
-  if(!S.showGender) return '';
+function audRow(pid){
+  var c = chanOf(pid);
+  if(!c || !c.showGender) return '';
+  var g = Math.max(0, Math.min(100, Math.round(Number(c.genderF) || 0)));
   return '<div class="a3-aud"><span class="k">Аудитория</span>'
-    + '<span class="bar"><i style="width:' + S.genderF + '%"></i></span>'
-    + '<span class="v">' + S.genderF + '% Ж · ' + (100 - S.genderF) + '% М</span></div>';
+    + '<span class="bar"><i style="width:' + g + '%"></i></span>'
+    + '<span class="v">' + g + '% Ж · ' + (100 - g) + '% М</span></div>';
 }
 /* Ряд размещений — он же в каталоге. Здесь он неподвижный: это
    предпросмотр, выбирать в нём нечего. */
@@ -88403,33 +88781,38 @@ function fmtRow(pid, c){
         return '<span class="' + (i === 0 ? 'on' : '') + '">' + esc(f.name) + '</span>';
       }).join('') + '</div>';
 }
+/* Какой канал показан в предпросмотре. По умолчанию — тот, что откроется
+   в каталоге первым (больше подписчиков); касание по пилюле переключает,
+   как и в каталоге: у каждого канала свои цифры, тематики и аудитория. */
+function pvPid(){
+  var r = readyChans();
+  return (S.pv && r.indexOf(S.pv) >= 0) ? S.pv : mainPid();
+}
 function previewHtml(){
   var u = me();
-  var ready = readyChans(), mp = mainPid();
+  var ready = readyChans(), main = mainPid(), mp = pvPid();
   if(!ready.length){
-    return '<div class="a3-empty"><h3>Карточки пока нет</h3><p>Вернитесь на первый шаг и добавьте канал со ссылкой и ценой.</p></div>';
+    return '<div class="a3-empty"><h3>Карточки пока нет</h3><p>Вернитесь на первый шаг и настройте канал: ссылка, цена и тематика.</p></div>';
   }
   var c = chanOf(mp) || {}, pl = PLAT[mp] || PLAT.youtube;
-  var name = nameOf(u, c.url, nickOf(mp));
+  var name = nameOf(u, (chanOf(main) || {}).url, nickOf(main));
   var ava = (u && u.avatar) ? '<img alt="" src="' + esc(u.avatar) + '" onerror="this.remove()">' : '';
   var handle = nickOf(mp);
   var pills = ready.map(function(p){
     var s = numInt(chanOf(p).subs);
-    /* Главная площадка в каталоге подсвечена своим цветом (.bpc6-ch.on) */
-    return '<span class="a3-pill' + (p === mp ? ' on' : '') + '">' + icoBox(p, 'a3-pill-ic') + esc(PLAT[p].name) + (s ? ' <b>' + esc(short(s)) + '</b>' : '') + '</span>';
+    return '<button type="button" class="a3-pill' + (p === mp ? ' on' : '') + '" data-act="pv" data-p="' + p + '"'
+      + ' aria-pressed="' + (p === mp ? 'true' : 'false') + '">' + icoBox(p, 'a3-pill-ic') + esc(PLAT[p].name)
+      + (s ? ' <b>' + esc(short(s)) + '</b>' : '') + '</button>';
   }).join('');
-  var byId = {}; topicsAll().forEach(function(t){ byId[t.id] = t.label; });
-  /* Каталог показывает все выбранные тематики (их и так не больше пяти),
-     а предпросмотр обрезал до трёх — карточка выглядела беднее правды. */
-  var tags = uniq(S.topics).slice(0, 5).map(function(id){ return '<span class="a3-tag">' + esc(byId[id] || id) + '</span>'; }).join('');
-  /* Цена — ПЕРВОГО размещения, как и в каталоге: там вилку убрали, и
-     превью обязано показывать то же самое число. */
+  var tags = labelsOf(topicsOf(mp)).slice(0, 5).map(function(l){ return '<span class="a3-tag">' + esc(l) + '</span>'; }).join('');
+  /* Цена — ПЕРВОГО размещения, как и в каталоге. */
   var kn = knownFmt(mp), firstId = '', fmtName = '';
-  Object.keys(c.fmts).forEach(function(k){ if(!firstId && numInt(c.fmts[k], MAXP)) firstId = k; });
-  var first = numInt(c.fmts[firstId], MAXP) || lowPrice(mp);
-  fmtName = (kn[firstId] && kn[firstId].name) || c.names[firstId] || '';
+  Object.keys(c.fmts || {}).forEach(function(k){ if(!firstId && numInt(c.fmts[k], MAXP)) firstId = k; });
+  var first = numInt((c.fmts || {})[firstId], MAXP) || lowPrice(mp);
+  fmtName = (kn[firstId] && kn[firstId].name) || (c.names || {})[firstId] || '';
   var priceTxt = money(first) + ' ₽';
   var cpm = cpmFor(first, c.reach);
+  var msg = String(S.msg || '').trim();
   return '<div class="a3-prev" style="--p-plt:' + pl.rgb + '">'
     + '<div class="a3-prev-top"><div class="a3-ava-wrap"><div class="a3-ava">' + esc(initialsOf(name)) + ava + '</div>'
     +   icoBox(mp, 'a3-ava-plt') + '</div>'
@@ -88440,26 +88823,19 @@ function previewHtml(){
     +   '<div><div class="v">' + (numInt(c.reach) ? esc(short(c.reach)) : '—') + '</div><div class="k">Просмотры</div></div>'
     +   '<div><div class="v">' + (numEr(c.er) ? esc(erText(c.er)) : '—') + '</div><div class="k">ER</div></div>'
     +   '<div><div class="v">' + (cpm ? esc(cpm) : '—') + '</div><div class="k">CPM</div></div></div>'
-    + audRow()
+    + audRow(mp)
+    + (c.kids ? '<div class="a4-kidtag">' + KIDS_IC + 'Контент для детей</div>' : '')
     + (tags ? '<div class="a3-tags">' + tags + '</div>' : '')
+    + (msg ? '<div class="a4-pmsg">' + esc(msg) + '</div>' : '')
     + fmtRow(mp, c)
     + '<div class="a3-buy"><div class="a3-price"><b' + (priceTxt.length > 13 ? ' data-long="1"' : '') + '>' + esc(priceTxt) + '</b>'
     +   (fmtName ? '<small>' + esc(fmtName) + '</small>' : '') + '</div><div class="a3-add">Добавить в кампанию</div></div>'
     + '</div>'
     + sanityHtml(mp)
-    + (ready.length > 1 ? '<div class="a3-help" style="margin:-8px 2px 14px">В полосе — цифры канала <b>' + esc(pl.name)
-        + '</b>: по нему у вас больше всего подписчиков. Остальные каналы рекламодатель увидит нажатием.</div>' : '');
+    + (ready.length > 1 ? '<div class="a3-help" style="margin:-8px 2px 14px">Нажмите на канал, чтобы посмотреть его карточку. '
+        + 'В каталоге первым откроется <b>' + esc(PLAT[main].name) + '</b> — у него больше всего подписчиков.</div>' : '');
 }
 function step3Html(){
-  var byId = {}; topicsAll().forEach(function(t){ byId[t.id] = t.label; });
-  var ready = readyChans(), half = halfChans();
-  var chans = ready.map(function(p){ return PLAT[p].name; }).join(', ') || 'нет';
-  var fc = fmtCount(), low = minPriceAll();
-  var aud = [];
-  if(S.showGender) aud.push(S.genderF + '% женщины');
-  if(S.kids) aud.push('детский контент');
-  var noReach = ready.filter(function(p){ return !numInt(chanOf(p).reach); });
-  var noSubs = ready.filter(function(p){ return !numInt(chanOf(p).subs); });
   var u = me();
   var avaBad = !!(u && u.avatar && String(u.avatar).indexOf('data:image/') !== 0);
   var intro = S.done
@@ -88469,19 +88845,28 @@ function step3Html(){
     return '<button type="button" class="a3-sumr' + (warn ? ' warn' : '') + '" data-act="step" data-step="' + st + '">' + ic
       + '<span class="txt"><span class="k">' + esc(k) + '</span><span class="v' + (warn ? ' warn' : '') + '">' + esc(v) + '</span></span>' + IC.go + '</button>';
   }
+  /* Строка сводки на каждый канал: касание открывает его настройку. */
+  function chRow(pid){
+    var c = chanOf(pid), ok = chanReady(pid), bits = [];
+    if(lowPrice(pid)) bits.push('от ' + money(lowPrice(pid)) + ' ₽');
+    var tl = labelsOf(topicsOf(pid)); if(tl.length) bits.push(tl.join(', '));
+    if(c.showGender) bits.push(c.genderF + '% Ж');
+    if(c.kids) bits.push('для детей');
+    var v = ok ? bits.join(' · ') : 'не уедет в каталог — не хватает: ' + missOf(pid).join(', ');
+    var h = nickOf(pid);
+    return '<button type="button" class="a3-sumr a4-sumch' + (ok ? '' : ' warn') + '" data-act="edit" data-p="' + pid + '">'
+      + icoBox(pid, 'a4-sum-ic')
+      + '<span class="txt"><span class="k">' + esc(PLAT[pid].name) + (h ? ' · ' + esc(h) : '') + '</span>'
+      + '<span class="v' + (ok ? '' : ' warn') + '">' + esc(v) + '</span></span>' + IC.go + '</button>';
+  }
+  var msg = String(S.msg || '').trim();
   return '<div class="a3-page">'
     + intro
     + previewHtml()
     + '<div class="a3-sec">Что уедет в каталог</div>'
     + '<div class="a3-sum">'
-    +   row(IC.link,  'Каналы', chans, !ready.length, 1)
-    +   (half.length ? row(IC.link, 'Не уедут — нет ссылки или цены',
-          half.map(function(p){ return PLAT[p].name; }).join(', ') + ' · набранное сохранится', true, 1) : '')
-    +   row(IC.money, 'Форматы с ценой', fc ? fc + ' · от ' + money(low) + ' ₽' : 'нет', !fc, 1)
-    +   row(IC.chart, 'Просмотры', noReach.length ? 'не указаны: ' + noReach.map(function(p){ return PLAT[p].name; }).join(', ') : 'указаны', !!noReach.length, 1)
-    +   (noSubs.length ? row(IC.users, 'Подписчики', 'не указаны: ' + noSubs.map(function(p){ return PLAT[p].name; }).join(', '), true, 1) : '')
-    +   row(IC.tag,   'Тематики', S.topics.length ? S.topics.map(function(id){ return byId[id] || id; }).join(' · ') : 'не выбраны', S.topics.length < 3, 2)
-    +   row(IC.users, 'Аудитория', aud.length ? aud.join(' · ') : 'не указана', false, 2)
+    +   (S.order.length ? S.order.map(chRow).join('') : row(IC.link, 'Каналы', 'нет ни одного', true, 1))
+    +   row(IC.msg, 'Слово блогера', msg ? (msg.length > 70 ? msg.slice(0, 70) + '…' : msg) : 'не написано — можно пропустить', false, 2)
     +   (avaBad ? row(IC.photo, 'Фото', 'из Телеграма — на других устройствах будут инициалы', true, 3) : '')
     + '</div>'
     + '<div class="a3-help" style="margin:-4px 2px 0">Публикуя, вы подтверждаете, что цифры взяты из статистики канала.</div>'
@@ -88515,6 +88900,16 @@ function ensure(){
   return true;
 }
 function headHtml(){
+  if(S.edit && chanOf(S.edit)){
+    var ep = PLAT[S.edit], en = doneCount(S.edit), eh = nickOf(S.edit);
+    var eseg = secDone(S.edit).slice(0, 3).map(function(x){ return '<span class="a3-seg' + (x ? ' done' : '') + '"></span>'; }).join('');
+    return '<div class="a3-top a4-top"><div class="a3-head">'
+      + '<button type="button" class="a3-back" data-act="edclose" aria-label="К списку каналов">' + IC.back + '</button>'
+      + '<span class="a3-mid"><span class="a3-title">' + esc(ep.name) + (eh ? '<em class="a4-nick">' + esc(eh) + '</em>' : '') + '</span>'
+      + '<span class="a3-sub">Настройка канала</span></span>'
+      + '<span class="a3-count" id="a4-cnt" aria-label="Готово разделов: ' + en + ' из 3">' + en + ' / 3</span>'
+      + '</div><div class="a3-segs" id="a4-segs">' + eseg + '</div></div>';
+  }
   var st = STEPS[step - 1];
   var segs = '';
   /* Пройденный шаг — кнопка возврата, текущий и будущие — просто
@@ -88552,6 +88947,11 @@ function paintFoot(){
   var b = foot.querySelector('button[data-cta="1"]');
   var extra = foot.querySelector('.a3-second');
   if(extra) extra.remove();
+  if(S.edit && chanOf(S.edit)){
+    b.className = ''; b.disabled = false;
+    b.innerHTML = '<span>Готово</span>' + IC.tick.replace('width="13" height="13"', 'width="17" height="17"');
+    return;
+  }
   if(step < 3){ b.className = ''; b.disabled = false; b.innerHTML = '<span>Далее</span>' + IC.next; return; }
   if(S.done && !dirty()){
     b.className = 'ok'; b.disabled = true;
@@ -88601,7 +89001,10 @@ function putFocus(){
     if(f.pos != null && el.setSelectionRange){ try{ el.setSelectionRange(f.pos, f.pos); }catch(e2){} }
   }catch(e){ E(e); }
 }
-function bodyHtml(){ return step === 1 ? step1Html() : step === 2 ? step2Html() : step3Html(); }
+function bodyHtml(){
+  if(S.edit && chanOf(S.edit)) return edHtml(S.edit);
+  return step === 1 ? step1Html() : step === 2 ? step2Html() : step3Html();
+}
 function render(anim){
   if(!ensure()) return;
   grabFocus();
@@ -88628,7 +89031,11 @@ function paintList(){
   host.innerHTML = show.map(chanCard).join('');
   host.setAttribute('data-mark', mark);
   var sec = root.querySelector('.a3-sec i');
-  if(sec){ sec.textContent = S.order.length ? S.order.length + ' из 3' : 'можно все три'; sec.className = S.order.length ? 'on' : ''; }
+  if(sec){
+    var nr = readyChans().length;
+    sec.textContent = S.order.length ? nr + ' из ' + S.order.length + ' готово' : 'можно все три';
+    sec.className = nr ? 'on' : '';
+  }
   paintFoot();
   putFocus();
   saveDraft();
@@ -88730,15 +89137,19 @@ function onInput(ev){
     if(act === 'msg'){
       S.msg = String(t.value || '').slice(0, 500);
       var cnt = document.getElementById('a3-cnt'); if(cnt) cnt.textContent = S.msg.length + ' / 500';
+      var tph = root.querySelector('#a4-tpl'); if(tph) tph.innerHTML = tplChips();
       paintFoot(); saveDraft(); return;
     }
     if(act === 'gender'){
-      S.genderF = Math.max(0, Math.min(100, parseInt(t.value, 10) || 0));
+      /* bp-abc4: пол аудитории — у канала, который сейчас настраивают */
+      var gt = (S.edit && chanOf(S.edit)) ? chanOf(S.edit) : S;
+      gt.genderF = Math.max(0, Math.min(100, parseInt(t.value, 10) || 0));
       var bar = root.querySelector('.a3-gbar i'), row = root.querySelector('.a3-grow');
       var knob = root.querySelector('.a3-gknob');
-      if(bar) bar.style.width = S.genderF + '%';
-      if(knob) knob.style.left = S.genderF + '%';
-      if(row) row.innerHTML = '<span>' + S.genderF + '% женщины</span><span>' + (100 - S.genderF) + '% мужчины</span>';
+      if(bar) bar.style.width = gt.genderF + '%';
+      if(knob) knob.style.left = gt.genderF + '%';
+      if(row) row.innerHTML = '<span>' + gt.genderF + '% женщины</span><span>' + (100 - gt.genderF) + '% мужчины</span>';
+      if(gt !== S) gt.touched = 1;
       paintFoot(); saveDraft(); return;
     }
     var box = t.closest ? t.closest('.a3-task') : null;
@@ -88774,6 +89185,7 @@ function paintChanHead(pid){
     if(inp) inp.classList.toggle('bad', !!c.bad);
     var n = document.getElementById('a3-need');
     if(n && readyChans().length) n.classList.remove('on');
+    if(S.edit === pid) paintEd();
   }catch(e){ E(e); }
 }
 function paintHelp(pid){
@@ -88821,6 +89233,77 @@ function onClick(ev){
   if(!t) return;
   var act = t.getAttribute('data-act');
   try{
+    /* ── bp-abc4: настройка канала ── */
+    if(act === 'edclose' || (act === 'back' && S.edit)){ closeEd(); return; }
+    if(act === 'add'){
+      var pa = t.closest('.a3-task').getAttribute('data-p');
+      if(!chanOf(pa)){ S.chans[pa] = blankChan(); S.order.push(pa); }
+      openEd(pa);
+      var ia = root.querySelector('[data-f="url"]');
+      if(ia && !String(chanOf(pa).url || '').trim()) setTimeout(function(){ try{ ia.focus(); }catch(e){} }, 120);
+      return;
+    }
+    if(act === 'edit'){
+      var eh = t.hasAttribute('data-p') ? t : t.closest('[data-p]');
+      var pe = eh ? eh.getAttribute('data-p') : '';
+      if(pe && chanOf(pe)) openEd(pe);
+      return;
+    }
+    if(act === 'ctopic'){
+      var ct = chanOf(S.edit); if(!ct) return;
+      var tid = t.getAttribute('data-id');
+      if(ct.topics.indexOf(tid) >= 0) ct.topics = ct.topics.filter(function(x){ return x !== tid; });
+      else if(ct.topics.length < 5) ct.topics.push(tid);
+      else { toast('Больше пяти тематик не выбрать — снимите лишнюю'); return; }
+      ct.touched = 1;
+      var full5 = ct.topics.length >= 5;
+      Array.prototype.forEach.call(root.querySelectorAll('#a3-chips .a3-chip'), function(b){
+        var on = ct.topics.indexOf(b.getAttribute('data-id')) >= 0;
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        b.classList.toggle('dim', !on && full5);
+      });
+      var cpb = root.querySelector('.a4-copy'); if(cpb && ct.topics.length) cpb.remove();
+      var fth = root.querySelector('.a4-tfold .a3-fold-t');
+      if(fth) fth.textContent = ct.topics.length ? labelsOf(ct.topics).join(' · ') : 'Выберите тематики';
+      paintEd(); saveDraft(); return;
+    }
+    if(act === 'ctfold'){
+      var fo = t.closest('.a3-fold'); if(!fo) return;
+      S.tOpen = !fo.classList.contains('open');
+      fo.classList.toggle('open', S.tOpen);
+      t.setAttribute('aria-expanded', S.tOpen ? 'true' : 'false');
+      return;
+    }
+    if(act === 'csw'){
+      var cs = chanOf(S.edit), kk = t.getAttribute('data-k');
+      if(!cs || (kk !== 'showGender' && kk !== 'kids')) return;
+      cs[kk] = !cs[kk]; cs.touched = 1;
+      render(false); return;
+    }
+    if(act === 'copyaud'){
+      var cd = chanOf(S.edit), src = chanOf(t.getAttribute('data-from'));
+      if(!cd || !src) return;
+      cd.topics = (src.topics || []).slice(0, 5); cd.genderF = src.genderF;
+      cd.showGender = !!src.showGender; cd.kids = !!src.kids; cd.touched = 1;
+      S.tOpen = false;
+      render(false); return;
+    }
+    if(act === 'pv'){ S.pv = t.getAttribute('data-p') || ''; render(false); return; }
+    if(act === 'tpl'){
+      var ph = String(t.textContent || '').trim(), m0 = String(S.msg || '');
+      if(m0.indexOf(ph) >= 0){
+        m0 = m0.split(ph + '.').join('').split(ph).join('')
+          .replace(/\s+([.,!?])/g, '$1').replace(/([.!?])\s*[.]+/g, '$1').replace(/\s{2,}/g, ' ').replace(/^[\s.,]+/, '').trim();
+      } else {
+        m0 = m0.replace(/\s+$/, '');
+        m0 = m0 ? (/[.!?]$/.test(m0) ? m0 + ' ' : m0 + '. ') + ph + '.' : ph + '.';
+      }
+      S.msg = m0.slice(0, 500);
+      var ta = root.querySelector('[data-act="msg"]'); if(ta) ta.value = S.msg;
+      var cnt2 = document.getElementById('a3-cnt'); if(cnt2) cnt2.textContent = S.msg.length + ' / 500';
+      var th = root.querySelector('#a4-tpl'); if(th) th.innerHTML = tplChips();
+      paintFoot(); saveDraft(); return;
+    }
     if(act === 'back'){ if(step > 1){ step--; render(); scrollTop(); } else leave(); return; }
     if(act === 'step'){ step = parseInt(t.getAttribute('data-step'), 10) || 1; if(step > 3) step = 3; render(); scrollTop(); return; }
     if(act === 'tocat'){ leaveTo('home'); return; }
@@ -88851,6 +89334,8 @@ function onClick(ev){
       }
       delete S.chans[p3]; S.order = S.order.filter(function(x){ return x !== p3; });
       if(S.open === p3) S.open = '';
+      if(S.pv === p3) S.pv = '';
+      if(S.edit === p3){ S.edit = ''; render(false); scrollTop(); return; }
       paintList(); return;
     }
     if(act === 'fmt'){
@@ -88909,13 +89394,27 @@ function onClick(ev){
 }
 function onCta(){
   try{
+    if(S.edit && chanOf(S.edit)){
+      var pe = S.edit, ce = chanOf(pe), miss = missOf(pe);
+      ce.touched = 1;
+      /* Не готов — говорим, чего не хватает, и ведём к разделу. Второе
+         нажатие всё равно вернёт к списку: набранное сохранится, а канал
+         подождёт в черновике. */
+      if(miss.length && !_edSure){
+        _edSure = 1; setTimeout(function(){ _edSure = 0; }, 6000);
+        toast('Не хватает: ' + miss.join(', ') + '. Без этого канал не попадёт в каталог — нажмите «Готово» ещё раз, чтобы вернуться к списку');
+        var ns = !urlOk(pe, ce.url) ? 1 : !lowPrice(pe) ? 2 : 3;
+        var sec = root.querySelector('.a4-n[data-s="' + ns + '"]');
+        if(sec) try{ sec.scrollIntoView({ block:'center', behavior:'smooth' }); }catch(e2){}
+        paintEd(); return;
+      }
+      closeEd(); return;
+    }
     if(step < 3){
       var why = stepNeed(step);
       if(why){
         if(step === 1){
           S.tried = 1;
-          var first = S.order.filter(function(p){ return !chanReady(p); })[0];
-          if(first && S.open !== first) S.open = first;
           paintList();
         }
         need(why);
@@ -88977,12 +89476,21 @@ function publish(){
       return '<div class="blc-soc ' + cls + '" title="' + PLAT[pid].name + '"><img loading="lazy" class="soc-img" src="' + icoUrl(pid) + '" alt=""></div>';
     }).join('');
     var byId = {}; topicsAll().forEach(function(t){ byId[t.id] = t.label; });
-    var catsText = S.topics.slice(0, 5).map(function(id){ return byId[id] || id; }).join(' · ') || 'Новый блогер на платформе';
+    /* Тематики карты — объединение тематик её каналов, главный канал
+       первым. По этой строке ищет фильтр каталога. */
+    var unionIds = [];
+    [mp].concat(ready.filter(function(p){ return p !== mp; })).forEach(function(p){
+      topicsOf(p).forEach(function(id){ if(unionIds.indexOf(id) < 0) unionIds.push(id); });
+    });
+    var catsText = unionIds.slice(0, 10).map(function(id){ return byId[id] || id; }).join(' · ') || 'Новый блогер на платформе';
     var platData = {}, integrations = {};
     ready.forEach(function(pid){
       var c = chanOf(pid);
       platData[pid] = { url: normUrl(c.url), subs: numInt(c.subs), er: numEr(c.er), reach: numInt(c.reach),
-                        verified: true, enabled: true, byLogin: !!c.vfy };
+                        verified: true, enabled: true, byLogin: !!c.vfy,
+                        /* bp-abc4: своя аудитория у каждого канала */
+                        topics: topicsOf(pid).slice(0, 5), genderF: Math.round(Number(c.genderF) || 0),
+                        showGender: !!c.showGender, kids: !!c.kids };
       var list = [];
       Object.keys(c.fmts).forEach(function(fid){
         var v = numInt(c.fmts[fid], MAXP); if(!v) return;
@@ -88998,7 +89506,8 @@ function publish(){
     var stash = {};
     halfChans().forEach(function(pid){
       var c = chanOf(pid);
-      stash[pid] = { url: String(c.url || ''), subs: numInt(c.subs), reach: numInt(c.reach), er: numEr(c.er), fmts: c.fmts };
+      stash[pid] = { url: String(c.url || ''), subs: numInt(c.subs), reach: numInt(c.reach), er: numEr(c.er), fmts: c.fmts,
+                     topics: topicsOf(pid).slice(0, 5), genderF: c.genderF, showGender: !!c.showGender, kids: !!c.kids };
     });
     var m = chanOf(mp) || {};
     /* В карту пишем цену за тысячу по ПЕРВОМУ размещению — ровно то
@@ -89026,9 +89535,11 @@ function publish(){
       userId: u.id, userEmail: u.email || null,
       platforms: ready.slice(), integrations: integrations, platData: platData,
       abcDraft: Object.keys(stash).length ? { chans: stash } : null,
-      genderF: S.genderF, genderM: 100 - S.genderF,
-      kids: !!S.kids, showGender: !!S.showGender, showKids: !!S.showKids,
-      topics: S.topics.slice(), msg: String(S.msg || '').trim().slice(0, 500)
+      /* Общие поля карты — от главного канала: их читают старые слои и
+         карточка до того, как каталог разложит аудиторию по каналам. */
+      genderF: Math.round(Number(m.genderF) || 0), genderM: 100 - Math.round(Number(m.genderF) || 0),
+      kids: !!m.kids, showGender: !!m.showGender, showKids: !!m.kids,
+      topics: unionIds.slice(0, 10), msg: String(S.msg || '').trim().slice(0, 500)
     };
     var all = myCards(), idx = -1;
     for(var i = 0; i < all.length; i++) if(all[i] && String(all[i].id) === String(cardData.id)) idx = i;
@@ -89090,7 +89601,7 @@ function open(){
        брошенная правка уже опубликованной. */
     var d = loadDraft(card ? card.id : '');
     if(d && sign(d) !== _saved){ d.id = S.id; S = d; }
-    step = 1; S.done = 0; S.tried = 0; S.find = '';
+    step = 1; S.done = 0; S.tried = 0; S.find = ''; S.edit = ''; S.pv = '';
     S.addOpen = false; S.topicsOpen = !S.topics.length;
     S.open = S.order.length === 1 ? S.order[0] : '';
     if(foot) foot.style.display = '';
@@ -89807,6 +90318,168 @@ html #pg-add-blogger-card .a3-pick{ font-size:10.5px; font-weight:600; letter-sp
 html #pg-add-blogger-card #a3 input,
 html #pg-add-blogger-card #a3 textarea{ scroll-margin:120px 0 150px }
 </style>
+
+<style id="bp-abc4-css">
+/* ══ МАСТЕР КАРТЫ · НАСТРОЙКА КАЖДОГО КАНАЛА ══════════════════════════
+   Пара к правкам в script#bp-abc2 (пометки «bp-abc4»): в списке каналов
+   сводка и кнопка «Настроить», настройка канала — отдельный экран из
+   четырёх разделов. Язык прежний: поверхности, рамки и синий мастера.
+   Откат: удалить блок и правки bp-abc4 в script#bp-abc2.            */
+
+/* ── карточка канала в списке ── */
+html #pg-add-blogger-card .a4-ch{ padding-bottom:12px }
+html #pg-add-blogger-card .a4-ch.done{ border-color:rgba(47,108,224,.42); background:rgba(47,108,224,.06) }
+html #pg-add-blogger-card .a4-ch .a3-task-h{ padding-bottom:10px }
+html #pg-add-blogger-card .a4-sum{ display:flex; flex-direction:column; gap:8px; padding:0 14px 2px 72px }
+html #pg-add-blogger-card .a4-tags{ display:flex; flex-wrap:wrap; gap:5px }
+html #pg-add-blogger-card .a4-tags span{ font-size:12px; line-height:1.3; padding:3px 8px; border-radius:8px;
+  background:rgba(255,255,255,.06); color:var(--a3-t2) }
+html #pg-add-blogger-card .a4-meta{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px;
+  font-size:12px; color:var(--a3-t3); font-variant-numeric:tabular-nums }
+html #pg-add-blogger-card .a4-gm{ display:inline-flex; align-items:center; gap:7px }
+html #pg-add-blogger-card .a4-g{ width:40px; height:4px; border-radius:999px; overflow:hidden; display:inline-block;
+  background:rgba(59,130,246,.5); flex:0 0 auto }
+html #pg-add-blogger-card .a4-g i{ display:block; height:100%; background:rgba(236,72,153,.75) }
+html #pg-add-blogger-card .a4-kid{ display:inline-flex; align-items:center; gap:5px; color:#f3c46b; font-weight:600 }
+html #pg-add-blogger-card .a4-kid svg{ width:14px; height:14px }
+html #pg-add-blogger-card .a4-steps{ display:flex; flex-wrap:wrap; gap:6px; padding:10px 14px 0 }
+html #pg-add-blogger-card .a4-steps span{ display:inline-flex; align-items:center; gap:4px; height:24px; padding:0 9px;
+  border-radius:999px; font-size:11.5px; font-weight:600; color:var(--a3-t3);
+  background:rgba(255,255,255,.035); border:1px solid var(--a3-brd) }
+html #pg-add-blogger-card .a4-steps span.on{ color:#a9c4fa; background:rgba(47,108,224,.12); border-color:rgba(47,108,224,.38) }
+html #pg-add-blogger-card .a4-ch.done .a4-steps{ display:none }
+html #pg-add-blogger-card .a4-steps span svg{ width:11px; height:11px; flex:0 0 auto }
+html #pg-add-blogger-card .a4-cfg{
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  width:calc(100% - 28px); height:44px; margin:12px 14px 0; border-radius:13px;
+  font-size:14px; font-weight:700; letter-spacing:-.1px; color:#fff;
+  background:linear-gradient(160deg, var(--a3-b), var(--a3-b2))!important;
+  transition:transform .12s var(--a3-ease), opacity .15s;
+}
+html #pg-add-blogger-card .a4-cfg svg{ width:17px; height:17px; flex:0 0 auto }
+html #pg-add-blogger-card .a4-cfg:active{ transform:scale(.985) }
+/* Готовый канал: кнопка перестаёт звать — это уже правка, а не шаг. */
+html #pg-add-blogger-card .a4-ch.done .a4-cfg{
+  background:rgba(255,255,255,.05)!important; color:var(--a3-t1);
+  border:1px solid var(--a3-brd)!important;
+}
+/* Строка-приглашение ещё не добавленной площадки. */
+html #pg-add-blogger-card .a4-addic{ width:32px; height:32px; border-radius:50%; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--a3-b3); background:rgba(47,108,224,.12); border:1px solid rgba(47,108,224,.35) }
+html #pg-add-blogger-card .a4-addic svg{ width:16px; height:16px }
+/* Вернулись из настройки — карточка канала коротко подсвечивается. */
+@keyframes a4Flash{ 0%{ box-shadow:0 0 0 0 rgba(47,108,224,.0) } 30%{ box-shadow:0 0 0 3px rgba(47,108,224,.45) } 100%{ box-shadow:0 0 0 0 rgba(47,108,224,0) } }
+html #pg-add-blogger-card .a4-ch.a4-flash{ animation:a4Flash .9s var(--a3-ease) backwards }
+
+/* ── экран настройки канала ── */
+html #pg-add-blogger-card .a3-title .a4-nick{ font-style:normal; font-weight:600; font-size:14px;
+  color:var(--a3-t3); letter-spacing:-.1px; margin-left:6px }
+html #pg-add-blogger-card .a4-edbox.a3-task{ border:0; background:none; box-shadow:none; border-radius:0 }
+html #pg-add-blogger-card .a4-sec{ border:1px solid var(--a3-brd); border-radius:16px; background:rgba(255,255,255,.03);
+  padding:14px; margin-bottom:12px }
+html #pg-add-blogger-card .a4-h{ display:flex; align-items:center; gap:10px; margin-bottom:13px }
+html #pg-add-blogger-card .a4-h b{ flex:1 1 auto; min-width:0; font-size:15px; font-weight:750; letter-spacing:-.25px; line-height:1.3 }
+html #pg-add-blogger-card .a4-h em{ font-style:normal; font-size:11.5px; font-weight:600; color:var(--a3-t3); white-space:nowrap }
+html #pg-add-blogger-card .a4-h em.on{ color:var(--a3-b3) }
+html #pg-add-blogger-card .a4-n{ width:24px; height:24px; border-radius:50%; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:800; color:var(--a3-t2); font-variant-numeric:tabular-nums;
+  background:rgba(255,255,255,.07); border:1px solid var(--a3-brd2);
+  transition:background .2s var(--a3-ease), border-color .2s var(--a3-ease), color .2s var(--a3-ease) }
+html #pg-add-blogger-card .a4-n.ok{ background:var(--a3-b); border-color:var(--a3-b); color:#fff }
+html #pg-add-blogger-card .a4-n svg{ width:12px; height:12px }
+html #pg-add-blogger-card .a4-lead{ margin:-4px 0 11px!important }
+html #pg-add-blogger-card .a4-copy{
+  display:flex; align-items:center; gap:9px; width:100%; min-height:44px; padding:9px 12px; margin:0 0 11px;
+  border-radius:12px; border:1px dashed rgba(47,108,224,.55)!important; background:rgba(47,108,224,.07)!important;
+  color:var(--a3-b3); font-size:13px; font-weight:650; line-height:1.35; text-align:left;
+}
+html #pg-add-blogger-card .a4-copy span{ min-width:0 }
+html #pg-add-blogger-card .a4-copy-ic{ width:22px; height:22px; border-radius:50%; overflow:hidden; display:block; flex:0 0 auto }
+html #pg-add-blogger-card .a4-copy-ic img{ width:100%; height:100%; display:block; object-fit:contain }
+html #pg-add-blogger-card .a4-sec .a3-sw:first-of-type{ padding-top:0 }
+html #pg-add-blogger-card .a4-kidsw{ align-items:center }
+html #pg-add-blogger-card .a4-kidic{ width:34px; height:34px; border-radius:11px; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  color:#f3c46b; background:rgba(246,168,35,.12); border:1px solid rgba(246,168,35,.28) }
+html #pg-add-blogger-card .a4-kidic svg{ width:18px; height:18px }
+html #pg-add-blogger-card .a4-ed .a3-ghost{ margin-top:2px }
+html #pg-add-blogger-card .a4-tfold{ margin:0; border-radius:12px; background:rgba(255,255,255,.04); border-top-color:var(--a3-brd) }
+html #pg-add-blogger-card .a4-tfold .a3-fold-t{ white-space:normal; line-height:1.4 }
+
+/* ── шаг «О вас» ── */
+html #pg-add-blogger-card .a4-sec2{ margin-top:18px }
+
+/* ── проверка ── */
+html #pg-add-blogger-card button.a3-pill{ cursor:pointer; transition:background .15s var(--a3-ease), color .15s var(--a3-ease), transform .12s var(--a3-ease) }
+html #pg-add-blogger-card button.a3-pill:active{ transform:scale(.96) }
+html #pg-add-blogger-card .a4-kidtag{ display:inline-flex; align-items:center; gap:6px; align-self:flex-start;
+  height:24px; padding:0 9px; border-radius:8px; font-size:11.5px; font-weight:600;
+  color:#f3c46b; background:rgba(246,168,35,.10); border:1px solid rgba(246,168,35,.28) }
+html #pg-add-blogger-card .a4-kidtag svg{ width:13px; height:13px }
+html #pg-add-blogger-card .a4-pmsg{ font-size:12.5px; line-height:1.45; color:var(--p-mu);
+  padding-left:9px; border-left:2px solid rgba(var(--p-plt,47,108,224),.55) }
+html #pg-add-blogger-card .a4-sum-ic{ width:22px; height:22px; border-radius:50%; overflow:hidden; display:block; flex:0 0 auto }
+html #pg-add-blogger-card .a4-sum-ic img{ width:100%; height:100%; display:block; object-fit:contain }
+html #pg-add-blogger-card .a4-sumch .v{ white-space:normal; line-height:1.4 }
+
+@media (prefers-reduced-motion:reduce){
+  html #pg-add-blogger-card .a4-ch.a4-flash{ animation:none }
+}
+</style>
+
+<style id="bp-card9-css">
+/* ══ КАРТОЧКА КАТАЛОГА · СПОКОЙНОЕ ПЕРЕКЛЮЧЕНИЕ ═══════════════════════
+   Владелец (14.09.2026): «свечение соцсетей убери», «при нажатии на
+   интеграцию цена появляется и исчезает», «длинное имя заходит под
+   избранное», «после рекламы в середине моргает CPM и цена».
+   Причины и починка скрипта — в script#bp-card5 (paintDeal) и bp-card6
+   (moveCpm), пометки «bp-card8». Здесь — вид.
+   Откат: удалить блок.                                                */
+
+/* 1 · Без свечения: выбранный канал отличает заливка и контур, тень цветом
+   площадки под пилюлей убрана. */
+html #catBloggerList .blc .bpc6-ch.on{ box-shadow:none!important; transform:none!important }
+
+/* 2 · При смене канала и формата ничего не гаснет и не вспыхивает: цифры и
+   цена докручиваются, блик по полосе чисел и проявления сняты. */
+html #catBloggerList .blc.bpc7-switch .blc-strip,
+html #catBloggerList .blc.bpc7-switch .blc-stats,
+html #catBloggerList .blc.bpc7-switch .blc-strip > .bls,
+html #catBloggerList .blc.bpc7-switch .blc-stats > div,
+html #catBloggerList .blc.bpc7-switch .bpc5-sub,
+html #catBloggerList .blc.bpc7-switch .bpc5-price,
+html #catBloggerList .blc.bpc7-switch .bpc5-plt,
+html #catBloggerList .blc .bpc5-price.bpc5-swap b,
+html #catBloggerList .blc .bpc5-price.bpc5-swap small{ animation:none!important }
+html #catBloggerList .blc.bpc5.bpc7-switch .blc-strip::after,
+html #catBloggerList .blc.bpc5.bpc7-switch .blc-stats::after{ display:none!important; animation:none!important }
+html #catBloggerList .blc .bpc5-price b{ font-variant-numeric:tabular-nums }
+html .blc .bpc6-cpm-src{ display:none!important }   /* и в избранном: там копия разметки каталога */
+
+/* 3 · Длинное имя не заходит под звезду. Под кнопки было отложено 74px,
+   а после разведения звезды и «⋯» колонка стала шире (31+14+31 и отступ
+   12 от края) — нужно 96. Имя — не больше двух строк. */
+html #catBloggerList .blc.bpc5 .blc-nr{ padding-right:96px!important }
+html #catBloggerList .blc.bpc5 .blc-name{
+  display:-webkit-box!important; -webkit-box-orient:vertical; -webkit-line-clamp:2;
+  overflow:hidden!important; white-space:normal!important; overflow-wrap:anywhere; line-height:1.3;
+}
+
+/* 4 · Аудитория у каждого канала своя (скрипт — paintAud в bp-card5). */
+html #catBloggerList .blc .bpc5-tag[hidden],
+html #catBloggerList .blc .blc-aud[hidden],
+html #catBloggerList .blc .bpc9-kids[hidden]{ display:none!important }
+html #catBloggerList .blc .bpc9-kids{
+  display:inline-flex; align-items:center; gap:6px; align-self:flex-start;
+  height:24px; padding:0 9px; border-radius:8px;
+  font-size:11.5px; font-weight:600; color:#f3c46b;
+  background:rgba(246,168,35,.10); border:1px solid rgba(246,168,35,.28);
+}
+html #catBloggerList .blc .bpc9-kids svg{ width:13px; height:13px; flex:0 0 auto }
+</style>
+
 
 </body>
 </html>

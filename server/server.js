@@ -1410,6 +1410,18 @@ function cleanCard(raw) {
       verified: !!pl.verified,
       enabled: pl.enabled !== false,
     };
+    /* Тематики и аудитория канала — у каждого свои (мастер карты,
+       15.09.2026). Строки режем по длине и срезаем угловые скобки: их
+       показывают в чужом каталоге. */
+    if (Array.isArray(pl.topics)) {
+      const tp = pl.topics.map((t) => cardStr(t, 40).replace(/[<>]/g, '').trim()).filter(Boolean).slice(0, 5);
+      if (tp.length) out.platData[pid].topics = tp;
+    }
+    if (pl.genderF != null && Number.isFinite(Number(pl.genderF))) {
+      out.platData[pid].genderF = Math.max(0, Math.min(100, Math.round(Number(pl.genderF))));
+    }
+    if (pl.showGender != null) out.platData[pid].showGender = !!pl.showGender;
+    if (pl.kids != null) out.platData[pid].kids = !!pl.kids;
   }
   out.integrations = {};
   const ig = (src.integrations && typeof src.integrations === 'object') ? src.integrations : {};

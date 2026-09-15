@@ -56,7 +56,8 @@ function card(name) {
     publishedAt: new Date(2026, 8, 4).toISOString(), msg: 'Пишите, отвечаю быстро',
     platforms: ['youtube', 'telegram'], topics: ['food', 'tech'],
     platData: {
-      youtube: { url: 'https://youtube.com/@test', subs: 12400, er: 4.2, reach: 30000, verified: true, enabled: true },
+      youtube: { url: 'https://youtube.com/@test', subs: 12400, er: 4.2, reach: 30000, verified: true, enabled: true,
+                 topics: ['games', 'tech', '<b>x</b>'], genderF: 62.4, showGender: true, kids: true },
       telegram: { url: 'https://t.me/test', subs: 3200, er: 4.1, reach: 10000, verified: true, enabled: true },
     },
     integrations: { youtube: [{ fmtId: 'yt_pre', price: 12000 }] },
@@ -91,6 +92,12 @@ try {
   ok(row && row.userId === blg.id, 'у строки указан серверный владелец', row && row.userId);
   ok(row && row.card.name === 'Блогер Один' && row.card.subsVal === '15.6K', 'поля витрины на месте', row && row.card);
   ok(row && row.card.platData.youtube.subs === 12400 && row.card.integrations.youtube[0].price === 12000, 'площадки и цены на месте', row && row.card.platData);
+  {
+    const yt = (row && row.card.platData.youtube) || {}, tg = (row && row.card.platData.telegram) || {};
+    ok(Array.isArray(yt.topics) && yt.topics.join(',') === 'games,tech,bx/b' && yt.genderF === 62 && yt.showGender === true && yt.kids === true,
+      'аудитория у каждого канала своя: тематики, пол, «для детей» сохранены, скобки срезаны', yt);
+    ok(!('topics' in tg) && !('kids' in tg) && !('genderF' in tg), 'у канала без своих настроек лишних полей нет', tg);
+  }
 
   /* ── чего в витрине быть не должно ── */
   const c = (row && row.card) || {};
