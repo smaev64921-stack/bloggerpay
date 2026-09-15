@@ -28848,7 +28848,7 @@ let _bloggerDealDate = '';
 const BLOGGER_DEAL_STEPS = [
   {id:1, label:'Принять заказ',             desc:'Рекламодатель оплатил заказ и ожидает подтверждения'},
   {id:2, label:'Создать контент',            desc:'Снимите видео или подготовьте пост по ТЗ'},
-  {id:'video', label:'Отправить видео рекламодателю', desc:'Рекламодатель хочет посмотреть видео до публикации'},
+  {id:'video', label:'Согласовать видео', desc:'Рекламодатель хочет посмотреть видео до публикации'},
   {id:3, label:'Опубликовать рекламу',       desc:'Опубликуйте готовый материал на платформе'},
   {id:4, label:'Добавить ссылку',            desc:'Отправьте ссылку на публикацию'},
   {id:5, label:'Завершение',                 desc:'Ожидаем подтверждения от рекламодателя'},
@@ -28909,7 +28909,7 @@ function getBloggerSteps(deal) {
   return [
     {num:1, key:'accept',  label:'Принять заказ',                    desc:'Рекламодатель оплатил заказ и ожидает вашего подтверждения.'},
     {num:2, key:'content', label:'Создать контент',                   desc:'Снимите видео или подготовьте пост согласно ТЗ'},
-    ...(vp ? [{num:3, key:'video', label:'Отправить видео рекламодателю', desc:'Рекламодатель хочет посмотреть видео до публикации'}] : []),
+    ...(vp ? [{num:3, key:'video', label:'Согласовать видео', desc:'Рекламодатель хочет посмотреть видео до публикации'}] : []),
     {num: vp?4:3, key:'publish', label:'Опубликовать рекламу',        desc:'Опубликуйте готовый рекламный материал'},
     {num: vp?5:4, key:'link',    label:'Добавить ссылку',             desc:'Отправьте ссылку на публикацию рекламодателю'},
     {num: vp?6:5, key:'done',   label:'Завершение',                   desc:'Ожидаем подтверждения от рекламодателя'},
@@ -29539,6 +29539,196 @@ var BPF_ICO = {
   chev: '<svg class="bpf-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>',
   clock:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'
 };
+/* ══ bp-bds2 · помощники экранов шага блогера ═══════════════════════
+   Иконки одним набором (штрих — currentColor, размер — класс .b2-ic),
+   разбор ТЗ на пункты, срок сдачи, строка маркировки. Стиль — в
+   style#bp-bds2-css, пояснение — в комментарии renderBloggerDealStep. */
+var BDS2_I = {
+  check:  '<svg viewBox="0 0 24 24" class="b2-ic"><polyline points="20 6 9 17 4 12"/></svg>',
+  chat:   '<svg viewBox="0 0 24 24" class="b2-ic"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  bolt:   '<svg viewBox="0 0 24 24" class="b2-ic"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+  send:   '<svg viewBox="0 0 24 24" class="b2-ic"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+  upload: '<svg viewBox="0 0 24 24" class="b2-ic"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
+  link:   '<svg viewBox="0 0 24 24" class="b2-ic"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
+  film:   '<svg viewBox="0 0 24 24" class="b2-ic"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" class="b2-ic"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+  warn:   '<svg viewBox="0 0 24 24" class="b2-ic"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+  info:   '<svg viewBox="0 0 24 24" class="b2-ic"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+  clock:  '<svg viewBox="0 0 24 24" class="b2-ic"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+  copy:   '<svg viewBox="0 0 24 24" class="b2-ic"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  refresh:'<svg viewBox="0 0 24 24" class="b2-ic"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
+  image:  '<svg viewBox="0 0 24 24" class="b2-ic"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
+  wallet: '<svg viewBox="0 0 24 24" class="b2-ic"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M16 15h2"/></svg>',
+  doc:    '<svg viewBox="0 0 24 24" class="b2-ic"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+  chev:   '<svg viewBox="0 0 24 24" class="b2-ic b2-chev"><polyline points="9 18 15 12 9 6"/></svg>'
+};
+
+/* ТЗ → пункты чек-листа. Режем по концу предложения (точка, «!», «?»
+   с пробелом после — ссылки вида t.me/x не рвутся), по «;», по новой
+   строке и маркерам списка. Без просмотра назад в регулярке: старые
+   вебвью айфона на нём падают при разборе всего скрипта. */
+function _bdsTzItems(tz){
+  var s = String(tz || '').replace(/\r/g, '');
+  if(!s.trim()) return [];
+  var parts = s.replace(/([.!?…])\s+/g, '$1\n').split(/\n+|;\s+/);
+  var out = [];
+  parts.forEach(function(p){
+    p = p.replace(/^\s*(?:[-–—•*·]|\d{1,2}[.)])\s*/, '').replace(/[.;]+\s*$/, '').trim();
+    if(p.length < 3) return;
+    if(p.length > 160) p = p.slice(0, 157).trim() + '…';
+    out.push(p.charAt(0).toUpperCase() + p.slice(1));
+  });
+  return out.slice(0, 8);
+}
+
+/* Отметки чек-листа ТЗ — на устройстве блогера. Ключ без префикса bp_:
+   эти ключи не должны уезжать на сервер вместе с данными приложения. */
+function _bdsChkGet(dealId){
+  try{
+    var a = JSON.parse(localStorage.getItem('bdsChk_' + dealId) || '[]');
+    return Array.isArray(a) ? a.filter(function(x){ return typeof x === 'number'; }) : [];
+  }catch(e){ return []; }
+}
+function bdsChkToggle(el, dealId, i){
+  var arr = _bdsChkGet(dealId), k = arr.indexOf(i), on = k < 0;
+  if(on) arr.push(i); else arr.splice(k, 1);
+  try{ localStorage.setItem('bdsChk_' + dealId, JSON.stringify(arr)); }catch(e){}
+  el.classList.toggle('on', on);
+  el.setAttribute('aria-pressed', on ? 'true' : 'false');
+  var card = el.closest('.b2-chk');
+  if(card){
+    var all = card.querySelectorAll('.b2-ci').length, n = card.querySelectorAll('.b2-ci.on').length;
+    var c = card.querySelector('.b2-cnt'); if(c) c.textContent = n + ' из ' + all;
+    var b = card.querySelector('.b2-bar i'); if(b) b.style.transform = 'scaleX(' + (all ? n / all : 0) + ')';
+  }
+  try{ if(on && navigator.vibrate) navigator.vibrate(6); }catch(e){}
+}
+
+/* Отметки перед публикацией живут до конца сессии: экран шага
+   перерисовывается сам, когда вторая сторона что-то меняет, — галочки
+   при этом не должны слетать. */
+var _bdsPubState = {};
+function bdsPubTick(el, dealId, key){
+  var st = _bdsPubState[dealId] || (_bdsPubState[dealId] = {});
+  st[key] = !st[key];
+  el.classList.toggle('on', !!st[key]);
+  el.classList.remove('b2-shake');
+  el.setAttribute('aria-pressed', st[key] ? 'true' : 'false');
+  try{ if(st[key] && navigator.vibrate) navigator.vibrate(6); }catch(e){}
+}
+
+/* Строка маркировки сделки. Контакт на этом устройстве может не
+   найтись (сделка восстановлена из общей записи) — тогда берём
+   маркировку прямо из общей сделки: её пишет рекламодатель. */
+function _bdsMarkLine(d){
+  if(!d || typeof bpMarkLine !== 'function') return '';
+  var m = null;
+  try{ if(typeof bpBloggerDealMarking === 'function') m = bpBloggerDealMarking(d); }catch(e){ BPERR(e, 'bds2mk'); }
+  if(!m){
+    try{
+      var sd = (d.dealId && typeof _sharedDealGet === 'function') ? _sharedDealGet(d.dealId) : null;
+      if(sd && sd.marking) m = sd.marking;
+    }catch(e){ BPERR(e, 'bds2mk2'); }
+  }
+  return m ? bpMarkLine(m) : '';
+}
+
+/* Срок сдачи как момент времени. «7 дней» считаем от принятия заказа,
+   если оно известно; дату — как есть. Не вышло — 0, и экран покажет
+   исходный текст срока, а не выдуманную дату. */
+function _bdsDueMs(d, sd){
+  try{
+    var raw = String((d && d.deadline) || '').trim();
+    if(!raw) return 0;
+    var rel = raw.match(/(\d+)\s*дн/i);
+    if(rel){
+      var from = Number(sd && sd.acceptedAt) || 0;
+      if(!from) return 0;
+      /* до конца дня — так же считает срок-дату parseDealDeadlineMs */
+      var t = new Date(from + parseInt(rel[1], 10) * 86400000);
+      t.setHours(23, 59, 59, 0);
+      return t.getTime();
+    }
+    if(typeof parseDealDeadlineMs === 'function'){
+      var left = parseDealDeadlineMs(raw);
+      if(left != null) return Date.now() + left;
+    }
+  }catch(e){ BPERR(e, 'bds2due'); }
+  return 0;
+}
+/* Срок для ячейки «Осталось» над шагом: ячейка считала «7 дней» от
+   текущей минуты и всегда показывала «7д 0ч», а экран ниже — настоящую
+   дату. Отдаём ей ту же дату, что видит человек. */
+function _bdsDueStr(d){
+  try{
+    var sd = (d && d.dealId && typeof _sharedDealGet === 'function') ? _sharedDealGet(d.dealId) : null;
+    var ms = _bdsDueMs(d, sd);
+    if(!ms) return d ? d.deadline : '';
+    var t = new Date(ms);
+    return t.getDate() + '.' + (t.getMonth() + 1) + '.' + t.getFullYear();
+  }catch(e){ return d ? d.deadline : ''; }
+}
+function _bdsDate(ms){
+  try{ return new Date(ms).toLocaleDateString('ru-RU', { day:'numeric', month:'long' }); }catch(e){ return ''; }
+}
+function _bdsWhen(ms){
+  try{ return new Date(ms).toLocaleString('ru-RU', { day:'numeric', month:'long', hour:'2-digit', minute:'2-digit' }); }catch(e){ return ''; }
+}
+function _bdsLeft(ms){
+  var t = ms - Date.now();
+  if(t <= 0) return 'срок вышел';
+  var h = Math.floor(t / 3600000);
+  if(h < 24) return 'осталось ' + Math.max(1, h) + ' ч';
+  var n = Math.floor(h / 24);
+  var w = (n % 10 === 1 && n % 100 !== 11) ? 'день'
+        : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'дня' : 'дней';
+  return 'осталось ' + n + ' ' + w;
+}
+
+/* «Приступаю к работе». Правило сроков bp-deadlines отменяет сделку,
+   если блогер не приступил за сутки после принятия, а засчитывало
+   «приступил» только сданное видео или ссылку. Сделку на неделю без
+   согласования видео отменяло через день, хотя человек честно снимал.
+   Теперь старт отмечается явно — метка startedAt в сделке блогера, в
+   контакте и в общей сделке (её видит рекламодатель, правило читает
+   оттуда). */
+function bdsStartWork(dealId){
+  var d = getBloggerDeals().find(function(x){ return x.id === dealId; });
+  if(!d) return;
+  var now = Date.now();
+  if(!d.startedAt) d.startedAt = now;
+  var c = null;
+  try{ c = CHAT_CONTACTS.find(function(x){ return String(x.id) === String(d.chatId || dealId); }) || null; }catch(e){}
+  if(c && c.deal && !c.deal.startedAt) c.deal.startedAt = now;
+  var sid = (c && c._dealId) || d.dealId;
+  try{ if(sid && typeof _sharedDealUpsert === 'function') _sharedDealUpsert({ dealId: sid, startedAt: now }); }catch(e){ BPERR(e, 'bds2start'); }
+  try{ if(c && typeof _injectDealSystemMsg === 'function') _injectDealSystemMsg(c, 3); }catch(e){ BPERR(e, 'bds2msg'); }
+  try{ if(typeof saveChats === 'function') saveChats(); }catch(e){}
+  renderBloggerDealStep(dealId, _currentBloggerStepNum || 2);
+  try{ showAuthToast('Отметили старт — рекламодатель видит, что вы в работе', 'ok'); }catch(e){}
+}
+
+/* «Реклама опубликована»: без строки erid дальше не пускаем — та же
+   проверка, что стоит на сдаче ссылки, только на шаг раньше, пока
+   публикацию ещё можно поправить. */
+function bdsPublished(dealId){
+  var d = getBloggerDeals().find(function(x){ return x.id === dealId; });
+  if(!d) return;
+  if(!_bdsMarkLine(d)){
+    showAuthToast('Без маркировки публиковать рекламу нельзя — напишите рекламодателю', 'err');
+    return;
+  }
+  var st = _bdsPubState[dealId] || {};
+  if(!st.erid){
+    showAuthToast('Отметьте, что строка с erid стоит в публикации', 'err');
+    var r = document.querySelector('#bdsBody .b2-ci[data-k="erid"]');
+    if(r){ r.classList.remove('b2-shake'); void r.offsetWidth; r.classList.add('b2-shake'); }
+    return;
+  }
+  d._eridOk = 1;
+  advanceBloggerDealByKey(dealId, 'publish');
+}
+
 function renderBloggerDealStep(dealId, stepNum) {
   const d = getBloggerDeals().find(x => x.id === dealId);
   if(!d) return;
@@ -29563,7 +29753,8 @@ function renderBloggerDealStep(dealId, stepNum) {
   const steps = getBloggerSteps(d);
   const total = getBloggerStepsTotal(d);
   const step = steps[stepNum - 1];
-  if(counter) counter.textContent = `Шаг ${stepNum} из ${total}`;
+  /* bp-bds2: номер шага уже стоит в ленте («01/05») — в шапке пишем, с кем сделка. */
+  if(counter) counter.textContent = d.advertiser ? ('Сделка с ' + d.advertiser) : `Шаг ${stepNum} из ${total}`;
   if(title) title.textContent = step ? step.label : '';
   const pct = Math.round(stepNum / total * 100);
   if(prog) prog.style.transform = 'scaleX(' + (pct / 100) + ')';
@@ -29611,151 +29802,140 @@ function renderBloggerDealStep(dealId, stepNum) {
     else if(d.tz) _hdrTzBtn.classList.add('visible');
   }
 
-  // ── Helper: deadline badge ──
-  function _deadlineBadge(deadline) {
-    if(!deadline) return `<span style="color:rgba(255,255,255,.4)">—</span>`;
-    const ms = parseDealDeadlineMs ? parseDealDeadlineMs(deadline) : null;
-    // Handle "до N дней" format
-    const relMatch = deadline.match(/до\s+(\d+)\s+дн/i);
-    if(relMatch) {
-      const d = parseInt(relMatch[1]);
-      const col = d <= 1 ? '#ff8090' : d <= 3 ? '#f6a823' : '#f6a823';
-      return `<span style="color:${col};font-weight:700">${bpEsc(deadline)}</span>`;
-    }
-    if(ms === null) return `<span style="font-weight:700;color:#f6a823">${bpEsc(deadline)}</span>`;
-    const days = Math.floor(ms / 86400000);
-    if(ms <= 0) return `<span style="color:#ff8090;font-weight:700">Просрочен</span>`;
-    if(days <= 1) return `<span style="color:#ff8090;font-weight:700">Осталось менее 1 дн.</span>`;
-    if(days <= 3) return `<span style="color:#f6a823;font-weight:700">Осталось ${days} дн.</span>`;
-    return `<span style="color:#f6a823;font-weight:700">${bpEsc(deadline)}</span>`;
-  }
+  /* ══ bp-bds2 (15.09.2026) · ШАГИ БЛОГЕРА ПЕРЕСОБРАНЫ ═════════════════
+     Владелец: «шаги от лица блогера сделать лучше, понятнее и круче».
+     Что было не так:
+       · сумма, срок и «Принять заказ» повторялись на экране по 2–3 раза;
+       · «Начать выполнение» просто листала дальше и не считалась стартом —
+         через сутки правило сроков отменяло сделку с возвратом денег;
+       · шаг публикации шесть секунд прятал кнопку за полосой «5s» и
+         показывал заранее отмеченный шаблонный список;
+       · строку маркировки erid блогер впервые видел ПОСЛЕ выхода рекламы;
+       · дата и комментарий на шаге ссылки никуда не сохранялись.
+     Стало: у каждого шага — что сделать сейчас, что для этого нужно и
+     одна главная кнопка. Маркировка — до публикации, старт работы —
+     явной кнопкой, поля — только те, что уходят рекламодателю.
+     Вид — style#bp-bds2-css, помощники — сразу перед функцией. */
+  const I = BDS2_I;
+  const _e = (s) => bpEsc(String(s == null ? '' : s));
+  const _adv = d.advertiser || 'Рекламодатель';
+  const _fmt = d.platform || d.format || '';
+  const _price = (typeof _normPriceLabel === 'function') ? _normPriceLabel(d.price) : String(d.price || '');
+  let _c = null, _sd = null, _rule = null;
+  try{
+    _c = CHAT_CONTACTS.find(x => x && (String(x.id) === String(d.chatId) || (d.dealId && String(x._dealId) === String(d.dealId)))) || null;
+    const _sid = d.dealId || (_c && _c._dealId);
+    _sd = (_sid && typeof _sharedDealGet === 'function') ? (_sharedDealGet(_sid) || null) : null;
+    if(_c && typeof window.bpDeadlineRule === 'function') _rule = window.bpDeadlineRule(_c);
+  }catch(e){ BPERR(e, 'bds2ctx'); }
+  const _mk = _bdsMarkLine(d);
+  const _dueMs = _bdsDueMs(d, _sd);
+  const _dueRaw = String(d.deadline || '').trim();
+  const _dueTxt = _dueMs ? (_bdsDate(_dueMs) + ' · ' + _bdsLeft(_dueMs))
+                : (/\d+\s*дн/i.test(_dueRaw) ? _dueRaw + ' после принятия' : (_dueRaw || '—'));
+  const _started = !!(d.startedAt || (_c && _c.deal && _c.deal.startedAt) || (_sd && _sd.startedAt)
+                  || d.videoStatus || d.sentVideoLink || d.link || (d.step || 0) >= 2);
+  const _nFiles = Array.isArray(d.files) ? d.files.length : 0;
+  let _ownRule = false;
 
-  // ── Helper: steps left motivation ──
-  const stepsLeft = total - stepNum;
-  const motivationText = stepsLeft <= 0
-    ? 'Деньги переведены на ваш баланс'
-    : stepsLeft === 1
-      ? 'Остался 1 шаг до получения оплаты'
-      : `Осталось ${stepsLeft} шага до выплаты ${d.price}`;
+  /* мелкие детали разметки */
+  const kv = (k, v) => `<div class="b2-kv-r"><span>${k}</span><b>${v}</b></div>`;
+  const note = (txt, tone, ico) => `<div class="b2-note${tone ? ' b2-note-' + tone : ''}">${ico || I.info}<span>${txt}</span></div>`;
+  const chatLink = (txt) => `<button type="button" class="b2-link" onclick="openBloggerChat('${dealId}')">${I.chat}${txt}</button>`;
+  const tzCard = (id) => `<div ${id ? 'id="' + id + '" ' : ''}class="b2-tz" onclick="openBloggerTZ('${dealId}')" role="button" tabindex="0">
+        <div class="b2-tz-i">${I.doc}</div>
+        <div class="b2-tz-t">
+          <div class="b2-ct">Техзадание${_nFiles ? ' · файлов: ' + _nFiles : ''}</div>
+          <div class="b2-tz-v">${_e(d.tz)}</div>
+        </div>
+        ${I.chev}
+      </div>`;
 
   let html = '';
 
   // ════════════════ ACCEPT ════════════════
   if(stepKey === 'accept') {
-    const steps1 = getBloggerSteps(d);
-    const total1 = getBloggerStepsTotal(d);
-    const stepLabels = steps1.map(s => s.label);
-    const stepDescs  = steps1.map(s => s.desc);
     const hdrTz = document.getElementById('bdsHeaderTzBtn');
     if(hdrTz) hdrTz.classList.remove('visible');
-
+    const FLOW = {
+      content: ['Снимете материал', 'По техзаданию, к сроку'],
+      video:   ['Покажете ролик', 'Рекламодатель одобрит его до выхода'],
+      publish: ['Опубликуете рекламу', 'Со строкой маркировки erid'],
+      link:    ['Пришлёте ссылку', 'Рекламодатель проверит размещение'],
+      done:    ['Получите оплату', _e(_price) + ' — на баланс после приёмки'],
+    };
+    const flow = steps.slice(1).map(s => {
+      const f = FLOW[s.key] || [_e(s.label), ''];
+      return `<li><b>${f[0]}</b><span>${f[1]}</span></li>`;
+    }).join('');
+    const startRule = _rule && _rule.id === 'start' ? _rule : null;
+    _ownRule = !!startRule;
     html = `
-      <div style="padding:14px 16px 0;display:flex;flex-direction:column;gap:12px">
-
-        <!-- Hero summary card -->
-        <div class="bds-hero-card">
-          <div style="margin-bottom:14px">
-            <div style="font-size:10px;color:rgba(255,255,255,.38);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:8px">Сумма сделки</div>
-            <div style="display:flex;align-items:baseline;gap:4px">
-              <span style="font-size:34px;font-weight:600;color:#fff;letter-spacing:-1.5px;line-height:1">${bpEsc(_normPriceLabel(d.price))}</span>
-            </div>
-            <div style="font-size:11px;color:rgba(255,255,255,.28);margin-top:6px">Средства заморожены и выплатятся после завершения</div>
-          </div>
-
-          <!-- Metrics row -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div style="background:rgba(0,0,0,.2);border-radius:12px;padding:11px 12px;border:1px solid rgba(255,255,255,.06)">
-              <div style="font-size:9.5px;color:rgba(255,255,255,.35);font-weight:500;text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px">Дедлайн</div>
-              <div style="font-size:13px;font-weight:700">${_deadlineBadge(d.deadline)}</div>
-            </div>
-            <div style="background:rgba(0,0,0,.2);border-radius:12px;padding:11px 12px;border:1px solid rgba(255,255,255,.06)">
-              <div style="font-size:9.5px;color:rgba(255,255,255,.35);font-weight:500;text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px">Формат</div>
-              <div style="font-size:12.5px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${bpEsc(d.platform||d.format||'—')}</div>
-            </div>
-          </div>
-
-          ${d.tz ? `
-          <!-- TZ shortcut -->
-          <div id="tzBlockStep1"  onclick="openBloggerTZ('${dealId}')" style="margin-top:10px;background:rgba(255,255,255,0.055);border:1px solid rgba(255,255,255,0.11);border-radius:12px;padding:11px 13px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:background .15s;transform-origin:top right" onmousedown="this.style.background='rgba(61,220,132,.18)'" onmouseup="this.style.background='rgba(61,220,132,.1)'" onmouseleave="this.style.background='rgba(61,220,132,.1)'" role="button" tabindex="0">
-            <div style="width:32px;height:32px;border-radius:10px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.14);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--acc2)" stroke-width="2.2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            </div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:700;color:#fff">Техническое задание</div>
-              <div style="font-size:10.5px;color:rgba(255,255,255,.38);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${bpEsc(d.tz.slice(0,55))}${d.tz.length>55?'…':''}</div>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.3)" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>` : ''}
+    <div class="b2">
+      <div class="bpf-focal">
+        <div class="b2-eye"><i></i>Новый заказ</div>
+        <h2 class="bpf-h">Заказ от<br>${_e(_adv)}</h2>
+        <p class="bpf-sub">Оплата уже в сделке: <b class="b2-money">${_e(_price)}</b> заморожены и придут вам, когда рекламодатель примет публикацию.</p>
+      </div>
+      <div class="b2-card">
+        <div class="b2-ct">Условия</div>
+        <div class="b2-kv">
+          ${_fmt ? kv('Формат', _e(_fmt)) : ''}
+          ${kv('Срок', _e(_dueTxt))}
+          ${kv('Видео до публикации', d.videoPreview ? 'Покажете рекламодателю' : 'Не нужно')}
+          ${kv('Маркировка', _mk ? '<span class="b2-ok">' + I.check + 'Оформлена</span>' : 'Оформит рекламодатель')}
         </div>
-
-        <!-- Action card: Принять заказ -->
-        <div style="background:#0e0e0e;border:1.5px solid rgba(255,255,255,0.125);border-radius:16px;padding:16px;position:relative;overflow:hidden">
-          <div style="position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.1),transparent)"></div>
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-            <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,rgba(255,255,255,0.1),rgba(43,185,107,.2));border:1px solid rgba(255,255,255,0.14);display:flex;align-items:center;justify-content:center;flex-shrink:0;animation:bdsIconPop .45s cubic-bezier(.34,1.28,.64,1) both">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--acc2)" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
-            </div>
-            <div>
-              <div style="font-size:9.5px;color:var(--acc2);font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin-bottom:2px">Текущий шаг</div>
-              <div style="font-size:15px;font-weight:700;color:#fff;letter-spacing:-.2px">Принять заказ</div>
-              <div style="font-size:11.5px;color:rgba(255,255,255,.42);margin-top:2px">Рекламодатель ждёт подтверждения</div>
-            </div>
-          </div>
-          <button id="acceptOrderBtn_${dealId}" onclick="acceptOrderWithAnimation('${dealId}')" class="bds-btn-primary" onmousedown="this.style.transform='scale(.98)'" onmouseup="this.style.transform=''">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-            Принять заказ
-          </button>
-        </div>
-
-        <!-- Locked steps timeline -->
-        <div style="background:#0a0a0b;border:1.5px solid rgba(255,255,255,.05);border-radius:16px;overflow:hidden">
-          <div style="padding:12px 16px 8px;font-size:9.5px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.5px">После принятия</div>
-          ${stepLabels.slice(1).map((lbl, i) => {
-            const si = i + 2;
-            const desc = stepDescs[i+1] || '';
-            const isLast = si === total1;
-            return `<div class="bds-locked-row" style="${isLast?'':'border-bottom:1px solid rgba(255,255,255,.04)'}">
-              <div class="bds-locked-num">${si}</div>
-              <div style="flex:1;min-width:0">
-                <div style="font-size:13px;font-weight:600;color:rgba(255,255,255,.45)">${bpEsc(lbl)}</div>
-                <div style="font-size:10.5px;color:rgba(255,255,255,.25);margin-top:1px;line-height:1.4">${bpEsc(desc.slice(0,70))}${bpEsc(desc.length>70?'…':'')}</div>
-              </div>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            </div>`;
-          }).join('')}
-        </div>
-
-      </div>`;
+      </div>
+      ${d.tz ? tzCard('tzBlockStep1') : ''}
+      ${startRule ? note('Ответьте до <b>' + _e(_bdsWhen(startRule.at)) + '</b> — иначе заказ отменится и деньги вернутся рекламодателю.', 'warn', I.clock) : ''}
+      <button id="acceptOrderBtn_${dealId}" onclick="acceptOrderWithAnimation('${dealId}')" class="bds-btn-primary">${I.check}Принять заказ</button>
+      ${chatLink('Задать вопрос рекламодателю')}
+      <div class="b2-card">
+        <div class="b2-ct">Как пройдёт сделка</div>
+        <ol class="b2-tl">${flow}</ol>
+      </div>
+    </div>`;
 
   // ════════════════ CONTENT ════════════════
   } else if(stepKey === 'content') {
-    html = `
-      <div style="padding:14px 16px 0;display:flex;flex-direction:column;gap:12px">
-
-        <!-- Motivation bar -->
-
-        <div class="bpf-focal">
-          <h2 class="bpf-h">Снимите материал<br>по техзаданию</h2>
-          <p class="bpf-sub">Видео или пост — как договорились в условиях сделки.</p>
-        </div>
-
-        ${d.tz ? `<div class="bpf-row" onclick="openBloggerTZ('${dealId}')" role="button" tabindex="0">
-          <div class="bpf-row-i">${BPF_ICO.doc}</div>
-          <div class="bpf-row-t">
-            <div class="bpf-row-k">Техническое задание</div>
-            <div class="bpf-row-v">${bpEsc(d.tz.slice(0,64))}${d.tz.length>64?'…':''}</div>
-          </div>
-          ${BPF_ICO.chev}
-        </div>` : ''}
-
-        <p class="bpf-hint">${BPF_ICO.clock}Обычно занимает 1–3 часа</p>
-
-        <button onclick="btnRipple(this);advanceBloggerDealByKey('${dealId}', 'content')" class="bds-btn-primary">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          Начать выполнение
-        </button>
-
+    const items = _bdsTzItems(d.tz);
+    const got = _bdsChkGet(dealId);
+    const nDone = items.filter((_, i) => got.indexOf(i) >= 0).length;
+    const startRule = (!_started && _rule && _rule.id === 'start') ? _rule : null;
+    _ownRule = !!startRule;
+    const chk = items.length ? `
+      <div class="b2-card b2-chk b2-chk-tz">
+        <div class="b2-ct">${_started ? 'Чек-лист по ТЗ' : 'Что нужно сделать'}<span class="b2-cnt">${nDone} из ${items.length}</span></div>
+        <div class="b2-bar"><i style="transform:scaleX(${items.length ? nDone / items.length : 0})"></i></div>
+        ${items.map((t, i) => {
+          const on = got.indexOf(i) >= 0;
+          return `<button type="button" class="b2-ci${on ? ' on' : ''}" aria-pressed="${on}" onclick="bdsChkToggle(this,'${dealId}',${i})"><i class="b2-box">${I.check}</i><span>${_e(t)}</span></button>`;
+        }).join('')}
+        <button type="button" class="b2-more" onclick="openBloggerTZ('${dealId}')">${I.doc}Открыть ТЗ полностью${_nFiles ? ' · файлов: ' + _nFiles : ''}${I.chev}</button>
+      </div>` : `
+      <div class="b2-card">
+        <div class="b2-ct">Техзадание</div>
+        <p class="b2-p">Рекламодатель не приложил ТЗ. Уточните детали в чате, прежде чем снимать.</p>
       </div>`;
+    html = `
+    <div class="b2">
+      <div class="bpf-focal">
+        <div class="b2-eye${_started ? '' : ' b2-eye-warm'}"><i></i>${_started ? 'В работе' : 'Заказ принят'}</div>
+        <h2 class="bpf-h">${_started ? 'Снимите материал<br>по техзаданию' : 'Приступите<br>к работе'}</h2>
+        <p class="bpf-sub">${_started
+          ? (_dueMs ? 'Сдать до <b>' + _e(_bdsDate(_dueMs)) + '</b>. ' : '') + 'Отмечайте пункты ТЗ по ходу — так ничего не упустите.'
+          : 'Прочитайте, что нужно сделать, и отметьте старт — рекламодатель увидит, что вы взялись за заказ.'}</p>
+      </div>
+      ${chk}
+      ${startRule ? note('Отметьте старт до <b>' + _e(_bdsWhen(startRule.at)) + '</b> — иначе сделка отменится и деньги вернутся рекламодателю.', 'warn', I.clock) : ''}
+      ${_started ? note(d.videoPreview
+          ? 'Готовый ролик сначала покажете рекламодателю — публикуете после его одобрения.'
+          : 'Когда материал готов, опубликуете его у себя. Строку маркировки erid покажем на следующем шаге.') : ''}
+      ${_started
+        ? `<button onclick="btnRipple(this);advanceBloggerDealByKey('${dealId}', 'content')" class="bds-btn-primary">${I.check}Материал готов</button>`
+        : `<button onclick="btnRipple(this);bdsStartWork('${dealId}')" class="bds-btn-primary">${I.bolt}Приступаю к работе</button>`}
+      ${chatLink(items.length ? 'Вопрос по ТЗ — написать рекламодателю' : 'Написать рекламодателю')}
+    </div>`;
 
   // ════════════════ VIDEO ════════════════
   } else if(stepKey === 'video') {
@@ -29764,304 +29944,193 @@ function renderBloggerDealStep(dealId, stepNum) {
     // ── СОСТОЯНИЕ: ОЖИДАЕМ ОДОБРЕНИЯ РЕКЛАМОДАТЕЛЯ ──
     if(vStatus === 'pending') {
       html = `
-      <div style="padding:14px 16px 0;display:flex;flex-direction:column;gap:12px">
-
+      <div class="b2">
         <div class="bpf-focal bpf-focal-wait">
           <div class="bpf-pulse" aria-hidden="true"><i></i><i></i><i></i></div>
-          <h2 class="bpf-h">Видео<br>на согласовании</h2>
-          <p class="bpf-sub">Рекламодатель смотрит материал. Дождитесь решения — он одобрит публикацию или запросит правки.</p>
+          <h2 class="bpf-h">Ролик<br>на согласовании</h2>
+          <p class="bpf-sub">Рекламодатель смотрит материал. Когда он ответит, экран обновится сам, а в чат придёт уведомление.</p>
         </div>
-
-        <!-- Отправленное видео -->
-        <div style="background:#0a0a0b;border:1.5px solid rgba(255,255,255,.07);border-radius:14px;padding:13px;display:flex;align-items:center;gap:11px">
-          <div style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,0.099);border:1px solid rgba(255,255,255,0.14);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--acc2)" stroke-width="2" stroke-linecap="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        <div class="b2-card b2-sent">
+          <div class="b2-tz-i">${I.film}</div>
+          <div class="b2-sent-t">
+            <b>Отправлено${d.sentVideoTime ? ' в ' + _e(d.sentVideoTime) : ''}</b>
+            <span>${_e(d.sentVideoName || d.sentVideoLink || 'Материал передан')}</span>
           </div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:2px">Видео отправлено</div>
-            <div style="font-size:11px;color:var(--acc2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.sentVideoName || d.sentVideoLink || 'материал передан'}</div>
-          </div>
-          <div style="font-size:10.5px;color:var(--t3);flex-shrink:0">${d.sentVideoTime||''}</div>
         </div>
-
-        ${d.sentVideoObjURL ? `
-        <!-- Просмотр своего видео -->
-        <div style="background:#0a0a0b;border:1.5px solid rgba(255,255,255,.07);border-radius:14px;padding:13px">
-          <div style="font-size:9.5px;font-weight:600;color:rgba(255,255,255,.32);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Ваше видео</div>
-          <video controls playsinline src="${bpUrl(d.sentVideoObjURL)}" style="width:100%;border-radius:12px;background:#000;max-height:240px;display:block"></video>
-        </div>` : ''}
-
-        <!-- Статус-подсказка -->
-        <div class="bds-info-box" style="background:rgba(246,168,35,.07);border-color:rgba(246,168,35,.2)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f6a823" stroke-width="2.2" stroke-linecap="round" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <div style="font-size:12px;color:rgba(255,255,255,.55);line-height:1.6">Кнопка публикации откроется автоматически, как только рекламодатель одобрит видео. Уведомление придёт в чат.</div>
+        ${d.sentVideoObjURL ? `<video controls playsinline src="${bpUrl(d.sentVideoObjURL)}" class="b2-vprev"></video>` : ''}
+        <div class="b2-card">
+          <div class="b2-ct">Что дальше</div>
+          <ol class="b2-tl">
+            <li class="now"><b>Рекламодатель смотрит ролик</b><span>Одобрит его или попросит правки</span></li>
+            <li><b>Публикация</b><span>Откроется сразу после одобрения</span></li>
+          </ol>
         </div>
-
-        <!-- Заблокированная кнопка -->
-        <button class="bds-btn-primary" disabled style="opacity:.45;cursor:not-allowed;display:flex;align-items:center;justify-content:center;gap:7px">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          Ожидаем одобрения…
-        </button>
+        <button type="button" class="bds-btn-ghost" onclick="bloggerRecheckVideoApproval('${dealId}')">Проверить статус</button>
+        ${chatLink('Написать рекламодателю')}
       </div>`;
 
     } else {
     // ── СОСТОЯНИЕ: ФОРМА ОТПРАВКИ (или повторная после правок) ──
-    const changesNote = (vStatus === 'changes' && d.videoRevisionNote) ? d.videoRevisionNote : '';
+    const isChg = vStatus === 'changes';
+    const changesNote = (isChg && d.videoRevisionNote) ? d.videoRevisionNote : '';
+    const prevLink = (isChg && /^https?:\/\//i.test(String(d.sentVideoLink || ''))) ? d.sentVideoLink : '';
     html = `
-      <div style="padding:14px 16px 0;display:flex;flex-direction:column;gap:12px">
-
-        <!-- Motivation bar -->
-
-        ${changesNote ? `
-        <!-- Запрошены правки -->
-        <div style="background:rgba(232,48,80,.08);border:1.5px solid rgba(232,48,80,.28);border-radius:14px;padding:14px;display:flex;gap:11px;align-items:flex-start">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff8090" stroke-width="2.2" stroke-linecap="round" style="flex-shrink:0;margin-top:1px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:800;color:#ff8090;margin-bottom:4px">Рекламодатель запросил правки</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.6);line-height:1.55;word-break:break-word">${changesNote}</div>
-          </div>
-        </div>` : `
+      <div class="b2">
         <div class="bpf-focal">
-          <h2 class="bpf-h">Покажите видео<br>до публикации</h2>
-          <p class="bpf-sub">Рекламодатель проверит материал и одобрит его — только после этого выходит публикация.</p>
-        </div>`}
-
+          <div class="b2-eye${isChg ? ' b2-eye-bad' : ''}"><i></i>${isChg ? 'Нужны правки' : 'Согласование'}</div>
+          <h2 class="bpf-h">${isChg ? 'Исправьте<br>ролик' : 'Покажите ролик<br>до публикации'}</h2>
+          <p class="bpf-sub">${isChg
+            ? 'Рекламодатель посмотрел материал и просит доработать. Пришлите новую версию — он проверит ещё раз.'
+            : 'Рекламодатель посмотрит и одобрит. Публикуете только после одобрения — без переделок после выхода.'}</p>
+        </div>
+        ${changesNote ? `<div class="b2-card b2-card-bad"><div class="b2-ct">${I.warn}Что поправить</div><p class="b2-p">${_e(changesNote)}</p></div>` : ''}
         <div class="bpf-form">
-
-          <!-- Ссылка на видео -->
           <div>
-            <div class="bpf-lbl">Ссылка на видео<span>или загрузите файл ниже</span></div>
-            <div style="position:relative">
-              <input id="bdsVideoLink" type="url" value="${(vStatus==='changes'&&d.sentVideoLink)?d.sentVideoLink:''}" placeholder="https://drive.google.com/… или Dropbox, WeTransfer" class="bds-input" style="padding-right:40px">
-              <div style="position:absolute;right:11px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:.4">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-              </div>
-            </div>
-          </div>
-
-          <!-- Загрузка видео-файла -->
-          <div>
-            <div class="bpf-lbl">Загрузить видео<span>с устройства</span></div>
+            <div class="bpf-lbl">Видео<span>файл или ссылка</span></div>
             <input id="bdsVideoFile" type="file" accept="video/*" style="display:none" onchange="bdsOnVideoFilePicked(this)">
-            <div id="bdsVideoDrop"  onclick="document.getElementById('bdsVideoFile').click()" style="background:rgba(255,255,255,0.033);border:1.5px dashed rgba(255,255,255,0.14);border-radius:12px;padding:16px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:background .15s" onmousedown="this.style.background='rgba(61,220,132,.12)'" onmouseup="this.style.background='rgba(61,220,132,.06)'" role="button" tabindex="0">
-              <div style="width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,0.099);border:1px solid rgba(255,255,255,0.14);display:flex;align-items:center;justify-content:center">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--acc2)" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              </div>
-              <div id="bdsVideoFileLabel" style="font-size:12.5px;font-weight:600;color:rgba(255,255,255,.55);text-align:center">Нажмите, чтобы выбрать видео</div>
+            <div id="bdsVideoDrop" class="b2-drop" onclick="document.getElementById('bdsVideoFile').click()" role="button" tabindex="0">
+              <div class="b2-tz-i">${I.upload}</div>
+              <div id="bdsVideoFileLabel" class="b2-drop-t">Выбрать видео с телефона</div>
+              <div class="b2-drop-s">MP4 или MOV</div>
             </div>
-            <video id="bdsVideoFilePreview" controls playsinline style="display:none;width:100%;margin-top:10px;border-radius:12px;background:#000;max-height:230px"></video>
+            <video id="bdsVideoFilePreview" controls playsinline class="b2-vprev" style="display:none"></video>
           </div>
-
-          <!-- Комментарий -->
+          <div class="b2-or"><span>или ссылкой</span></div>
+          <div class="b2-inp">
+            <input id="bdsVideoLink" type="url" value="${_e(prevLink)}" placeholder="Google Диск, Яндекс Диск, Dropbox…" class="bds-input">
+            ${I.link}
+          </div>
           <div>
             <div class="bpf-lbl">Комментарий<span>необязательно</span></div>
-            <textarea id="bdsVideoComment" placeholder="Снял по всем пунктам ТЗ, добавил ссылку в описание…" class="bds-input" style="height:72px;resize:none">${bpEsc((d.videoComment||''))}</textarea>
+            <textarea id="bdsVideoComment" placeholder="${isChg ? 'Что исправили…' : 'Например: ссылка в описании, бренд на 0:30'}" class="bds-input" style="height:72px;resize:none">${_e(d.videoComment || '')}</textarea>
           </div>
         </div>
-
-        <!-- CTA — primary accent, NOT red -->
-        <button onclick="btnRipple(this);advanceBloggerDealByKey('${dealId}', 'video')" class="bds-btn-primary">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          ${changesNote ? 'Отправить исправленное видео' : 'Отправить на согласование'}
-        </button>
-
+        <button onclick="btnRipple(this);advanceBloggerDealByKey('${dealId}', 'video')" class="bds-btn-primary">${I.send}${isChg ? 'Отправить исправленное' : 'Отправить на согласование'}</button>
       </div>`;
     }
 
   // ════════════════ PUBLISH ════════════════
   } else if(stepKey === 'publish') {
+    const pst = _bdsPubState[dealId] || {};
+    const approved = !!(d.videoPreview && d.videoStatus === 'approved');
+    const ci = (key, txt, req) => `<button type="button" class="b2-ci${pst[key] ? ' on' : ''}" data-k="${key}" aria-pressed="${!!pst[key]}" onclick="bdsPubTick(this,'${dealId}','${key}')"><i class="b2-box">${I.check}</i><span>${txt}${req ? '<em class="b2-req">обязательно</em>' : ''}</span></button>`;
     html = `
-      <div style="padding:14px 16px 0;display:flex;flex-direction:column;gap:12px">
-
+      <div class="b2">
         <div class="bpf-focal">
-          <h2 class="bpf-h">Разместите<br>публикацию</h2>
-          <p class="bpf-sub">${d.platform ? 'Формат — ' + bpEsc(d.platform) + '. Материал готов.' : 'Материал готов — опубликуйте его у себя.'}</p>
+          <div class="b2-eye${approved ? ' b2-eye-ok' : ''}"><i></i>${approved ? 'Ролик одобрен' : 'Публикация'}</div>
+          <h2 class="bpf-h">Опубликуйте<br>рекламу</h2>
+          <p class="bpf-sub">${_fmt ? 'Формат — ' + _e(_fmt) + '. ' : ''}Разместите материал у себя${_mk ? ' со строкой маркировки' : ''} и вернитесь сюда.</p>
         </div>
-
-        <div class="bpf-form">
-          <div class="bpf-lbl">Перед публикацией проверьте</div>
-          ${['Упомянуть бренд минимум 1 раз','Добавить ссылку в описание','Позитивная тональность','Хронометраж по ТЗ'].map((item, i, arr) => `
-          <div class="bds-check-item" style="${i===arr.length-1?'border-bottom:none':''}">
-            <div class="bds-check-dot">
-              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#e4e4e7" stroke-width="3" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-            <span style="font-size:13px;color:rgba(255,255,255,.6);line-height:1.4">${item}</span>
-          </div>`).join('')}
-        </div>
-
-        <!-- Publish button (delayed 6s) -->
-        <div id="bdsPublishBtnWrap" style="display:none">
-          <button id="bdsPublishBtn" data-dealid="${dealId}" class="bds-btn-green">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-            Реклама опубликована!
-          </button>
-        </div>
-        <div id="bdsPublishCountdown" class="bpf-wait-row">
-          <div style="flex:1;height:3px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden">
-            <div id="bdsPublishProgress" style="height:100%;background:linear-gradient(90deg,#2f6ce0,#1b49a8);border-radius:3px;width:100%;transform-origin:left center;transform:scaleX(0);will-change:transform;transition:transform 6s linear"></div>
+        ${_mk ? `
+        <div class="b2-card b2-mk">
+          <div class="b2-ct">${I.shield}Маркировка · обязательно</div>
+          <div class="bp-mk-line"><b>Маркировка · вставьте в публикацию</b>${_e(_mk)}</div><button type="button" class="bp-mk-copy" onclick="bpDealCopyErid(this)">${I.copy}Скопировать строку</button>
+          <p class="b2-p">Вставьте её в описание ролика или в текст поста. Без неё реклама незаконна — штраф грозит и вам, и рекламодателю.</p>
+        </div>` : `
+        <div class="b2-card b2-card-warn">
+          <div class="b2-ct">${I.warn}Нет маркировки</div>
+          <p class="b2-p">Рекламодатель ещё не оформил маркировку. Публиковать рекламу без токена erid нельзя — попросите его добавить её в сделку.</p>
+          <div class="b2-row2">
+            ${chatLink('Написать')}
+            <button type="button" class="b2-link" onclick="renderBloggerDealStep('${dealId}', ${stepNum})">${I.refresh}Проверить снова</button>
           </div>
-          <span id="bdsPublishTimer" style="font-size:11px;color:rgba(255,255,255,.3);flex-shrink:0;width:28px;text-align:right">6s</span>
+        </div>`}
+        <div class="b2-card b2-chk">
+          <div class="b2-ct">Перед тем как нажать</div>
+          ${_mk ? ci('erid', 'Строка с erid стоит в публикации', true) : ''}
+          ${ci('open', 'Публикация открыта всем — не в «Близких друзьях» и не по ссылке')}
+          ${ci('tz', 'Всё сделано по ТЗ')}
         </div>
-
+        <button id="bdsPublishBtn" class="bds-btn-primary"${_mk ? '' : ' disabled'} onclick="btnRipple(this);bdsPublished('${dealId}')">${_mk ? I.check + 'Реклама опубликована' : I.clock + 'Ждём маркировку'}</button>
       </div>`;
 
   // ════════════════ LINK ════════════════
   } else if(stepKey === 'link') {
+    const eridOk = !!d._eridOk;
+    const mkBlock = !_mk
+      ? '<div class="bp-mk-warn">Рекламодатель не оформил маркировку. Публиковать рекламу без токена erid нельзя — напишите ему в чат.</div>'
+      : eridOk
+        ? '<label class="bp-mk-check b2-mk-done"><input type="checkbox" id="bdsErid" checked>'
+          + '<span>Строка с erid стоит в публикации — вы отметили это на прошлом шаге</span></label>'
+        : '<div><div class="bp-mk-line"><b>Маркировка · вставьте в публикацию</b>' + _e(_mk) + '</div>'
+          + '<button type="button" class="bp-mk-copy" onclick="bpDealCopyErid(this)">' + I.copy + 'Скопировать строку</button>'
+          + '<label class="bp-mk-check"><input type="checkbox" id="bdsErid">'
+          + '<span>Строка с erid стоит в публикации. Без неё штраф грозит и вам, и рекламодателю.</span></label></div>';
     html = `
-      <div style="padding:14px 16px 0;display:flex;flex-direction:column;gap:12px">
-
+      <div class="b2">
         <div class="bpf-focal">
+          <div class="b2-eye"><i></i>Последний шаг</div>
           <h2 class="bpf-h">Пришлите ссылку<br>на публикацию</h2>
-          <p class="bpf-sub">По ней рекламодатель проверит размещение и подтвердит выплату.</p>
+          <p class="bpf-sub">По ссылке рекламодатель проверит размещение и примет работу — после этого деньги придут на баланс.</p>
         </div>
-
         <div class="bpf-form">
-
-          <!-- Маркировка: строку блогер обязан поставить в публикацию -->
-          ${(function(){
-            var _mkLine = (typeof bpBloggerDealMarking === 'function' && typeof bpMarkLine === 'function')
-              ? bpMarkLine(bpBloggerDealMarking(d)) : '';
-            return _mkLine
-              ? '<div class="bp-mk-line"><b>Маркировка · вставьте в публикацию</b>' + bpEsc(_mkLine) + '</div>'
-                + '<button type="button" class="bp-mk-copy" onclick="bpDealCopyErid(this)">Копировать строку</button>'
-                + '<label class="bp-mk-check"><input type="checkbox" id="bdsErid">'
-                + '<span>Строка с erid стоит в публикации. Без неё штраф грозит и вам, и рекламодателю.</span></label>'
-              : '<div class="bp-mk-warn">Рекламодатель не оформил маркировку. Публиковать рекламу без токена erid нельзя — напишите ему в чат.</div>';
-          })()}
-
-          <!-- Ссылка -->
           <div>
-            <div style="font-size:10.5px;font-weight:600;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.4px;margin-bottom:7px">Ссылка на публикацию <span style="color:#3ddc84">*</span></div>
-            <div style="position:relative">
-              <input id="bdsPubLink" type="url" placeholder="https://instagram.com/reel/… или t.me/…" value="${_bloggerDealLink||''}" oninput="_bloggerDealLink=this.value;_bdsAutodetectPlatform(this.value)" class="bds-input" style="padding-right:40px">
-              <div style="position:absolute;right:11px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:.4">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-              </div>
+            <div class="bpf-lbl">Ссылка на публикацию<span>обязательно</span></div>
+            <div class="b2-inp">
+              <input id="bdsPubLink" type="url" placeholder="https://youtube.com/… или t.me/…" value="${_e(_bloggerDealLink || '')}" oninput="_bloggerDealLink=this.value;_bdsAutodetectPlatform(this.value)" class="bds-input">
+              ${I.link}
             </div>
-            <!-- Auto-detected platform badge -->
             <div id="bdsPlatformBadge" style="display:none;margin-top:7px">
               <span class="bds-platform-badge" id="bdsPlatformBadgeInner"></span>
             </div>
           </div>
-
-          <!-- Дата публикации -->
+          ${mkBlock}
           <div>
-            <div class="bpf-lbl">Дата публикации</div>
-            <input id="bdsPubDate" type="datetime-local" class="bds-input" style="color-scheme:dark">
-          </div>
-
-          <!-- Комментарий -->
-          <div>
-            <div class="bpf-lbl">Комментарий<span>необязательно</span></div>
-            <textarea id="bdsPubComment" placeholder="Всё выполнено согласно ТЗ, ссылка в описании…" class="bds-input" style="height:64px;resize:none"></textarea>
-          </div>
-
-          <!-- Скриншот — premium uploader -->
-          <div>
-            <div class="bpf-lbl">Скриншот подтверждения</div>
-            <div id="bdsScrZone"  onclick="document.getElementById('bdsScrInput').click()" class="bds-upload-zone" role="button" tabindex="0">
-              <div id="bdsScrZoneContent">
-                <div style="font-size:22px;margin-bottom:6px"></div>
-                <div style="font-size:13px;font-weight:600;color:var(--acc2)" id="bdsScrLabel">${_bloggerDealScreenshotName||'Загрузить скриншот'}</div>
-                <div style="font-size:10.5px;color:rgba(255,255,255,.25);margin-top:3px">JPG, PNG · до 10 МБ</div>
+            <div class="bpf-lbl">Скриншот<span>необязательно, ускоряет проверку</span></div>
+            <div id="bdsScrZone" onclick="document.getElementById('bdsScrInput').click()" class="bds-upload-zone b2-drop" role="button" tabindex="0">
+              <div id="bdsScrZoneContent" class="b2-drop-in">
+                <div class="b2-tz-i">${I.image}</div>
+                <div class="b2-drop-t" id="bdsScrLabel">${_e(_bloggerDealScreenshotName || 'Загрузить скриншот')}</div>
+                <div class="b2-drop-s">JPG или PNG · до 10 МБ</div>
               </div>
-              <input type="file" id="bdsScrInput" accept="image/*" style="display:none"
-                onchange="bpBdsShot(this)">
+              <input type="file" id="bdsScrInput" accept="image/*" style="display:none" onchange="bpBdsShot(this)">
             </div>
           </div>
         </div>
-
-        <button onclick="btnRipple(this);submitBloggerLink('${dealId}')" class="bds-btn-green">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          Отправить на проверку
-        </button>
-
+        <button onclick="btnRipple(this);submitBloggerLink('${dealId}')" class="bds-btn-green">${I.send}Отправить на проверку</button>
+        ${note('Если рекламодатель не ответит за 72 часа, работа примется автоматически и деньги придут вам.', '', I.clock)}
       </div>`;
 
   // ════════════════ DONE ════════════════
   } else if(stepKey === 'done') {
-    html = `
-      <div style="padding:24px 16px 0;display:flex;flex-direction:column;align-items:center;gap:16px">
-
-        <div class="bpf-seal" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-
+    const paid = d.statusKey === 'done';
+    const acc = (_rule && _rule.id === 'accept') ? _rule : null;
+    _ownRule = !!acc;
+    html = paid ? `
+      <div class="b2 b2-center">
+        <div class="bpf-seal" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"/></svg></div>
         <div class="bpf-focal bpf-focal-mid">
-          <h2 class="bpf-h">Работа сдана</h2>
-          <p class="bpf-sub">Рекламодатель получил уведомление и скоро проверит публикацию.</p>
+          <h2 class="bpf-h">Деньги<br>на балансе</h2>
+          <p class="bpf-sub"><b class="b2-money">${_e(_price)}</b> зачислены. Сделка закрыта — спасибо за работу!</p>
         </div>
-
-        <!-- What's next card -->
-        <div style="width:100%;background:#0e0e0e;border:1.5px solid rgba(255,255,255,.07);border-radius:16px;padding:16px;animation:bdsFadeUp .45s .3s ease both">
-          <div style="font-size:9.5px;font-weight:600;color:rgba(255,255,255,.28);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Что дальше?</div>
-          <div style="display:flex;flex-direction:column;gap:10px">
-            <div style="display:flex;align-items:flex-start;gap:12px">
-              <div style="width:28px;height:28px;border-radius:10px;background:rgba(255,255,255,0.077);border:1px solid rgba(255,255,255,0.14);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--acc2)" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-              </div>
-              <div>
-                <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:2px">Ожидайте проверки</div>
-                <div style="font-size:11px;color:rgba(255,255,255,.38);line-height:1.5">Уведомим, как только рекламодатель примет работу</div>
-              </div>
-            </div>
-            <div style="height:1px;background:rgba(255,255,255,.05)"></div>
-            <div style="display:flex;align-items:flex-start;gap:12px">
-              <div style="width:28px;height:28px;border-radius:10px;background:rgba(255,255,255,0.055);border:1px solid rgba(255,255,255,0.11);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#e4e4e7" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-              </div>
-              <div>
-                <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:2px">Деньги придут автоматически</div>
-                <div style="font-size:11px;color:rgba(255,255,255,.38);line-height:1.5">После подтверждения сделка закроется и <b style="color:#3ddc84">${bpEsc(d.price)}</b> поступят на баланс</div>
-              </div>
-            </div>
-          </div>
+        <button onclick="btnRipple(this);closeBloggerDealStep();goTo('balance')" class="bds-btn-primary">${I.wallet}Открыть кошелёк</button>
+        <button onclick="btnRipple(this);closeBloggerDealStep();switchMainSection('deals')" class="bds-btn-ghost">К списку сделок</button>
+      </div>` : `
+      <div class="b2 b2-center">
+        <div class="bpf-seal" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="bpf-focal bpf-focal-mid">
+          <h2 class="bpf-h">Работа<br>сдана</h2>
+          <p class="bpf-sub">Рекламодатель получил ссылку и проверяет публикацию.</p>
         </div>
-
-        <!-- CTAs -->
-        <div style="width:100%;display:flex;flex-direction:column;gap:9px;animation:bdsFadeUp .45s .4s ease both">
-          <button onclick="btnRipple(this);openBloggerChat('${dealId}')" class="bds-btn-primary">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            Перейти в чат
-          </button>
-          <button onclick="btnRipple(this);closeBloggerDealStep();switchMainSection('deals')" class="bds-btn-ghost">
-            К списку сделок
-          </button>
+        <div class="b2-card">
+          <div class="b2-ct">Что дальше</div>
+          <ol class="b2-tl">
+            <li class="now"><b>Проверка</b><span>${acc
+              ? 'Если рекламодатель не ответит до ' + _e(_bdsWhen(acc.at)) + ', работа примется автоматически'
+              : 'Если рекламодатель не ответит за 72 часа, работа примется автоматически'}</span></li>
+            <li><b>Оплата ${_e(_price)}</b><span>Придёт на баланс сразу после приёмки</span></li>
+            <li><b>Вывод</b><span>На карту — из кошелька, когда удобно</span></li>
+          </ol>
         </div>
-
+        <button onclick="btnRipple(this);openBloggerChat('${dealId}')" class="bds-btn-primary">${I.chat}Перейти в чат</button>
+        <button onclick="btnRipple(this);closeBloggerDealStep();switchMainSection('deals')" class="bds-btn-ghost">К списку сделок</button>
       </div>`;
   }
 
+  /* Строку регламента (bp-deadlines) прячем, когда тот же срок экран
+     уже назвал сам, — одна и та же дата дважды читается как две. */
+  body.classList.toggle('b2-own-rule', _ownRule);
   body.innerHTML = html;
-
-  // ── Publish countdown ──
-  if(stepKey === 'publish') {
-    let secs = 6;
-    const timerEl = document.getElementById('bdsPublishTimer');
-    const progressEl = document.getElementById('bdsPublishProgress');
-    const countdownEl = document.getElementById('bdsPublishCountdown');
-    const wrapEl = document.getElementById('bdsPublishBtnWrap');
-
-    // Kick off the progress bar via CSS transition
-    requestAnimationFrame(() => {
-      if(progressEl) progressEl.style.transform = 'scaleX(1)';
-    });
-
-    const tick = setInterval(() => {
-      secs--;
-      if(timerEl) timerEl.textContent = secs + 's';
-      if(secs <= 0) {
-        clearInterval(tick);
-        if(countdownEl) { countdownEl.style.opacity='0'; countdownEl.style.transition='opacity .3s'; setTimeout(()=>{countdownEl.style.display='none'},300); }
-        if(wrapEl) { wrapEl.style.display='block'; wrapEl.style.animation='bdsFadeUp .35s ease'; }
-        const btn = document.getElementById('bdsPublishBtn');
-        if(btn) {
-          const did = btn.dataset.dealid;
-          btn.onclick = function() { btnRipple(this); advanceBloggerDealByKey(did, 'publish'); };
-        }
-      }
-    }, 1000);
-  }
 }
 
 
@@ -30230,13 +30299,21 @@ function advanceBloggerDeal(dealId, currentStep, skip) {
   // ── Синхронизируем шаг общей сделки для рекламодателя (по ключу фазы) ──
   const chatId = d.chatId || dealId;
   const contact = CHAT_CONTACTS.find(c => String(c.id) === String(chatId));
+  /* bp-bds2: принятие оплаченного заказа на экране шага — это и есть
+     старт работы (см. bdsStartWork), правило сроков его учитывает. */
+  const _accNow = Date.now();
+  const _isAcc = !!(steps[currentStep-1] && steps[currentStep-1].key === 'accept');
+  if(_isAcc && !d.startedAt) d.startedAt = _accNow;
   if(contact && contact.deal) {
     const _key = (steps[currentStep-1] && steps[currentStep-1].key) || 'content';
     const newAdvStep = _bloggerKeyToSharedStep(_key);
     contact.deal.step = newAdvStep;
+    if(_isAcc && !contact.deal.startedAt) contact.deal.startedAt = _accNow;
     saveChats();
     if(contact._dealId && typeof _sharedDealUpsert === 'function') {
-      _sharedDealUpsert({ dealId: contact._dealId, step: newAdvStep, status: 'active', updatedAt: Date.now() });
+      const _up = { dealId: contact._dealId, step: newAdvStep, status: 'active', updatedAt: _accNow };
+      if(_isAcc) _up.startedAt = contact.deal.startedAt;
+      _sharedDealUpsert(_up);
     }
   }
 
@@ -30259,8 +30336,7 @@ function submitBloggerLink(dealId) {
      о строке erid работа не сдаётся. Если маркировки нет вовсе —
      сдавать тоже нельзя, публикация была бы вне закона. */
   const _mkD = getBloggerDeals().find(x => x.id === dealId);
-  const _mkLine = (typeof bpBloggerDealMarking === 'function' && typeof bpMarkLine === 'function')
-    ? bpMarkLine(bpBloggerDealMarking(_mkD)) : '';
+  const _mkLine = _bdsMarkLine(_mkD);   /* bp-bds2: и через общую сделку, если контакта нет */
   const _mkBox = document.getElementById('bdsErid');
   if(!_mkLine){
     showAuthToast && showAuthToast('Рекламодатель не оформил маркировку — сдавать работу нельзя', 'err');
@@ -30325,6 +30401,16 @@ function submitBloggerLink(dealId) {
 function openBloggerChat(dealId) {
   closeBloggerDealStep();
   closeBloggerDealDetail();
+  /* bp-bds2: «Написать рекламодателю» ведёт прямо в переписку этой
+     сделки, а не в общий список чатов, где её ещё надо найти. */
+  try{
+    const _d = dealId ? getBloggerDeals().find(x => x.id === dealId) : null;
+    const _cid = _d ? _d.chatId : null;
+    if(_cid != null && typeof openChatDialog === 'function' && CHAT_CONTACTS.some(c => String(c.id) === String(_cid))){
+      openChatDialog(_cid);
+      return;
+    }
+  }catch(e){ BPERR(e, 'bds2chat'); }
   goTo('chats');
   switchMainSection('chats');
 }
@@ -36360,7 +36446,8 @@ function decorateStep(dealId){
   var body = document.getElementById('bdsBody');
   if(body && !body.querySelector('.dp-ctx')){
     var ctx = document.createElement('div');
-    ctx.innerHTML = ctxBar(d.price, d.deadline, d.statusKey, d.num, true, true);
+    /* bp-bds2: срок — та же дата, что на самом шаге */
+    ctx.innerHTML = ctxBar(d.price, (typeof _bdsDueStr === 'function' ? _bdsDueStr(d) : d.deadline), d.statusKey, d.num, true, true);
     body.insertBefore(ctx.firstChild, body.firstChild);
   }
   tick();
@@ -62126,8 +62213,14 @@ function ruleFor(c){
        пишет только bloggerVideoLink/bloggerVideoObjURL и step='3.5').
        Иначе сданное на согласование видео через 24 ч отменялось как
        «не приступил» — с возвратом денег рекламодателю. */
+    /* bp-bds2: и явная отметка «Приступаю к работе» (startedAt) — в
+       контакте или в общей сделке, которую видят обе стороны. Раньше
+       без сданного ролика или ссылки сделку на неделю отменяло через
+       сутки, хотя блогер честно снимал. */
+    var _sdS = sd(c._dealId);
     var started = !!(c.deal.pubLink || c.deal.sentVideoObjURL || c.deal.videoStep
-      || c.deal.bloggerVideoLink || c.deal.bloggerVideoObjURL || st >= 3.5);
+      || c.deal.bloggerVideoLink || c.deal.bloggerVideoObjURL || st >= 3.5
+      || num(c.deal.startedAt) || num(_sdS && _sdS.startedAt));
     if(!started){
       return { id:'start', at: since + START_H * H,
         adv:'Если блогер не приступит до {D} — сделка отменится и деньги вернутся вам',
@@ -90619,6 +90712,248 @@ setInterval(function(){
 settle();
 })();
 </script>
+
+<style id="bp-bds2-css">
+/* ══ ШАГИ БЛОГЕРА · ВИД (bp-bds2, 15.09.2026) ═════════════════════════
+   Пара к правкам в renderBloggerDealStep (пометки «bp-bds2»): разметка
+   шагов пересобрана на классы .b2-*, здесь их вид. Язык тот же, что у
+   экрана сделки: поверхность #121218, волосяная рамка, синь #2f6ce0 /
+   #5b93f5, янтарь — срок и внимание, красный — правки. Зелёного нет —
+   его снимает сторож deGreen.
+   Имена классов подобраны так, чтобы не попасть под общие правила
+   вида [class*="-sum"], [class*="-x"], [class*="-list"], [class*="-plus"].
+   Откат: удалить этот блок и вернуть прежние шаблоны из истории. */
+
+#bdsStepCounter{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100% }
+
+#bdsBody .b2{
+  display:flex; flex-direction:column; gap:12px;
+  padding:2px 16px 0;
+}
+#bdsBody .b2-center .bpf-seal{ margin-top:14px }
+#bdsBody .b2 .bpf-focal{ padding-top:20px }
+#bdsBody .b2 .bpf-focal-wait{ padding-top:26px }
+
+#bdsBody .b2-ic{
+  width:15px; height:15px; flex-shrink:0;
+  fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;
+}
+
+/* ── надзаголовок-пилюля: где человек сейчас ── */
+#bdsBody .b2-eye{
+  display:inline-flex; align-items:center; gap:7px;
+  margin:0 0 12px; padding:5px 11px 5px 9px; border-radius:20px;
+  font-size:11px; font-weight:700; letter-spacing:.2px; line-height:1.2;
+  color:#5b93f5; background:rgba(47,108,224,.12); border:1px solid rgba(47,108,224,.3);
+}
+#bdsBody .b2-eye i{
+  width:6px; height:6px; border-radius:50%; background:currentColor; flex-shrink:0;
+  box-shadow:0 0 0 0 currentColor; animation:b2Ping 2s ease-out infinite;
+}
+#bdsBody .b2-eye-warm{ color:#f5a524; background:rgba(245,165,36,.1); border-color:rgba(245,165,36,.3) }
+#bdsBody .b2-eye-bad { color:#ff8090; background:rgba(240,71,94,.1);  border-color:rgba(240,71,94,.32) }
+#bdsBody .b2-eye-ok  { color:#fff;    background:#2f6ce0;              border-color:#2f6ce0 }
+#bdsBody .b2-eye-ok i{ animation:none }
+@keyframes b2Ping{ 0%{ box-shadow:0 0 0 0 currentColor } 70%,100%{ box-shadow:0 0 0 5px transparent } }
+
+#bdsBody .b2 .bpf-sub b{ color:#fff; font-weight:700 }
+#bdsBody .b2-money{ white-space:nowrap; color:#fff; font-weight:700; font-variant-numeric:tabular-nums }
+
+/* ── карточка и её подпись ── */
+#bdsBody .b2-card{
+  background:#121218; border:1px solid rgba(255,255,255,.09); border-radius:16px;
+  padding:14px 16px;
+}
+#bdsBody .b2-ct{
+  display:flex; align-items:center; gap:7px; margin:0 0 10px;
+  font-size:11.5px; font-weight:700; letter-spacing:.2px; color:#7d818c;
+}
+#bdsBody .b2-ct .b2-ic{ width:14px; height:14px }
+#bdsBody .b2-cnt{ margin-left:auto; color:#5b93f5; font-variant-numeric:tabular-nums }
+#bdsBody .b2-p{ margin:0; font-size:13px; line-height:1.55; color:#c7c9d0; word-break:break-word }
+#bdsBody .b2-card-warn{ background:rgba(245,165,36,.06); border-color:rgba(245,165,36,.26) }
+#bdsBody .b2-card-warn .b2-ct{ color:#f5a524 }
+#bdsBody .b2-card-bad{ background:rgba(240,71,94,.06); border-color:rgba(240,71,94,.28) }
+#bdsBody .b2-card-bad .b2-ct{ color:#ff8090 }
+
+/* ── условия заказа: ключ слева, значение справа ── */
+#bdsBody .b2-kv-r{
+  display:flex; justify-content:space-between; align-items:baseline; gap:14px;
+  padding:10px 0; border-top:1px solid rgba(255,255,255,.06);
+  font-size:13px; line-height:1.4;
+}
+#bdsBody .b2-kv-r:first-child{ border-top:0; padding-top:2px }
+#bdsBody .b2-kv-r:last-child{ padding-bottom:0 }
+#bdsBody .b2-kv-r > span{ color:#9a9ea8; flex-shrink:0 }
+#bdsBody .b2-kv-r b{ color:#fff; font-weight:600; text-align:right; min-width:0; word-break:break-word }
+#bdsBody .b2-ok{ display:inline-flex; align-items:center; gap:5px; color:#5b93f5 }
+#bdsBody .b2-ok .b2-ic{ width:13px; height:13px; stroke-width:2.6 }
+
+/* ── техзадание: плитка-иконка, три строки текста, шеврон ── */
+#bdsBody .b2-tz{
+  display:flex; align-items:center; gap:12px; cursor:pointer;
+  background:#121218; border:1px solid rgba(255,255,255,.09); border-radius:16px;
+  padding:14px; transition:background .16s, border-color .16s;
+  -webkit-tap-highlight-color:transparent;
+}
+#bdsBody .b2-tz:active{ background:#17171f; border-color:rgba(255,255,255,.16) }
+#bdsBody .b2-tz-i{
+  width:40px; height:40px; border-radius:12px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center;
+  color:#5b93f5; background:rgba(47,108,224,.13); border:1px solid rgba(47,108,224,.4);
+}
+#bdsBody .b2-tz-i .b2-ic{ width:18px; height:18px }
+#bdsBody .b2-tz-t{ flex:1; min-width:0 }
+#bdsBody .b2-tz-t .b2-ct{ margin-bottom:4px }
+#bdsBody .b2-tz-v{
+  font-size:13px; line-height:1.45; color:#d6d8de; word-break:break-word;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
+}
+#bdsBody .b2-chev{ width:16px; height:16px; color:#7d818c }
+
+/* ── заметка: текст с иконкой, без тяжёлой коробки ── */
+#bdsBody .b2-note{
+  display:flex; align-items:flex-start; gap:10px;
+  padding:12px 14px; border-radius:14px;
+  background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07);
+  font-size:12.5px; line-height:1.5; color:#b9bcc4;
+}
+#bdsBody .b2-note .b2-ic{ margin-top:1px; color:#5b93f5 }
+#bdsBody .b2-note b{ color:#fff; font-weight:700 }
+#bdsBody .b2-note-warn{ background:rgba(245,165,36,.07); border-color:rgba(245,165,36,.24) }
+#bdsBody .b2-note-warn .b2-ic{ color:#f5a524 }
+
+/* ── второе действие — текстом, чтобы не спорить с главной кнопкой ── */
+#bdsBody .b2-link{
+  display:flex; align-items:center; justify-content:center; gap:8px; width:100%;
+  background:none; border:0; padding:10px 8px; margin:-4px 0 0;
+  font:inherit; font-size:13px; font-weight:600; color:#5b93f5; cursor:pointer;
+  -webkit-tap-highlight-color:transparent; border-radius:12px;
+}
+#bdsBody .b2-link:active{ background:rgba(47,108,224,.08) }
+#bdsBody .b2-row2{ display:flex; gap:8px; margin-top:12px }
+#bdsBody .b2-row2 .b2-link{ flex:1; margin:0; border:1px solid rgba(255,255,255,.12); padding:10px 6px; font-size:12.5px }
+#bdsBody .b2 .bds-btn-ghost{ width:100% }
+#bdsBody .b2 .bds-btn-primary:disabled{ cursor:default }
+#bdsBody .b2 .bds-btn-primary:disabled::after{ content:none }
+#bdsBody .b2 .bpf-lbl span{ margin-left:.3em }
+#bdsBody .b2 .bds-btn-primary .b2-ic,
+#bdsBody .b2 .bds-btn-green .b2-ic{ width:16px; height:16px; stroke-width:2.4 }
+#bdsBody .b2 .bds-btn-primary,#bdsBody .b2 .bds-btn-green{ margin-top:2px }
+
+/* ── чек-лист: большая зона нажатия, галочка пружинит ── */
+#bdsBody .b2-chk{ padding-bottom:6px }
+#bdsBody .b2-bar{ height:4px; border-radius:4px; background:rgba(255,255,255,.07); overflow:hidden; margin:0 0 4px }
+#bdsBody .b2-bar i{
+  display:block; height:100%; border-radius:4px; transform-origin:left center;
+  background:linear-gradient(90deg,#2f6ce0,#5b93f5); transition:transform .35s cubic-bezier(.22,1,.36,1);
+}
+#bdsBody .b2-ci{
+  display:flex; align-items:flex-start; gap:12px; width:100%; text-align:left;
+  background:none; border:0; border-top:1px solid rgba(255,255,255,.06);
+  padding:12px 0; margin:0; cursor:pointer;
+  font:inherit; font-size:13.5px; line-height:1.45; color:#e4e5ea;
+  -webkit-tap-highlight-color:transparent;
+}
+#bdsBody .b2-ct + .b2-ci{ border-top:0; padding-top:4px }
+#bdsBody .b2-box{
+  width:22px; height:22px; border-radius:7px; flex-shrink:0; margin-top:-1px;
+  display:flex; align-items:center; justify-content:center;
+  border:1.5px solid rgba(255,255,255,.24); background:transparent;
+  transition:background .18s, border-color .18s;
+}
+#bdsBody .b2-box .b2-ic{
+  width:13px; height:13px; stroke:#fff; stroke-width:3; opacity:0; transform:scale(.5);
+  transition:opacity .15s, transform .22s cubic-bezier(.34,1.56,.64,1);
+}
+#bdsBody .b2-ci.on .b2-box{ background:#2f6ce0; border-color:#2f6ce0 }
+#bdsBody .b2-ci.on .b2-box .b2-ic{ opacity:1; transform:none }
+#bdsBody .b2-ci.on span{ color:#9a9ea8 }
+#bdsBody .b2-chk-tz .b2-ci.on span{ text-decoration:line-through; text-decoration-color:rgba(154,158,168,.55) }
+#bdsBody .b2-req{
+  display:inline-block; margin-left:7px; padding:1px 7px; border-radius:10px; vertical-align:1px;
+  font-style:normal; font-size:10.5px; font-weight:700; letter-spacing:.2px;
+  color:#f5a524; background:rgba(245,165,36,.12);
+}
+#bdsBody .b2-ci.on .b2-req{ color:#5b93f5; background:rgba(47,108,224,.13) }
+#bdsBody .b2-more{
+  display:flex; align-items:center; gap:9px; width:100%;
+  background:none; border:0; border-top:1px solid rgba(255,255,255,.06);
+  padding:12px 0 8px; margin:0; cursor:pointer; text-align:left;
+  font:inherit; font-size:13px; font-weight:600; color:#5b93f5;
+  -webkit-tap-highlight-color:transparent;
+}
+#bdsBody .b2-more .b2-chev{ margin-left:auto }
+@keyframes b2Shake{ 0%,100%{ transform:none } 20%{ transform:translateX(-6px) } 40%{ transform:translateX(5px) } 60%{ transform:translateX(-3px) } 80%{ transform:translateX(2px) } }
+#bdsBody .b2-shake{ animation:b2Shake .42s ease }
+#bdsBody .b2-shake .b2-box{ border-color:#f5a524 }
+
+/* ── путь сделки: номера по порядку, текущий — синий ── */
+#bdsBody .b2-tl{ list-style:none; margin:0; padding:0; counter-reset:b2s }
+#bdsBody .b2-tl li{ position:relative; padding:1px 0 16px 36px; min-height:24px; counter-increment:b2s }
+#bdsBody .b2-tl li:last-child{ padding-bottom:0 }
+#bdsBody .b2-tl li::before{
+  content:counter(b2s); position:absolute; left:0; top:0;
+  width:24px; height:24px; border-radius:50%; box-sizing:border-box;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:700; color:#9a9ea8; font-variant-numeric:tabular-nums;
+  background:#121218; border:1.5px solid rgba(255,255,255,.16);
+}
+#bdsBody .b2-tl li::after{
+  content:''; position:absolute; left:11.25px; top:28px; bottom:4px; width:1.5px;
+  background:rgba(255,255,255,.08);
+}
+#bdsBody .b2-tl li:last-child::after{ content:none }
+#bdsBody .b2-tl li.now::before{ color:#fff; background:#2f6ce0; border-color:#2f6ce0; box-shadow:0 0 0 4px rgba(47,108,224,.18) }
+#bdsBody .b2-tl b{ display:block; font-size:13.5px; font-weight:600; color:#fff; line-height:1.35 }
+#bdsBody .b2-tl span{ display:block; margin-top:2px; font-size:12px; line-height:1.45; color:#8b8f99 }
+
+/* ── загрузка файла: плитка, подпись, формат ── */
+#bdsBody .b2-drop{
+  display:flex; flex-direction:column; align-items:center; gap:7px; text-align:center;
+  padding:18px 14px; border-radius:14px; cursor:pointer;
+  border:1.5px dashed rgba(255,255,255,.16); background:rgba(255,255,255,.02);
+  transition:border-color .16s, background .16s; -webkit-tap-highlight-color:transparent;
+}
+#bdsBody .b2-drop:active{ background:rgba(47,108,224,.07); border-color:rgba(47,108,224,.5) }
+#bdsBody .b2-drop-in{ display:flex; flex-direction:column; align-items:center; gap:7px }
+#bdsBody .b2-drop-t{ font-size:13.5px; font-weight:600; color:#fff; line-height:1.4; word-break:break-word }
+#bdsBody .b2-drop-s{ font-size:11px; color:#7d818c }
+#bdsBody .b2-or{ display:flex; align-items:center; gap:10px; font-size:11.5px; color:#7d818c; margin:-4px 0 }
+#bdsBody .b2-or::before,#bdsBody .b2-or::after{ content:''; flex:1; height:1px; background:rgba(255,255,255,.08) }
+#bdsBody .b2-inp{ position:relative }
+#bdsBody .b2-inp .bds-input{ padding-right:42px !important }
+#bdsBody .b2-inp > .b2-ic{
+  position:absolute; right:13px; top:50%; transform:translateY(-50%);
+  color:#fff; opacity:.4; pointer-events:none;
+}
+#bdsBody .b2-vprev{ width:100%; max-height:240px; margin-top:10px; border-radius:12px; background:#000; display:block }
+#bdsBody .b2 > .b2-vprev{ margin-top:0 }
+
+/* ── отправленный ролик ── */
+#bdsBody .b2-sent{ display:flex; align-items:center; gap:12px }
+#bdsBody .b2-sent-t{ flex:1; min-width:0 }
+#bdsBody .b2-sent-t b{ display:block; font-size:13.5px; font-weight:700; color:#fff }
+#bdsBody .b2-sent-t span{ display:block; margin-top:2px; font-size:12px; color:#5b93f5; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+
+/* ── маркировка ── */
+#bdsBody .b2-mk .bp-mk-line{ margin:0 0 10px; -webkit-user-select:all; user-select:all }
+#bdsBody .b2-mk .b2-p{ margin-top:10px; font-size:12px; color:#9a9ea8 }
+#bdsBody .bp-mk-copy{ display:inline-flex; align-items:center; gap:7px; margin-bottom:0; padding:8px 12px; font-size:12px }
+#bdsBody .bp-mk-copy .b2-ic{ width:13px; height:13px }
+#bdsBody .b2-mk-done{
+  padding:12px 14px; border-radius:12px;
+  background:rgba(47,108,224,.08); border:1px solid rgba(47,108,224,.28); color:#d6d8de;
+}
+
+/* Строка регламента bp-deadlines: срок уже назван на самом экране. */
+#bdsBody.b2-own-rule > .bpdl{ display:none !important }
+
+@media (prefers-reduced-motion:reduce){
+  #bdsBody .b2-eye i,#bdsBody .b2-shake{ animation:none }
+  #bdsBody .b2-box .b2-ic,#bdsBody .b2-bar i{ transition:none }
+}
+</style>
 
 </body>
 </html>
