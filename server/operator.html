@@ -56,7 +56,7 @@
   .gate p{color:var(--t2);margin:0 0 14px;line-height:1.55;font-size:var(--fs-md)}
   .gate .hint{color:var(--t3);font-size:var(--fs-sm)}
   .brandmark{display:inline-flex;align-items:center;gap:10px;margin-bottom:18px;color:var(--t2);font-size:var(--fs-sm);font-weight:600;letter-spacing:.3px}
-  .brandmark i{width:30px;height:30px;border-radius:9px;background:linear-gradient(140deg,#5b93f5,#1b49a8);display:grid;place-items:center;font-style:normal;font-weight:800;color:#fff;font-size:13px}
+  .brandmark i{width:30px;height:30px;border-radius:9px;background:linear-gradient(140deg,#5b93f5,#1b49a8);display:grid;place-items:center;font-style:normal;font-weight:800;color:#fff;font-size:var(--fs-sm)}
   .inp{width:100%;background:var(--card2);border:1px solid var(--line2);border-radius:var(--r2);padding:11px 13px;outline:none;transition:border-color .15s}
   .inp:focus{border-color:var(--acc)}
   textarea.inp{resize:vertical;min-height:84px;line-height:1.5}
@@ -158,7 +158,7 @@
   .acts{display:flex;gap:6px;flex-wrap:wrap}
   .empty{padding:38px 20px;text-align:center;color:var(--t3)}
   .more{display:flex;justify-content:center;padding:14px}
-  .ava{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:13px;color:#fff;background:#2a3240;flex-shrink:0}
+  .ava{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:var(--fs-sm);color:#fff;background:#2a3240;flex-shrink:0}
   .person{display:flex;gap:11px;align-items:center;min-width:0}
   .flags{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
 
@@ -266,9 +266,11 @@
     .side-foot .btn{padding:7px 10px;font-size:var(--fs-sm)}
     .main{padding:18px 14px 50px}
     .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-    .tile{padding:12px 13px} .tile b{font-size:22px}
+    .tile{padding:12px 13px}
     .todo{grid-template-columns:minmax(0,1fr)}
-    .head h1{font-size:24px}
+    /* на узком экране шкала сжимается целиком: заголовок и числа плиток
+       по-прежнему берут --fs-xl, ступени остаются не меньше 1,25 */
+    :root{ --fs-xl:24px; --fs-lg:19px }
   }
 </style>
 </head>
