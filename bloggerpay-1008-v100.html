@@ -37129,7 +37129,7 @@ function makeCard(type, title, desc, opts){
 
   try{
     if(el.animate) el.animate(
-      [{ opacity:0, transform:'translate3d(0,-16px,0) scale(.96)' }, { opacity:1, transform:'none' }],
+      [{ opacity:0, transform:'translate3d(0,16px,0) scale(.96)' }, { opacity:1, transform:'none' }],
       { duration: 360, easing:'cubic-bezier(.2,1,.35,1)' }
     );
   }catch(e){BPERR(e,31111)}
@@ -78001,35 +78001,98 @@ window.bpPf2Open = function(id){
   }catch(e){ E(e); }
 };
 window.bpPf2Close = function(){ var ov = $('pf2Ov'); if(ov) ov.remove(); };
+/* Рейтинг переписан 16.09.2026 по просьбе владельца: «не нравится, как
+   сделан раздел рейтинг — хочу красиво». Было: ровный серый список, в
+   котором число сделок стояло дважды, а первые места ничем не
+   отличались от десятого.
+
+   Стало: тройка на подиуме (второй — первый — третий, как на пьедестале),
+   своя строка отдельной карточкой с расстоянием до следующего места, а
+   в списке у каждого — полоса по числу сделок, чтобы разрыв был виден
+   глазом, а не вычитанием. */
 function fillBoard(ov){
-  var u = me(), B = board(), adv = isAdv(), top = B.rows.slice(0, 10), body = ov.querySelector('.bd'); if(!body) return;
-  function line(r, i){
-    var n = i + 1, cls = n === 1 ? ' g1' : n === 2 ? ' g2' : n === 3 ? ' g3' : '';
-    var ava = r.img ? '<img src="' + esc(r.img) + '" alt="" loading="lazy">' : esc(r.initials || initialsOf(r.name));
-    var bg = r.img ? '' : ' style="background:' + gradOf(r.name) + '"';
-    return '<button type="button" class="pf2-lb' + (r.me && !B.inList ? ' me' : '') + '" data-pf2-user="' + esc(String(r.id)) + '">'
-      + '<span class="n' + cls + '">' + n + '</span><span class="av"' + bg + '>' + ava + '</span>'
-      + '<span class="tx"><b>' + esc(r.name || 'Блогер') + (r.me ? '<em class="pf2-lb-me">вы</em>' : '') + '</b>'
-      + '<span>' + (r.rating ? '<i>★ ' + esc(r.rating) + '</i> · ' : '') + fm(r.deals) + ' ' + plural(r.deals, 'сделка', 'сделки', 'сделок') + '</span></span>'
+  var B = board(), adv = isAdv(), rows = B.rows.slice(0, 10), body = ov.querySelector('.bd');
+  if(!body) return;
+  var top = rows.reduce(function(m, r){ return Math.max(m, num(r.deals)); }, 0) || 1;
+  var low = rows.reduce(function(m, r){ return Math.min(m, num(r.deals)); }, top);
+  /* Полоса показывает разрыв между людьми. Когда у всех поровну, она
+     превращается в одинаковое подчёркивание под каждым именем — шум. */
+  var spread = top > low;
+
+  function face(r, cls){
+    var inner = r.img ? '<img src="' + esc(r.img) + '" alt="" loading="lazy">' : esc(r.initials || initialsOf(r.name));
+    return '<span class="' + cls + '"' + (r.img ? '' : ' style="background:' + gradOf(r.name) + '"') + '>' + inner + '</span>';
+  }
+  function dealsTxt(n){ return fm(n) + ' ' + plural(n, 'сделка', 'сделки', 'сделок'); }
+  function nameOf(r){ return esc(r.name || 'Блогер') + (r.me ? '<em class="pf2-lb-me">вы</em>' : ''); }
+
+  /* Подиум. Порядок в разметке — 2 · 1 · 3: так стоят на пьедестале. */
+  function podium(){
+    if(rows.length < 3) return '';
+    var order = [rows[1], rows[0], rows[2]], place = [2, 1, 3];
+    return '<div class="rt2-pod">' + order.map(function(r, i){
+      return '<button type="button" class="rt2-p p' + place[i] + (r.me ? ' me' : '') + '"'
+        + ' data-pf2-user="' + esc(String(r.id)) + '" style="--i:' + i + '">'
+        + '<span class="rt2-ring">' + face(r, 'av') + '<i>' + place[i] + '</i></span>'
+        + '<b>' + nameOf(r) + '</b><span class="d">' + dealsTxt(r.deals) + '</span>'
+        + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function line(r, n, i){
+    var w = Math.max(6, Math.round(num(r.deals) / top * 100));
+    var bar = spread ? '<span class="rt2-bar"><i style="width:' + w + '%"></i></span>' : '';
+    return '<button type="button" class="pf2-lb' + (r.me ? ' me' : '') + '" data-pf2-user="' + esc(String(r.id)) + '" style="--i:' + i + '">'
+      + '<span class="n">' + n + '</span>' + face(r, 'av')
+      + '<span class="tx"><b>' + nameOf(r) + '</b>' + bar + '</span>'
       + '<span class="rt">' + fm(r.deals) + '<small>' + plural(r.deals, 'сделка', 'сделки', 'сделок') + '</small></span></button>';
   }
-  var html = top.map(line).join('');
-  if(!top.length){
-    html = '<div class="pf2-lb-empty">Рейтинг пока пуст<span>' + (adv ? 'Первые завершённые сделки на площадке ещё впереди' : 'Первая выполненная сделка выведет вас на первое место') + '</span></div>';
+
+  /* Своё место — отдельной карточкой, а не строкой в хвосте списка. */
+  function mineCard(){
+    if(adv) return '';
+    var my = B.mine ? num(B.mine.deals) : 0;
+    if(!B.place){
+      return '<div class="rt2-me nope"><span class="t">Вас пока нет в рейтинге</span>'
+        + '<span class="s">Первая же завершённая сделка ставит вас в список — и рекламодатели видят это в каталоге.</span></div>';
+    }
+    var total = B.total || B.rows.length || B.place;
+    var w = Math.max(4, Math.round((1 - (B.place - 1) / Math.max(1, total)) * 100));
+    var ahead = B.place > 1 ? B.rows[B.place - 2] : null;
+    var step = ahead ? Math.max(1, num(ahead.deals) - my + 1) : 0;
+    var sub = B.place === 1
+      ? 'Вы на первом месте — так держать.'
+      : (ahead ? 'До ' + (B.place - 1) + '-го места — ' + step + ' ' + plural(step, 'сделка', 'сделки', 'сделок') + '.'
+               : 'Каждая закрытая сделка поднимает выше.');
+    return '<div class="rt2-me"><span class="t">Ваше место</span>'
+      + '<span class="v"><b>' + B.place + '</b><i>из ' + fm(total) + '</i>'
+      + '<em>' + dealsTxt(my) + '</em></span>'
+      + '<span class="bar"><i style="width:' + w + '%"></i></span>'
+      + '<span class="s">' + sub + '</span></div>';
   }
-  if(B.mine && !B.inList) html += line(B.mine, B.place - 1);
+
+  var html = '';
+  if(!rows.length){
+    html = '<div class="pf2-lb-empty">Рейтинг пока пуст<span>'
+      + (adv ? 'Первые завершённые сделки на площадке ещё впереди' : 'Первая выполненная сделка выведет вас на первое место')
+      + '</span></div>';
+  } else if(rows.length < 3){
+    html = rows.map(function(r, i){ return line(r, i + 1, i); }).join('');
+  } else {
+    /* Порядок: тройка, своё место, остальные. После подиума своё место
+       человек ищет первым — в хвосте списка его пришлось бы прокручивать.
+       Карточка заодно заменяет прежнюю строку «вы» в конце: место и
+       число сделок уже сказаны в ней, строкой это было бы дважды. */
+    html = podium() + mineCard() + rows.slice(3).map(function(r, i){ return line(r, i + 4, i); }).join('');
+  }
+  if(!rows.length || rows.length < 3) html += mineCard();
+
   var hint = '';
-  if(!adv){
-    var myDeals = B.mine ? B.mine.deals : 0;
-    if(!B.place) hint = '<b>Как попасть в рейтинг.</b> Выполните первую сделку через эскроу или задание — карточка в каталоге помогает получить первый заказ.';
-    else if(!B.inList){ var need = Math.max(1, num(top[top.length - 1] && top[top.length - 1].deals) - myDeals + 1); hint = 'До списка — ещё <b>' + need + ' ' + plural(need, 'сделка', 'сделки', 'сделок') + '</b>. Каждая закрытая сделка поднимает вас выше.'; }
-    else if(B.place > 1){ var ahead = top[B.place - 2]; var gap = Math.max(1, num(ahead && ahead.deals) - myDeals + 1); hint = 'Вы в списке. До ' + (B.place - 1) + '-го места — <b>' + gap + ' ' + plural(gap, 'сделка', 'сделки', 'сделок') + '</b>.'; }
-    else hint = '<b>Вы на первом месте.</b> Так держать — рейтинг видят рекламодатели.';
-  } else if(top.length){
-    hint = 'Нажмите на блогера, чтобы открыть его карточку и отправить заявку.';
-  }
-  body.innerHTML = html + (hint ? '<div class="pf2-hint"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span>' + hint + '</span></div>' : '')
-    + '<div class="pf2-note">Считаются только завершённые сделки через эскроу и принятые задания. ' + (B.src === 'server' ? 'Данные со всей площадки.' : 'Пока сервер недоступен — по данным этого устройства.') + '</div>';
+  if(adv && rows.length) hint = 'Нажмите на блогера, чтобы открыть его карточку и отправить заявку.';
+  body.innerHTML = html
+    + (hint ? '<div class="pf2-hint"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span>' + hint + '</span></div>' : '')
+    + '<div class="pf2-note">Считаются только завершённые сделки через эскроу и принятые задания. '
+    + (B.src === 'server' ? 'Данные со всей площадки.' : 'Пока сервер недоступен — по данным этого устройства.') + '</div>';
 }
 window.bpPf2Board = function(){
   try{
@@ -86021,9 +86084,14 @@ function step1Html(){
   var show = shownChans();
   var picker = (!empty && S.addOpen && rest.length)
     ? '<div class="a3-list a3-more">' + rest.map(chanCard).join('') + '</div>' : '';
+  /* Кнопка стоит ПОД списком площадок: при раскрытии список вырастает
+     сверху, а кнопка уезжает вниз вместе с ним — движение показывает,
+     откуда взялись площадки (анимация в слое bp-abc5). */
   var addBtn = (!empty && rest.length)
-    ? '<button type="button" class="a3-add-ch' + (S.addOpen ? ' on' : '') + '" data-act="more">'
-      + (S.addOpen ? 'Скрыть' : '+ Добавить канал') + '</button>' : '';
+    ? '<button type="button" class="a3-add-ch' + (S.addOpen ? ' on' : '') + '" data-act="more"'
+      + ' aria-expanded="' + (S.addOpen ? 'true' : 'false') + '">'
+      + '<span class="a3-add-ic" aria-hidden="true"></span>'
+      + '<span class="a3-add-tx">' + (S.addOpen ? 'Скрыть' : 'Добавить канал') + '</span></button>' : '';
   var nReady = readyChans().length;
   return '<div class="a3-page">'
     + '<div class="a3-intro">' + IC.info + '<div>' + (empty
@@ -86033,7 +86101,7 @@ function step1Html(){
     + '<div class="a3-sec">' + (empty ? 'Площадки' : 'Ваши каналы')
     +   '<i' + (nReady ? ' class="on"' : '') + '>' + (mine.length ? nReady + ' из ' + mine.length + ' готово' : 'можно все три') + '</i></div>'
     + '<div class="a3-list" data-mark="' + esc(show.join(',') + '|' + (S.addOpen ? 1 : 0)) + '">' + show.map(chanCard).join('') + '</div>'
-    + addBtn + picker
+    + picker + addBtn
     + '<div class="a3-need" id="a3-need" role="alert" aria-live="polite"></div>'
     + '</div>';
 }
@@ -88495,6 +88563,321 @@ html.bp-lite body .drw:not(.open){ box-shadow:none!important }
 html body .dp-seg.now::after,
 html body .bpds-bar.now::after{ animation:none!important; opacity:0!important }
 html body .auth-title{ text-shadow:none!important }
+</style>
+<style id="bp-abc5-css">
+/* ── «Добавить канал»: раскрытие и движение ──────────────────────────
+   Площадки появляются НАД кнопкой, кнопка едет вниз, «плюс»
+   доворачивается в «×». Прежняя мгновенная анимация a3Fold выключена:
+   высоту и каскад ведёт скрипт bp-abc5, иначе они спорят. */
+html body #pg-add-blogger-card .a3-add-ch{
+  display:flex!important; align-items:center; justify-content:center; gap:9px;
+  transition:color .18s cubic-bezier(.22,1,.36,1), border-color .18s cubic-bezier(.22,1,.36,1),
+             background-color .18s cubic-bezier(.22,1,.36,1), transform .12s cubic-bezier(.22,1,.36,1);
+}
+html body #pg-add-blogger-card .a3-add-ch:active{ transform:scale(.985) }
+html body #pg-add-blogger-card .a3-add-ch.on{ background:rgba(47,108,224,.07)!important }
+html body #pg-add-blogger-card .a3-add-ic{
+  position:relative; width:13px; height:13px; flex:0 0 auto;
+  transition:transform .38s cubic-bezier(.22,1,.36,1);
+}
+html body #pg-add-blogger-card .a3-add-ic::before,
+html body #pg-add-blogger-card .a3-add-ic::after{
+  content:''; position:absolute; left:50%; top:50%; background:currentColor; border-radius:2px;
+}
+html body #pg-add-blogger-card .a3-add-ic::before{ width:13px; height:2px; margin:-1px 0 0 -6.5px }
+html body #pg-add-blogger-card .a3-add-ic::after{ width:2px; height:13px; margin:-6.5px 0 0 -1px }
+html body #pg-add-blogger-card .a3-add-ch.on .a3-add-ic{ transform:rotate(135deg) }
+html body #pg-add-blogger-card .a3-more{ animation:none!important; margin-bottom:2px }
+html body #pg-add-blogger-card .a5-ghost{ pointer-events:none }
+/* Новая карточка канала въезжает снизу — движение задаёт скрипт bp-abc5. */
+@media (prefers-reduced-motion:reduce){
+  html body #pg-add-blogger-card .a3-add-ic{ transition:none }
+}
+</style>
+
+<script id="bp-abc5">
+/* Движение при нажатии «Добавить канал».
+   Мастер на каждое нажатие пересобирает шаг целиком (render), поэтому
+   анимировать нужно уже НОВУЮ разметку. Нажатие слушаем на погружении:
+   успеваем снять высоту старого списка и его копию ДО пересборки, а
+   дорисовываем в микрозадаче — она выполнится, когда обработчик мастера
+   отработает, но ещё до кадра, так что скачка не видно.
+
+   Раскрытие ведём высотой списка: соседи (кнопка и подсказка) едут вниз
+   сами, кадр в кадр, без второй анимации и без рассинхрона. */
+(function(){
+  'use strict';
+  var EASE = 'cubic-bezier(.22,1,.36,1)', OPEN_MS = 420, CLOSE_MS = 300, STEP = 70;
+
+  function reduced(){
+    try{ return window.matchMedia('(prefers-reduced-motion:reduce)').matches; }catch(e){ return false; }
+  }
+  function pg(){ return document.getElementById('pg-add-blogger-card'); }
+  function play(el, frames, opts){ try{ return el.animate(frames, opts); }catch(e){ return null; } }
+
+  document.addEventListener('click', function(ev){
+    try{
+      var host = pg(); if(!host || !host.classList.contains('on')) return;
+      var btn = ev.target && ev.target.closest ? ev.target.closest('[data-act="more"]') : null;
+      if(!btn || !host.contains(btn)) return;
+      if(reduced() || !document.body.animate || typeof queueMicrotask !== 'function') return;
+      var wasOpen = btn.classList.contains('on');
+      var list = host.querySelector('.a3-more');
+      var h = list ? list.offsetHeight : 0;
+      var ghost = (wasOpen && list && h) ? list.cloneNode(true) : null;
+      queueMicrotask(function(){ paint(wasOpen, h, ghost); });
+    }catch(e){ if(window.bpErr) window.bpErr(e); }
+  }, true);
+
+  function paint(wasOpen, h, ghost){
+    try{
+      var host = pg(); if(!host) return;
+      var btn = host.querySelector('.a3-add-ch'); if(!btn) return;
+      if(!wasOpen) openUp(host, btn); else closeDown(btn, h, ghost);
+    }catch(e){ if(window.bpErr) window.bpErr(e); }
+  }
+
+  /* ── состав списка каналов ─────────────────────────────────────────
+     Мастер не сообщает наружу, что список изменился, поэтому держим
+     слепок его состава: появился канал — отмечаем карточку волной по
+     кромке.
+
+     Слепок держим, пока список существует. Канал добавляют В РЕДАКТОРЕ,
+     а там списка нет: если обнулять слепок на каждом нажатии, к возврату
+     сравнивать будет не с чем и новая карточка останется незамеченной. */
+  var seen = null;
+
+  function ids(){
+    var host = pg(); if(!host) return null;
+    var list = host.querySelector('.a3-list:not(.a3-more)'); if(!list) return null;
+    return Array.prototype.map.call(list.children, function(c){ return c.getAttribute('data-p') || ''; });
+  }
+
+  document.addEventListener('click', function(ev){
+    try{
+      var host = pg(); if(!host || !host.classList.contains('on')) return;
+      /* Любое нажатие внутри раздела: кнопка «Готово» помечена data-cta,
+         а не data-act — по [data-act] мы бы её пропустили. */
+      if(!ev.target || !ev.target.closest) return;
+      var before = ids();
+      queueMicrotask(function(){ settle(before); });
+    }catch(e){ if(window.bpErr) window.bpErr(e); }
+  }, true);
+
+  function settle(before){
+    try{
+      var host = pg(); if(!host) return;
+      var list = host.querySelector('.a3-list:not(.a3-more)');
+      var now = ids();
+      if(!list || !now) return;        /* открыт редактор — слепок не трогаем */
+      var was = before || seen;
+      if(was){
+        now.forEach(function(id, i){
+          if(id && was.indexOf(id) < 0) mark(list.children[i]);
+        });
+      }
+      seen = now;
+    }catch(e){ if(window.bpErr) window.bpErr(e); }
+  }
+
+  /* Карточка только что добавленного канала: въезжает снизу — оттуда же,
+     откуда человек вернулся (из редактора). Кромку не подсвечиваем: у
+     готового канала она и так синяя, вспышки не видно. */
+  function mark(card){
+    if(!card || reduced() || !document.body.animate) return;
+    play(card, [{ opacity:0, transform:'translateY(18px) scale(.975)', filter:'blur(4px)' },
+                { opacity:1, transform:'none', filter:'blur(0px)' }],
+         { duration: 440, easing: EASE });
+  }
+
+
+  function openUp(host, btn){
+    var box = host.querySelector('.a3-more'); if(!box) return;
+    var full = box.offsetHeight; if(!full) return;
+    /* Высоту ставим сразу: иначе первый кадр успевает показать список
+       целиком, и раскрытие выглядит рывком. */
+    box.style.height = '0px'; box.style.overflow = 'hidden';
+    var a = play(box, [{ height:'0px', opacity:.4 }, { height: full + 'px', opacity:1 }],
+                 { duration: OPEN_MS, easing: EASE });
+    var done = function(){ try{ box.style.height = ''; box.style.overflow = ''; }catch(e){} };
+    if(a){ a.onfinish = done; a.oncancel = done; } else done();
+    /* Площадки выезжают ИЗ-ПОД кнопки: нижняя — первой. Пока список
+       растёт, они идут снизу вверх, поэтому кажется, что кнопка их
+       выпускает, а не что они падают сверху. Размытие снимает ощущение
+       «скачка» на первых кадрах. */
+    var kids = Array.prototype.slice.call(box.children);
+    kids.forEach(function(c, i){
+      var k = kids.length - 1 - i;
+      play(c, [{ opacity:0, transform:'translateY(22px) scale(.965)', filter:'blur(4px)' },
+               { opacity:1, transform:'none', filter:'blur(0px)' }],
+           { duration: 380, delay: 40 + k * STEP, easing: EASE, fill:'backwards' });
+    });
+    /* Список вырос за нижний край — подводим кнопку к глазам. */
+    setTimeout(function(){
+      try{
+        var r = btn.getBoundingClientRect();
+        if(r.bottom > window.innerHeight - 96) btn.scrollIntoView({ block:'nearest', behavior:'smooth' });
+      }catch(e){}
+    }, OPEN_MS + 40);
+  }
+
+  function closeDown(btn, h, ghost){
+    if(!ghost || !h || !btn.parentNode) return;
+    ghost.classList.add('a5-ghost');
+    ghost.style.height = h + 'px'; ghost.style.overflow = 'hidden';
+    btn.parentNode.insertBefore(ghost, btn);
+    var kill = function(){ try{ ghost.remove(); }catch(e){} };
+    /* Уходят в обратном порядке — верхняя первой, будто складываются
+       обратно под кнопку. */
+    Array.prototype.slice.call(ghost.children).forEach(function(c, i){
+      play(c, [{ opacity:1, transform:'none' },
+               { opacity:0, transform:'translateY(16px) scale(.975)', filter:'blur(3px)' }],
+           { duration: 220, delay: i * 45, easing: EASE, fill:'forwards' });
+    });
+    var a = play(ghost, [{ height: h + 'px', opacity:1 }, { height:'0px', opacity:0 }],
+                 { duration: CLOSE_MS, easing: EASE });
+    if(a){ a.onfinish = kill; a.oncancel = kill; } else kill();
+    /* Кадры могут не идти (вкладка ушла в фон) — копия не должна остаться. */
+    setTimeout(kill, CLOSE_MS + 600);
+  }
+})();
+</script>
+<style id="bp-toast3-css">
+/* ── Тосты: снизу, не поверх шапки ───────────────────────────────────
+   Владелец: «чтобы ничего ничем не перекрывалось». Стопка стояла вверху
+   и закрывала шапку, имя в профиле и кнопку «Сохранить» — а при смене
+   роли их набиралось сразу три. Теперь стопка внизу (там под ней только
+   лента, которую можно прокрутить) и в ней не больше двух карточек.
+
+   Обёртке #bpToastWrap положение задаётся ИНЛАЙНОМ при каждом тосте,
+   поэтому здесь !important — иначе правило не сработает. */
+html body #bpToastWrap{
+  top:auto!important;
+  bottom:calc(env(safe-area-inset-bottom,0px) + 18px)!important;
+  flex-direction:column-reverse!important;   /* новая карточка ближе к краю */
+  justify-content:flex-end;
+}
+html body.bp-tabbar #bpToastWrap{
+  bottom:calc(env(safe-area-inset-bottom,0px) + 96px)!important;   /* над полкой */
+}
+/* У мастера карты и окна кампании действие живёт внизу — там тост
+   поднимается наверх, под шапку шага (прежнее правило bp-ux1). */
+html body:has(#pg-add-blogger-card.on) #bpToastWrap,
+html body:has(#campModalOverlay[style*="flex"]) #bpToastWrap{
+  bottom:auto!important;
+  top:calc(env(safe-area-inset-top,0px) + 118px)!important;
+}
+/* Третья и дальше карточки не показываются: стопка в полэкрана — это уже
+   не уведомление, а завал. Новая карточка встаёт ПЕРВОЙ в разметке
+   (insertBefore firstChild), поэтому прячем по nth-child, иначе
+   спрятались бы как раз свежие. */
+html body #bpToastWrap > *:nth-child(n+3){ display:none!important }
+</style>
+<style id="bp-pf3-css">
+/* ── Профиль: роль не двигает шапку ──────────────────────────────────
+   Владелец: «в профиле блок блогер и рекламодатель расположен не так как
+   надо, при переключении уходит в другое место».
+
+   Почему уходил: чип роли стоял в одной строке с именем и переносился
+   вниз, только если не влезал. «Блогер» влезал, «Рекламодатель» — нет,
+   поэтому при смене роли имя, ID и вся карточка прыгали.
+
+   Теперь порядок строк один и тот же в обеих ролях:
+   имя · чип роли · ID · «на площадке с». Ничего не наезжает и не
+   меняет место. */
+html.bp-onb #pg-profile .prc-name{ flex:0 0 100%; max-width:100% }
+html.bp-onb #pg-profile .prc-badges{
+  order:2; flex:0 0 100%; margin:2px 0 0!important;
+  display:flex; align-items:center; gap:8px;
+}
+html.bp-onb #pg-profile .pf-handle-row{ order:3; margin-top:3px }
+/* Кнопка правки — по верхнему краю имени, а не по центру выросшей
+   колонки: иначе она уезжала вниз вместе с чипом. */
+html.bp-onb #pg-profile .pf-hero-row{ align-items:flex-start!important }
+html.bp-onb #pg-profile .pf-ava{ margin-top:2px }
+</style>
+<style id="bp-rate2-css">
+/* ── Рейтинг: подиум, своё место, полосы ─────────────────────────────
+   Пара к переписанному fillBoard (слой bp-profile2). Золото у первого —
+   тот же цвет, что у бегущей кромки рейтинга в профиле, серебро и
+   бронза — приглушённые, без блеска. */
+html .pf2-sheet .bd{ padding-top:2px }
+
+/* подиум */
+html .rt2-pod{ display:grid; grid-template-columns:1fr 1.16fr 1fr; align-items:end; gap:8px; margin:4px 0 14px }
+html .rt2-p{
+  display:flex; flex-direction:column; align-items:center; gap:7px;
+  padding:14px 6px 13px; border-radius:16px; border:1px solid var(--brd);
+  background:rgba(255,255,255,.035); font-family:inherit; color:var(--t1); cursor:pointer;
+  -webkit-tap-highlight-color:transparent; min-width:0;
+  animation:rt2In .42s cubic-bezier(.22,1,.36,1) backwards;
+  animation-delay:calc(var(--i, 0) * 70ms);
+}
+html .rt2-p:active{ transform:scale(.985) }
+html .rt2-p.p1{
+  padding:20px 6px 17px;
+  background:linear-gradient(180deg,rgba(246,168,35,.13),rgba(246,168,35,.03));
+  border-color:rgba(246,168,35,.34);
+}
+html .rt2-p b{
+  font-size:12.5px; font-weight:800; letter-spacing:-.2px; max-width:100%;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+html .rt2-p .d{ font-size:11px; color:var(--t3); white-space:nowrap }
+html .rt2-p.p1 .d{ color:#f0b957 }
+html .rt2-ring{
+  position:relative; width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  border:2px solid rgba(255,255,255,.14);
+}
+html .rt2-p.p1 .rt2-ring{ width:64px; height:64px; border-color:#f6a823 }
+html .rt2-p.p2 .rt2-ring{ border-color:#cfd6e4 }
+html .rt2-p.p3 .rt2-ring{ border-color:#cf9457 }
+html .rt2-ring .av{
+  width:100%; height:100%; border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center;
+  font-size:15px; font-weight:800; color:#fff; background:linear-gradient(135deg,#373f4d,#293041);
+}
+html .rt2-p.p1 .rt2-ring .av{ font-size:18px }
+html .rt2-ring .av img{ width:100%; height:100%; object-fit:cover; display:block }
+html .rt2-ring i{
+  position:absolute; bottom:-7px; left:50%; transform:translateX(-50%);
+  min-width:21px; height:21px; padding:0 5px; box-sizing:border-box; border-radius:99px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px; font-weight:800; font-style:normal; font-variant-numeric:tabular-nums;
+  background:#232b38; border:1px solid var(--brd2); color:var(--t2);
+}
+html .rt2-p.p1 .rt2-ring i{ background:#f6a823; border-color:transparent; color:#1b1408 }
+html .rt2-p.p2 .rt2-ring i{ color:#dfe4ee }
+html .rt2-p.p3 .rt2-ring i{ color:#e0b083 }
+
+/* строки списка */
+html .pf2-lb{ animation:rt2In .38s cubic-bezier(.22,1,.36,1) backwards; animation-delay:calc(var(--i, 0) * 45ms + 120ms) }
+html .pf2-lb .rt2-bar{
+  display:block; height:3px; border-radius:99px; background:rgba(255,255,255,.06); margin-top:7px; overflow:hidden;
+}
+html .pf2-lb .rt2-bar i{ display:block; height:100%; border-radius:99px; background:rgba(91,147,245,.55) }
+html .pf2-lb.me .rt2-bar i{ background:#5b93f5 }
+
+/* своё место */
+html .rt2-me{
+  display:block; margin:0 0 12px; padding:13px 14px 14px; border-radius:16px;
+  border:1px solid var(--acc-br,rgba(47,108,224,.42)); background:var(--acc-bg,rgba(47,108,224,.12));
+}
+html .rt2-me .t{ display:block; font-size:11px; font-weight:800; letter-spacing:.5px; text-transform:uppercase; color:var(--t3) }
+html .rt2-me .v{ display:flex; align-items:baseline; gap:7px; margin-top:4px }
+html .rt2-me .v b{ font-size:26px; font-weight:800; letter-spacing:-1px; color:var(--t1); font-variant-numeric:tabular-nums }
+html .rt2-me .v i{ font-style:normal; font-size:12px; color:var(--t3) }
+html .rt2-me .v em{ font-style:normal; margin-left:auto; font-size:12px; font-weight:700; color:var(--t2) }
+html .rt2-me .bar{ display:block; height:5px; border-radius:99px; background:rgba(255,255,255,.08); margin:9px 0 8px; overflow:hidden }
+html .rt2-me .bar i{ display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,#3573e6,#5b93f5) }
+html .rt2-me .s{ display:block; font-size:12px; color:var(--t2); line-height:1.45 }
+html .rt2-me.nope{ background:rgba(255,255,255,.035); border-color:var(--brd) }
+html .rt2-me.nope .t{ color:var(--t2); text-transform:none; font-size:13px; letter-spacing:-.2px }
+html .rt2-me.nope .s{ margin-top:5px; color:var(--t3) }
+
+@keyframes rt2In{ from{ opacity:0; transform:translateY(12px) } }
+@media (prefers-reduced-motion:reduce){
+  html .rt2-p, html .pf2-lb{ animation:none!important }
+}
 </style>
 </body>
 </html>
