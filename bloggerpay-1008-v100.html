@@ -41733,6 +41733,11 @@ else setTimeout(boot, 0);
      Спрашиваем у браузера, что лежит под центром экрана.               */
   function isOverlayBox(el){
     if (!el || el === document.body || el === document.documentElement) return false;
+    /* страница — не шторка: раздел «Разместить карту блогера» —
+       единственный обычный экран с position:fixed и z-index 170, и
+       системная «Назад» принимала его за оверлей. «Закрыть» внутри не
+       находилось, экран гасили классом — оставался пустой фон с шапкой. */
+    if (el.classList && el.classList.contains('pg')) return false;
     var cs;
     try { cs = getComputedStyle(el); } catch(_){ return false; }
     if (cs.position !== 'fixed' && cs.position !== 'absolute') return false;
@@ -85469,7 +85474,11 @@ function blankChan(){
 function blank(){
   return { id:'', chans:{}, order:[], topics:[], genderF:50, showGender:false,
            kids:false, showKids:false, msg:'', open:'', find:'', tried:0, done:0,
-           addOpen:false, topicsOpen:false, edit:'', pv:'' };
+           addOpen:false, topicsOpen:false, edit:'', pv:'',
+           /* Убранные вручную площадки: ответ сервера про вход возвращал их
+              обратно при каждом заходе, и убрать подтверждённый канал было
+              нельзя в принципе. */
+           dropped:[] };
 }
 function chanOf(pid){ return S && S.chans[pid]; }
 
@@ -85547,6 +85556,13 @@ function sign(st){
   }catch(e){ return ''; }
 }
 var _saved = '';
+/* Подпись состояния, которое уже уехало в карту. Нужна, чтобы черновик
+   не воскресал сразу после публикации: publish() его удаляет, но следом
+   зовёт render(), а render() заканчивается saveDraft(). Черновик
+   возвращался под ключом опубликованной карты и при следующем заходе
+   всегда побеждал саму карту — правки, сделанные мимо раздела (с другого
+   устройства, из «Моей карты»), было не видно, и они затирались. */
+var _pub = '';
 function dirty(){ return sign(S) !== _saved; }
 
 /* Черновик ведём и в режиме правки: иначе «назад» посреди правки цен
@@ -85558,6 +85574,10 @@ function draftKey(id){
 }
 function saveDraft(){
   if(!S) return;
+  /* Состояние один в один уехало в карту — хранить нечего. От первой же
+     настоящей правки подписи разойдутся, и черновик снова начнёт
+     сохраняться: «незаконченная работа переживает уход» не ломается. */
+  if(_pub && sign(S) === _pub){ dropDraft(S.id); return; }
   try{ localStorage.setItem(draftKey(S.id), JSON.stringify(S)); }catch(e){}
 }
 function dropDraft(id){ try{ localStorage.removeItem(draftKey(id)); }catch(e){} }
@@ -85595,6 +85615,9 @@ function loadDraft(id){
     }
     if(Array.isArray(d.order)) s.order = uniq(d.order).filter(function(p){ return s.chans[p]; });
     ORDER.forEach(function(p){ if(s.chans[p] && s.order.indexOf(p) < 0) s.order.push(p); });
+    /* Что человек убрал — помним, иначе ответ сервера про вход вернёт
+       площадку обратно при следующем заходе. */
+    if(Array.isArray(d.dropped)) s.dropped = uniq(d.dropped).filter(function(p){ return ORDER.indexOf(p) >= 0 && !s.chans[p]; });
     if(typeof d.genderF === 'number') s.genderF = Math.max(0, Math.min(100, d.genderF));
     s.showGender = !!d.showGender; s.kids = !!d.kids; s.showKids = !!d.showKids;
     s.msg = String(d.msg || '').slice(0, 500);
@@ -85732,11 +85755,21 @@ function pullChannels(){
         var pid = String((r && r.platform) || '').toLowerCase();
         if(!PLAT[pid]) return;
         var c = chanOf(pid);
-        if(!c){ c = S.chans[pid] = blankChan(); S.order.push(pid); }
-        if(!String(c.url || '').trim() && r.url) c.url = String(r.url);
+        if(!c){
+          /* Канал убран вручную — не воскрешаем. */
+          if(Array.isArray(S.dropped) && S.dropped.indexOf(pid) >= 0) return;
+          c = S.chans[pid] = blankChan(); S.order.push(pid);
+        }
+        var his = String((r && r.url) || '').trim(), mine = String(c.url || '').trim();
         if(!numInt(c.subs) && numInt(r.subs)) c.subs = numInt(r.subs);
         if(!c.nick) c.nick = String(r.username || r.title || '').slice(0, 40);
-        c.vfy = 1;
+        /* Значок «подтверждён входом» раньше ставился кому угодно: если в
+           поле был вписан другой канал (чужой или второй свой), в каталог
+           уезжало «подтверждено» на непроверенный адрес. Подтверждаем
+           только то, что площадка действительно назвала своим. */
+        if(!mine && his){ c.url = his; c.vfy = 1; }
+        else if(!his) c.vfy = 1;                     /* площадка адрес не отдаёт */
+        else c.vfy = sameUrl(mine, his) ? 1 : 0;
         got++;
       });
       if(got && opened){
@@ -85746,6 +85779,13 @@ function pullChannels(){
       }
     }).catch(function(){});
   }catch(e){}
+}
+/* Два адреса одного канала: сравниваем без схемы, www и хвостового слеша. */
+function sameUrl(a, b){
+  try{
+    function k(v){ return String(normUrl(v) || v || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, ''); }
+    return !!k(a) && k(a) === k(b);
+  }catch(e){ return false; }
 }
 function vfyOn(pid){
   if(pid !== 'youtube' && pid !== 'tiktok') return false;
@@ -85851,7 +85891,11 @@ function doneCount(pid){ var d = secDone(pid); return d[0] + d[1] + d[2]; }
 function missOf(pid){
   var c = chanOf(pid); if(!c) return [];
   var out = [];
-  if(!urlOk(pid, c.url)) out.push(String(c.url || '').trim() ? 'верная ссылка' : 'ссылка');
+  /* Раньше при непохожем адресе сюда попадало «верная ссылка»: в строке
+     «не хватает: верная ссылка, цена» это читается как канцелярит и не
+     говорит, что именно не так. Список называет разделы, а про сам адрес
+     человеку отвечает подпись под полем. */
+  if(!urlOk(pid, c.url)) out.push('ссылка');
   if(!lowPrice(pid)) out.push('цена');
   if(!topicsOf(pid).length) out.push('тематика');
   return out;
@@ -85951,9 +85995,9 @@ function edHtml(pid){
                     : ''))
     + '</div>'
     + '<div class="a3-field"><div class="a3-three">'
-    +   '<div><div class="a3-lbl">Подписчики</div><input class="a3-inp" data-f="subs" inputmode="numeric" enterkeyhint="next" aria-label="Подписчики" placeholder="0" value="' + (numInt(c.subs) ? esc(money(c.subs)) : '') + '"></div>'
-    +   '<div><div class="a3-lbl">Просмотры</div><input class="a3-inp" data-f="reach" inputmode="numeric" enterkeyhint="next" aria-label="Просмотры" placeholder="0" value="' + (numInt(c.reach) ? esc(money(c.reach)) : '') + '"></div>'
-    +   '<div><div class="a3-lbl">ER, %</div><input class="a3-inp" data-f="er" inputmode="decimal" enterkeyhint="done" aria-label="ER в процентах" placeholder="0" value="' + (numEr(c.er) ? esc(dec(String(numEr(c.er)))) : '') + '"></div>'
+    +   '<div><div class="a3-lbl">Подписчики</div><input class="a3-inp" data-f="subs" inputmode="numeric" enterkeyhint="next" aria-label="Подписчики" placeholder="" value="' + (numInt(c.subs) ? esc(money(c.subs)) : '') + '"></div>'
+    +   '<div><div class="a3-lbl">Просмотры</div><input class="a3-inp" data-f="reach" inputmode="numeric" enterkeyhint="next" aria-label="Просмотры" placeholder="" value="' + (numInt(c.reach) ? esc(money(c.reach)) : '') + '"></div>'
+    +   '<div><div class="a3-lbl">ER, %</div><input class="a3-inp" data-f="er" inputmode="decimal" enterkeyhint="done" aria-label="ER в процентах" placeholder="" value="' + (numEr(c.er) ? esc(dec(String(numEr(c.er)))) : '') + '"></div>'
     + '</div>'
     +   '<div class="a3-help" data-h="num">' + esc(numsHelp(pid))
     +     ' <button type="button" data-act="where">' + (c.where ? 'Скрыть' : 'Где посмотреть') + '</button></div>'
@@ -86002,6 +86046,7 @@ function edHtml(pid){
     +   '<button type="button" class="a3-tg" role="switch" aria-checked="' + (c.kids ? 'true' : 'false') + '" data-act="csw" data-k="kids" aria-labelledby="a4-sw-k"></button></div>'
     + '</section>'
 
+    + '<div class="a3-need a3-need-ed" id="a3-need" role="alert" aria-live="polite"></div>'
     + '<button type="button" class="a3-ghost" data-act="del">Убрать канал</button>'
     + '</div>'
     + '</div>';
@@ -86024,7 +86069,7 @@ function paintEd(){
     if(!S || !S.edit || !root || !chanOf(S.edit)) return;
     var pid = S.edit, d = secDone(pid), n = d[0] + d[1] + d[2];
     var cnt = root.querySelector('#a4-cnt');
-    if(cnt){ cnt.textContent = n + ' / 3'; cnt.setAttribute('aria-label', 'Готово разделов: ' + n + ' из 3'); }
+    if(cnt){ cnt.textContent = n + ' из 3'; cnt.classList.add('a4-cnt'); cnt.setAttribute('aria-label', 'Готово разделов: ' + n + ' из 3'); }
     var segs = root.querySelectorAll('#a4-segs .a3-seg');
     for(var i = 0; i < segs.length; i++) segs[i].classList.toggle('done', !!d[i]);
     Array.prototype.forEach.call(root.querySelectorAll('.a4-n[data-s]'), function(el){
@@ -86061,8 +86106,11 @@ function closeEd(){
 }
 function numsHelp(pid){
   var c = chanOf(pid);
-  if(c && !numInt(c.reach)) return 'Средние за месяц. Без просмотров не посчитается цена за тысячу — по ней сравнивают каналы.';
-  return 'Средние за месяц. В карточке они подписаны «со слов блогера».';
+  /* ER раньше нигде не расшифровывался: три буквы над пустым полем
+     ничего не говорят тому, кто пришёл с первой карточкой. */
+  var er = 'ER — вовлечённость: сколько в среднем лайков и комментариев на сто зрителей.';
+  if(c && !numInt(c.reach)) return 'Средние за месяц. Без просмотров не посчитается цена за тысячу — по ней сравнивают каналы. ' + er;
+  return 'Средние за месяц. В карточке они подписаны «со слов блогера». ' + er;
 }
 function fmtHelp(pid, low){
   if(!low) return 'Поставьте цену хотя бы за один формат — без неё канал не уедет в каталог.';
@@ -86096,7 +86144,9 @@ function step1Html(){
   return '<div class="a3-page">'
     + '<div class="a3-intro">' + IC.info + '<div>' + (empty
         ? '<b>Где вы публикуетесь?</b> Выберите площадку. У каждого канала будут свои цены, тематики и аудитория. Черновик сохраняется сам.'
-        : '<b>У каждого канала свои настройки</b> — цены, тематики и аудитория. Нажмите «Настроить» у канала. Черновик сохраняется сам.')
+        : (S.id && dirty()
+            ? '<b>Изменения пока только у вас.</b> Чтобы их увидели рекламодатели, нажмите «Сохранить изменения» внизу.'
+            : '<b>У каждого канала свои настройки</b> — цены, тематики и аудитория. Нажмите «Настроить» у канала. Черновик сохраняется сам.'))
     + '</div></div>'
     + '<div class="a3-sec">' + (empty ? 'Площадки' : 'Ваши каналы')
     +   '<i' + (nReady ? ' class="on"' : '') + '>' + (mine.length ? nReady + ' из ' + mine.length + ' готово' : 'можно все три') + '</i></div>'
@@ -86249,7 +86299,8 @@ function previewHtml(){
     + '<div class="a3-buy"><div class="a3-price"><b' + (priceTxt.length > 13 ? ' data-long="1"' : '') + '>' + esc(priceTxt) + '</b>'
     +   (fmtName ? '<small>' + esc(fmtName) + '</small>' : '') + '</div><div class="a3-add">Добавить в кампанию</div></div>'
     + '</div>'
-    + sanityHtml(mp)
+    /* sanityHtml здесь больше не зовём: блок живёт в #a3Sanity (previewHost),
+       иначе на запасном пути предупреждение показалось бы дважды. */
     + (ready.length > 1 ? '<div class="a3-help" style="margin:-8px 2px 14px">Нажмите на канал, чтобы посмотреть его карточку. '
         + 'В каталоге первым откроется <b>' + esc(PLAT[main].name) + '</b> — у него больше всего подписчиков.</div>' : '');
 }
@@ -86264,7 +86315,14 @@ function previewHtml(){
    показана глазами рекламодателя; пилюли каналов переключают канал. */
 function previewHost(){
   var ready = readyChans();
+  /* Предупреждения о странных цифрах (дорогой просмотр, ER под 50%,
+     просмотров больше подписчиков) жили внутри previewHtml. С тех пор
+     как шаг 3 показывает настоящую карточку каталога, previewHtml
+     остаётся только запасным путём — и предупреждения перестали
+     показываться вовсе. Теперь у них своё место, и его красит paintReal
+     при каждой перерисовке. */
   return '<div class="a3-real" id="a3RealCard">' + (ready.length ? '' : previewHtml()) + '</div>'
+    + '<div id="a3Sanity">' + (ready.length ? sanityHtml(pvPid()) : '') + '</div>'
     + (ready.length > 1 ? '<div class="a3-help" style="margin:-4px 2px 14px">Нажмите на канал в карточке, чтобы посмотреть его цифры. '
         + 'В каталоге первым откроется <b>' + esc(PLAT[mainPid()].name) + '</b> — у него больше всего подписчиков.</div>' : '');
 }
@@ -86272,8 +86330,20 @@ var _realSeq = 0;
 function paintReal(){
   var host = root && root.querySelector('#a3RealCard');
   if(!host || !readyChans().length) return;
+  try{
+    var sn = root.querySelector('#a3Sanity');
+    if(sn) sn.innerHTML = sanityHtml(pvPid());
+  }catch(e){ E(e); }
   var seq = ++_realSeq;
   var cat = document.getElementById('catBloggerList'), u = me();
+  /* Подпись «N блогеров» renderMyCard пересчитывает по карточкам на
+     странице — вместе с нашей временной. Карточку мы убираем, а подпись
+     возвращать надо самим: renderAllMyCards при следующем заходе видит
+     прежний состав карт и пересчёт пропускает. */
+  var ccEl = document.getElementById('catCnt'), ccTxt = ccEl ? ccEl.textContent : null;
+  function ccBack(){
+    try{ if(ccEl && ccTxt != null && ccEl.textContent !== ccTxt) ccEl.textContent = ccTxt; }catch(_){}
+  }
   function fallback(){ if(seq === _realSeq){ host.innerHTML = previewHtml(); host.classList.add('a3-real-fb'); } }
   if(!cat || typeof window.renderMyCard !== 'function' || !u) return fallback();
   try{ if(typeof window.bpFavMirror === 'function') window.bpFavMirror(); }catch(e){ E(e); }
@@ -86287,7 +86357,13 @@ function paintReal(){
      Писать туда черновик нельзя — запись в bp_my_cards уходит на сервер,
      — поэтому на время сборки он виден им из памяти. */
   window.__bpPv = cd;
-  try{ window.renderMyCard(cd); }catch(e){ E(e); window.__bpPv = null; return fallback(); }
+  try{ window.renderMyCard(cd); }catch(e){
+    E(e); window.__bpPv = null;
+    /* Упало ПОСЛЕ вставки — временная карточка осталась бы в живом
+       каталоге, а подпись сбитой. */
+    try{ var bad = cat.querySelector('.blc[data-cardid="__bppv"]'); if(bad) bad.remove(); }catch(_){}
+    ccBack(); return fallback();
+  }
   /* Наблюдатель bp-card10 собирает карточку микрозадачей сразу после
      вставки; наш снимок — следующей микрозадачей, ещё до кадра. */
   Promise.resolve().then(function(){
@@ -86312,6 +86388,22 @@ function paintReal(){
         card.classList.remove('bpc7-in', 'bpx-late');
         card.removeAttribute('id');
         card.setAttribute('aria-label', 'Так карточку увидят рекламодатели');
+        /* Предпросмотр смотрят, а не нажимают. pointer-events:none гасит
+           палец и мышь, но не клавиатуру: Tab заходил внутрь снимка, а
+           Enter по «Добавить в кампанию» звал добавление для карточки
+           «__bppv», которую мы тут же удаляем, — и человек получал
+           ошибку про собственную карточку. Пилюли каналов оставляем:
+           ими предпросмотр переключается по-настоящему. */
+        Array.prototype.forEach.call(
+          card.querySelectorAll('a,button,input,textarea,select,[tabindex],[role="button"]'),
+          function(e){
+            if(e.classList.contains('bpc6-ch')) return;
+            e.setAttribute('tabindex', '-1');
+            e.setAttribute('aria-hidden', 'true');
+            e.removeAttribute('role');
+            if(e.hasAttribute('onclick')) e.removeAttribute('onclick');
+            if('disabled' in e) { try{ e.disabled = true; }catch(_){} }
+          });
         /* подсветку пилюль bp-card6 обновляет следующим проходом — в снимок
            она не успевает, ставим сами */
         Array.prototype.forEach.call(card.querySelectorAll('.bpc6-ch'), function(b){
@@ -86321,7 +86413,7 @@ function paintReal(){
         });
       }
     }catch(e){ E(e); fallback(); }
-    finally{ window.__bpPv = null; try{ if(el) el.remove(); }catch(_){} }
+    finally{ window.__bpPv = null; try{ if(el) el.remove(); }catch(_){} ccBack(); }
   });
 }
 function step3Html(){
@@ -86403,7 +86495,7 @@ function headHtml(){
       + '<button type="button" class="a3-back" data-act="edclose" aria-label="К списку каналов">' + IC.back + '</button>'
       + '<span class="a3-mid"><span class="a3-title">' + esc(ep.name) + (eh ? '<em class="a4-nick">' + esc(eh) + '</em>' : '') + '</span>'
       + '<span class="a3-sub">Настройка канала</span></span>'
-      + '<span class="a3-count" id="a4-cnt" aria-label="Готово разделов: ' + en + ' из 3">' + en + ' / 3</span>'
+      + '<span class="a3-count a4-cnt" id="a4-cnt" aria-label="Готово разделов: ' + en + ' из 3">' + en + ' из 3</span>'
       + '</div><div class="a3-segs" id="a4-segs">' + eseg + '</div></div>';
   }
   var st = STEPS[step - 1];
@@ -86448,7 +86540,21 @@ function paintFoot(){
     b.innerHTML = '<span>Готово</span>' + IC.tick.replace('width="13" height="13"', 'width="17" height="17"');
     return;
   }
-  if(step < 3){ b.className = ''; b.disabled = false; b.innerHTML = '<span>Далее</span>' + IC.next; return; }
+  if(step < 3){
+    b.className = ''; b.disabled = false; b.innerHTML = '<span>Далее</span>' + IC.next;
+    /* Правка уже опубликованной карты: «Сохранить изменения» жило только
+       на третьем шаге. Человек менял цену, видел её в списке и уходил
+       стрелкой — в каталоге оставалась прежняя. Даём кнопку там, где он
+       считает правку законченной; publish() сам проверит шаги 1–2 и, если
+       чего-то не хватает, вернёт на нужный с подсказкой. */
+    if(S.id && dirty()){
+      var sv = document.createElement('button');
+      sv.type = 'button'; sv.className = 'a3-second'; sv.setAttribute('data-act', 'save');
+      sv.textContent = 'Сохранить изменения';
+      foot.appendChild(sv);
+    }
+    return;
+  }
   if(S.done && !dirty()){
     b.className = 'ok'; b.disabled = true;
     /* 15.09.2026 владелец: «при нажатии на сохранить изменения кнопка должна
@@ -86726,6 +86832,9 @@ function onFootClick(ev){
   var t = ev.target && ev.target.closest ? ev.target.closest('button') : null;
   if(!t) return;
   if(t.getAttribute('data-act') === 'tocat'){ leaveTo('home'); return; }
+  /* Вторая кнопка полосы на шагах 1–2: правка уезжает в каталог отсюда,
+     не дожидаясь третьего шага. */
+  if(t.getAttribute('data-act') === 'save'){ publish(); return; }
   if(t.getAttribute('data-cta') === '1') onCta();
 }
 function onClick(ev){
@@ -86737,6 +86846,7 @@ function onClick(ev){
     if(act === 'edclose' || (act === 'back' && S.edit)){ closeEd(); return; }
     if(act === 'add'){
       var pa = t.closest('.a3-task').getAttribute('data-p');
+      if(Array.isArray(S.dropped)) S.dropped = S.dropped.filter(function(x){ return x !== pa; });
       if(!chanOf(pa)){ S.chans[pa] = blankChan(); S.order.push(pa); }
       openEd(pa);
       var ia = root.querySelector('[data-f="url"]');
@@ -86812,6 +86922,7 @@ function onClick(ev){
     if(act === 'back'){ if(step > 1){ step--; render(); scrollTop(); } else leave(); return; }
     if(act === 'step'){ step = parseInt(t.getAttribute('data-step'), 10) || 1; if(step > 3) step = 3; render(); scrollTop(); return; }
     if(act === 'tocat'){ leaveTo('home'); return; }
+    if(act === 'save'){ publish(); return; }
     if(act === 'more'){ S.addOpen = !S.addOpen; render(false); return; }
     if(act === 'topics'){ S.topicsOpen = !S.topicsOpen; render(false); return; }
     if(act === 'toggle'){
@@ -86838,6 +86949,8 @@ function onClick(ev){
         return;
       }
       delete S.chans[p3]; S.order = S.order.filter(function(x){ return x !== p3; });
+      if(!Array.isArray(S.dropped)) S.dropped = [];
+      if(S.dropped.indexOf(p3) < 0) S.dropped.push(p3);
       if(S.open === p3) S.open = '';
       if(S.pv === p3) S.pv = '';
       if(S.edit === p3){ S.edit = ''; render(false); scrollTop(); return; }
@@ -86907,7 +87020,11 @@ function onCta(){
          подождёт в черновике. */
       if(miss.length && !_edSure){
         _edSure = 1; setTimeout(function(){ _edSure = 0; }, 6000);
-        toast('Не хватает: ' + miss.join(', ') + '. Без этого канал не попадёт в каталог — нажмите «Готово» ещё раз, чтобы вернуться к списку');
+        /* Тост ложился ровно на поле ссылки, о котором говорил, и пять
+           секунд забирал по нему касание (карточка тоста ловит палец).
+           Строка на месте — тем же языком, что и остальные подсказки
+           раздела. */
+        need('Не хватает: ' + miss.join(', ') + '. Нажмите «Готово» ещё раз, чтобы вернуться к списку — набранное сохранится.');
         var ns = !urlOk(pe, ce.url) ? 1 : !lowPrice(pe) ? 2 : 3;
         var sec = root.querySelector('.a4-n[data-s="' + ns + '"]');
         if(sec) try{ sec.scrollIntoView({ block:'center', behavior:'smooth' }); }catch(e2){}
@@ -86955,7 +87072,21 @@ function homeAfterPublish(){
     }catch(e){ E(e); }
   }, 1400);
 }
+var _leaveSure = 0;
 function leave(){
+  /* Несохранённая правка опубликованной карты: молча отпускать нельзя —
+     в каталоге останется прежняя версия, а раздел при следующем заходе
+     покажет новую, и человек будет уверен, что всё уехало. Спрашиваем тем
+     же приёмом, что и «Готово» в редакторе канала: первое нажатие
+     объясняет, второе выпускает (набранное остаётся в черновике). */
+  if(S && S.id && dirty() && !_leaveSure){
+    _leaveSure = 1;
+    setTimeout(function(){ _leaveSure = 0; }, 6000);
+    need('Изменения не сохранены — в каталоге прежняя версия. Нажмите «Сохранить изменения» или «назад» ещё раз.');
+    paintFoot();
+    return;
+  }
+  _leaveSure = 0;
   /* Раньше здесь звался abcBack() спрятанного старого мастера: он смотрел
      на СВОЙ номер шага и мог никуда не уйти. Уходим сами. */
   try{ if(typeof goBack === 'function'){ goBack(); return; } }catch(e){}
@@ -87076,7 +87207,7 @@ function publish(){
     /* Остаёмся на месте: подсказка зелёная, кнопка — отметка. Состояние
        держится, пока человек ничего не менял; таймера, который сам всё
        перерисовывает через шесть секунд, больше нет. */
-    _saved = sign(S); S.done = 1;
+    _saved = sign(S); _pub = _saved; S.done = 1; _leaveSure = 0;
     render(); scrollTop();
     /* Первая публикация — ведём в каталог смотреть карту. Правку — нет:
        человек нажал «Сохранить изменения» и должен увидеть, что кнопка
@@ -87113,7 +87244,7 @@ function open(){
     var card = (_wantId && cardById(_wantId)) || myCard();
     _wantId = '';
     S = card ? fromCard(card) : blank();
-    _saved = sign(S);
+    _saved = sign(S); _pub = ''; _leaveSure = 0;   /* новый заход — чистый лист */
     /* Незаконченная работа поверх: черновик новой карты или начатая и
        брошенная правка уже опубликованной. */
     var d = loadDraft(card ? card.id : '');
@@ -88877,6 +89008,18 @@ html .rt2-me.nope .s{ margin-top:5px; color:var(--t3) }
 @keyframes rt2In{ from{ opacity:0; transform:translateY(12px) } }
 @media (prefers-reduced-motion:reduce){
   html .rt2-p, html .pf2-lb{ animation:none!important }
+}
+</style>
+<style id="bp-abc6-css">
+/* Счётчик разделов в настройке канала стоял той же синей пилюлей и в том
+   же углу, что счётчик шагов мастера, — «0 / 3» читалось как «шаг 0 из 3»,
+   которого не бывает. Тот же угол оставляем (там его ищут глазами), но
+   вид другой: спокойный серый чип и слово «из» вместо дроби. */
+html #pg-add-blogger-card .a3-count.a4-cnt{
+  background:rgba(255,255,255,.05)!important;
+  border-color:rgba(255,255,255,.12)!important;
+  color:var(--a3-t3,#8f97a5)!important;
+  font-weight:700!important;
 }
 </style>
 </body>
