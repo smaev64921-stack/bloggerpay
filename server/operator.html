@@ -35,9 +35,11 @@
     --bad:#ff6b6b; --badbg:rgba(255,107,107,.11);
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
     --r:14px; --r2:10px;
-    /* Шкала размеров — пять ступеней, как в прежнем пульте: экран
-       сканируют глазами, ищут сумму и статус, а не читают подряд. */
-    --fs-xl:28px; --fs-lg:20px; --fs-md:15px; --fs-sm:12px; --fs-xs:10px;
+    /* Шкала размеров — четыре ступени с шагом не меньше 1,25: экран
+       сканируют глазами, ищут сумму и статус, а не читают подряд.
+       Пятая ступень (10px) была почти неотличима от 12 и мешала читать
+       заголовки таблиц — убрана. */
+    --fs-xl:28px; --fs-lg:20px; --fs-md:15px; --fs-sm:12px;
   }
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--bg);color:var(--t1)}
@@ -79,14 +81,14 @@
   .side{position:sticky;top:0;height:100vh;background:var(--side);border-right:1px solid var(--line);
     display:flex;flex-direction:column;padding:18px 12px 14px}
   .side .brandmark{padding:0 8px;margin-bottom:22px;color:var(--t1);font-size:var(--fs-md);font-weight:700;letter-spacing:-.2px}
-  .side .brandmark span{display:block;color:var(--t3);font-size:var(--fs-xs);font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-top:1px}
+  .side .brandmark span{display:block;color:var(--t3);font-size:var(--fs-sm);font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-top:1px}
   .nav{display:flex;flex-direction:column;gap:2px}
   .nav button{display:flex;align-items:center;gap:11px;width:100%;background:none;border:0;border-radius:10px;
     padding:9px 10px;color:var(--t2);font-size:var(--fs-md);font-weight:500;cursor:pointer;text-align:left;transition:background .15s,color .15s}
   .nav button:hover{background:rgba(255,255,255,.04);color:var(--t1)}
   .nav button.on{background:var(--accbg);color:#fff}
   .nav button.on svg.i{color:var(--acc2)}
-  .nav em{margin-left:auto;font-style:normal;font-size:var(--fs-xs);font-weight:800;min-width:20px;height:20px;padding:0 6px;border-radius:10px;
+  .nav em{margin-left:auto;font-style:normal;font-size:var(--fs-sm);font-weight:800;min-width:20px;height:20px;padding:0 6px;border-radius:10px;
     display:inline-flex;align-items:center;justify-content:center;background:var(--warnbg);color:var(--warn)}
   .nav em.bad{background:var(--badbg);color:var(--bad)}
   .nav em:empty{display:none}
@@ -135,7 +137,7 @@
   /* ── таблицы: на широком экране строки, на узком — карточки ── */
   .box{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
   table{width:100%;border-collapse:collapse}
-  th{text-align:left;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.7px;color:var(--t3);padding:11px 14px;border-bottom:1px solid var(--line);font-weight:700;white-space:nowrap}
+  th{text-align:left;font-size:var(--fs-sm);text-transform:uppercase;letter-spacing:.7px;color:var(--t3);padding:11px 14px;border-bottom:1px solid var(--line);font-weight:700;white-space:nowrap}
   td{padding:12px 14px;border-bottom:1px solid var(--line);font-size:var(--fs-md);vertical-align:top}
   tr:last-child td{border-bottom:0}
   tbody tr.click{cursor:pointer} tbody tr.click:hover td{background:rgba(255,255,255,.02)}
@@ -146,7 +148,7 @@
   .who b{font-weight:600} .who span{display:block;color:var(--t3);font-size:var(--fs-sm);margin-top:2px;word-break:break-all}
   .linkish{background:none;border:0;padding:0;color:inherit;cursor:pointer;text-align:left}
   .linkish:hover b{color:var(--acc2)}
-  .st{display:inline-block;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.5px;padding:4px 8px;border-radius:6px;font-weight:700;white-space:nowrap}
+  .st{display:inline-block;font-size:var(--fs-sm);text-transform:uppercase;letter-spacing:.5px;padding:4px 8px;border-radius:6px;font-weight:700;white-space:nowrap}
   .st.queued{background:var(--warnbg);color:var(--warn)}
   .st.processing{background:var(--accbg);color:var(--acc2)}
   .st.paid,.st.approved,.st.on{background:var(--okbg);color:var(--ok)}
