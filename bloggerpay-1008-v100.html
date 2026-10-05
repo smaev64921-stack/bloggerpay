@@ -40032,14 +40032,16 @@ else setTimeout(boot, 0);
 
   function rateChip(c){
     if(c.payMode === 'fixed' && num(c.fixedPrice))
-      return '<span class="tk-rate">' + num(c.fixedPrice).toLocaleString('ru') + ' ₽<i>за публикацию</i></span>';
+      return '<span class="tk-rate">' + num(c.fixedPrice).toLocaleString('ru') + ' ₽<i>'
+        + ((c.taskType || c.format) === 'banners' ? 'за публикацию' : 'за ролик') + '</i></span>';
     /* Ставки за 1 000 просмотров мастер не спрашивает. Раньше её считали
        из бюджета и цели — цифра выходила похожей на «максимальную выплату
        за ролик», и это путало. Показываем то, что рекламодатель правда
        указал: потолок выплаты за один ролик. */
     if(!num(c.rate)){
       var cap = num(c.maxPayout) || num(c.payMax);
-      if(cap) return '<span class="tk-rate">до ' + cap.toLocaleString('ru') + ' ₽<i>за ролик</i></span>';
+      if(cap) return '<span class="tk-rate">до ' + cap.toLocaleString('ru') + ' ₽<i>'
+        + ((c.taskType || c.format) === 'banners' ? 'за публикацию' : 'за ролик') + '</i></span>';
       return '';
     }
     return '<span class="tk-rate">' + num(c.rate).toLocaleString('ru')
@@ -40241,9 +40243,14 @@ else setTimeout(boot, 0);
   function applySort(arr){
     var a = arr.slice();
     /* Порядок внутри группы — выбранная сортировка. */
-    if(sortMode === 'budget') a.sort(function(x,y){ return budgetNum(y)-budgetNum(x); });
+    /* Карточка (bp-tkcard) крупно показывает СВОБОДНЫЙ бюджет — сортируем
+       по нему же, иначе «по бюджету» 10 000 ₽ стояли выше 200 000 ₽. */
+    function used(c){ return num(c.stats&&c.stats.totalSpent) + num(c.stats&&c.stats.totalHold); }
+    if(sortMode === 'budget') a.sort(function(x,y){
+      return Math.max(0, budgetNum(y)-used(y)) - Math.max(0, budgetNum(x)-used(x));
+    });
     else if(sortMode === 'pct') a.sort(function(x,y){
-      function p(c){ var b=budgetInfo(c); return b&&b.max? num(c.stats&&c.stats.totalSpent)/b.max : 0; }
+      function p(c){ var b=budgetInfo(c); return b&&b.max? used(c)/b.max : 0; }
       return p(y)-p(x);
     });
     else a.sort(function(x,y){ return (Date.parse(y.createdAt)||0)-(Date.parse(x.createdAt)||0); });
@@ -42153,6 +42160,9 @@ else setTimeout(boot, 0);
     if (!el || !el.getAttribute) return;
     if (el.getAttribute('role') !== 'button') return;
     if (/^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(el.tagName)) return;
+    /* data-bp-key уже нажал сам (обработчик выше по файлу) — второй
+       клик открывал задание дважды (05.10.2026) */
+    if (e.defaultPrevented || (el.hasAttribute && el.hasAttribute('data-bp-key'))) return;
     e.preventDefault();
     el.click();
   });
@@ -90216,7 +90226,11 @@ html body #kycSheet .kyc-stat-s{ font-size:13.5px; line-height:1.5; color:var(--
   border:1px solid rgba(255,255,255,.1);
   background:repeating-conic-gradient(#1b2029 0 25%,#151a22 0 50%) 0 0/16px 16px;
 }
-#campModal .cwo-tile img{ width:100%; height:100%; object-fit:contain; display:block }
+#campModal .cwo-tile img, #campModal .cwo-tile video{ width:100%; height:100%; object-fit:contain; display:block }
+.cwo-badge{
+  position:absolute; left:5px; bottom:5px; padding:2px 7px; border-radius:7px; pointer-events:none;
+  background:rgba(8,10,14,.74); color:#fff; font-size:10.5px; font-weight:700; letter-spacing:.1px;
+}
 #campModal .cwo-tile-x{
   position:absolute; top:5px; right:5px; width:30px; height:30px; border-radius:50%; border:none;
   background:rgba(8,10,14,.74); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer;
@@ -90266,7 +90280,7 @@ html body #kycSheet .kyc-stat-s{ font-size:13.5px; line-height:1.5; color:var(--
   position:relative; aspect-ratio:1/1; border-radius:12px; overflow:hidden; padding:0; cursor:zoom-in;
   border:1px solid rgba(255,255,255,.1); background:repeating-conic-gradient(#1b2029 0 25%,#151a22 0 50%) 0 0/16px 16px;
 }
-.tko-tile img{ width:100%; height:100%; object-fit:contain; display:block }
+.tko-tile img, .tko-tile video{ width:100%; height:100%; object-fit:contain; display:block }
 .tko-acts{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap }
 .tko-btn{
   min-height:40px; padding:0 14px; border-radius:12px; border:1px solid rgba(91,147,245,.4); background:rgba(47,108,224,.1);
@@ -90318,8 +90332,24 @@ function safeHttp(u){
 function imgSrc(u){
   var s = String(u || '');
   if(/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/i.test(s)) return s;
-  if(/^\/media\/[a-f0-9]{32}$/.test(s)) return s;
+  if(/^\/media\/[a-f0-9]{32}(#[a-z0-9]{2,5})?$/.test(s)) return s;
   return safeHttp(s);
+}
+/* Что внутри файла: метка #mp4/#gif/#apng в адресе /media (её ставит
+   загрузка) или тип из data:-адреса. Нужна, чтобы видео-баннер
+   показать <video>, а при скачивании дать верное расширение. */
+function extOf(u){
+  var s = String(u || ''), m = /#([a-z0-9]{2,5})$/i.exec(s);
+  if(m) return m[1].toLowerCase();
+  m = /^data:(?:image|video)\/([a-z0-9]+);/i.exec(s);
+  return m ? m[1].toLowerCase().replace('jpeg', 'jpg') : '';
+}
+function isVideo(u){ var e = extOf(u); return e === 'mp4' || e === 'webm'; }
+function animTag(u){ var e = extOf(u); return isVideo(u) ? 'Видео' : (e === 'agif' || e === 'apng' || e === 'awebp') ? 'Анимация' : ''; }
+function mediaTag(src, alt){
+  return isVideo(src)
+    ? '<video src="' + esc(src) + '" muted autoplay loop playsinline preload="metadata" aria-label="' + esc(alt) + '"></video>'
+    : '<img src="' + esc(src) + '" alt="' + esc(alt) + '" loading="lazy">';
 }
 function linksIn(t){ return String(t || '').split(/[\s,]+/).map(safeHttp).filter(Boolean); }
 function openUrl(u){
@@ -90358,6 +90388,9 @@ function loadImg(src){
 function bytesOf(d){ var i = d.indexOf(','); return Math.floor((d.length - i - 1) * 3 / 4); }
 function shrink(file, o){
   return readFile(file).then(function(src){
+    /* файл из «Файлов» бывает без типа — подставляем узнанный по байтам,
+       иначе PNG терял бы прозрачность, а подходящий JPEG пережимался */
+    if(o.mime) src = 'data:' + o.mime + ';base64,' + src.slice(src.indexOf(',') + 1);
     return loadImg(src).then(function(im){
       var w = im.naturalWidth || im.width, h = im.naturalHeight || im.height;
       if(!w || !h) throw new Error('Это не картинка — нужен PNG, JPG или WebP');
@@ -90382,6 +90415,9 @@ function shrink(file, o){
     });
   });
 }
+/* Несколько файлов сразу — один вход на всех: второй вызов bpEnsureSrv
+   отвечал первому «нет», и все файлы, кроме последнего, падали. */
+var ensureP = null;
 window.bpMediaPut = function(dataUrl){
   var s = srv();
   function go(){
@@ -90394,24 +90430,104 @@ window.bpMediaPut = function(dataUrl){
   if(!srvOk()) return Promise.reject(new Error('nosrv'));
   if(s.token && s.token()) return go();
   if(typeof window.bpEnsureSrv === 'function'){
-    return window.bpEnsureSrv('Картинки оффера хранятся на сервере BloggerPay').then(function(ok){
+    if(!ensureP){
+      ensureP = window.bpEnsureSrv('Картинки оффера хранятся на сервере BloggerPay')
+        .then(function(ok){ ensureP = null; return ok; }, function(){ ensureP = null; return false; });
+    }
+    return ensureP.then(function(ok){
       if(!ok) throw new Error('nologin');
       return go();
     });
   }
   return Promise.reject(new Error('nologin'));
 };
-function putImage(file, kind){
-  if(!file || !/^image\/(png|jpeg|webp|gif|heic|heif)$/i.test(file.type || 'image/jpeg')) return Promise.reject(new Error('Нужна картинка: PNG, JPG или WebP'));
-  var local = function(){ return shrink(file, { max: 1000, limit: 140 * 1024 }); };
+/* Тип — по первым байтам: файл из «Файлов» на Андроиде часто приходит
+   без file.type. Анимацию узнаём там же: GIF с NETSCAPE2.0 или больше
+   одного кадра, APNG (acTL до IDAT), WebP с флагом анимации в VP8X.
+   У HEIC/AVIF с iPhone тоже «ftyp», как у MP4, — различаем по марке. */
+function sniff(file){
+  return new Promise(function(res){
+    var r = new FileReader();
+    r.onload = function(){
+      var b = new Uint8Array(r.result || new ArrayBuffer(0));
+      function s(a, z){ var o = ''; for(var i = a; i < z && i < b.length; i++) o += String.fromCharCode(b[i]); return o; }
+      var t = '', anim = false;
+      if(b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) t = 'jpg';
+      else if(s(0, 8) === '\x89PNG\r\n\x1a\n') t = 'png';
+      else if(s(0, 4) === 'RIFF' && s(8, 12) === 'WEBP') t = 'webp';
+      else if(/^GIF8[79]a$/.test(s(0, 6))) t = 'gif';
+      else if(s(4, 8) === 'ftyp'){
+        var brand = s(8, 12).toLowerCase();
+        if(/^(heic|heix|hevc|hevx|heim|heis|mif1|msf1|avif|avis)$/.test(brand)) t = 'heic';
+        else if(/^(isom|iso[2-9]|mp41|mp42|avc1|dash|m4v |qt  |3gp\d|3g2\w|mmp4|f4v )$/.test(brand)) t = 'mp4';
+      }
+      else if(b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) t = 'webm';
+      if(t === 'png'){
+        /* идём по блокам PNG до первого IDAT: acTL может стоять не в начале */
+        for(var p = 8; p + 8 <= b.length;){
+          var len = ((b[p] << 24) | (b[p + 1] << 16) | (b[p + 2] << 8) | b[p + 3]) >>> 0, ty = s(p + 4, p + 8);
+          if(ty === 'acTL'){ anim = true; break; }
+          if(ty === 'IDAT') break;
+          p += 12 + len;
+        }
+      }
+      if(t === 'webp') anim = s(12, 16) === 'VP8X' && !!(b[20] & 0x02);
+      if(t === 'gif'){ var g = s(0, b.length); anim = g.indexOf('NETSCAPE2.0') > 0 || g.split('\x21\xF9\x04').length > 2; }
+      res({ t: t, anim: anim });
+    };
+    r.onerror = function(){ res({ t: '', anim: false }); };
+    r.readAsArrayBuffer(file.slice(0, 2 * 1024 * 1024));
+  });
+}
+var MIME = { jpg:'image/jpeg', png:'image/png', webp:'image/webp', gif:'image/gif', mp4:'video/mp4', webm:'video/webm' };
+var RICH_MAX = 6 * 1024 * 1024;
+function asDataUrl(file, mime){
+  return readFile(file).then(function(d){ return 'data:' + mime + ';base64,' + d.slice(d.indexOf(',') + 1); });
+}
+function putStatic(file, kind, t){
+  var mime = MIME[t] && /^image\/(jpeg|png|webp)$/.test(MIME[t]) ? MIME[t] : '';
+  var local = function(){ return shrink(file, { max: 1000, limit: 140 * 1024, mime: mime }); };
   if(!srvOk()) return local();
-  return shrink(file, { max: kind === 'banner' ? 2048 : 1600, limit: 950 * 1024, keepPng: kind === 'banner' })
+  return shrink(file, { max: kind === 'banner' ? 2048 : 1600, limit: 950 * 1024, keepPng: kind === 'banner', mime: mime })
     .then(function(d){
-      return window.bpMediaPut(d).catch(function(e){
+      var m = /^data:image\/(png|jpeg|webp)/.exec(d), tag = m ? '#' + m[1].replace('jpeg', 'jpg') : '';
+      return window.bpMediaPut(d).then(function(u){ return u + tag; }, function(e){
         if(e && (e.message === 'nologin' || e.message === 'nosrv')) return local();
         throw e;
       });
     });
+}
+function putImage(file, kind){
+  if(!file) return Promise.reject(new Error('Файл не выбран'));
+  return sniff(file).then(function(sn){
+    var t = sn.t, video = t === 'mp4' || t === 'webm';
+    /* фото с iPhone (HEIC/AVIF): пусть браузер попробует открыть и
+       пересохранить; не вышло — говорим, что сделать */
+    if(t === 'heic'){
+      return putStatic(file, kind, '').catch(function(){
+        throw new Error('Фото в формате HEIC здесь не открывается — сохраните его как JPG');
+      });
+    }
+    if(!t || (video && kind !== 'banner')){
+      throw new Error(kind === 'banner' ? 'Нужна картинка (PNG, JPG, WebP, GIF) или видео MP4' : 'Нужна картинка: PNG, JPG или WebP');
+    }
+    /* анимированный и видео-баннер, а также любой GIF — как есть, без
+       холста: холст оставил бы один кадр */
+    var rich = kind === 'banner' && (video || sn.anim || t === 'gif');
+    if(!rich) return putStatic(file, kind, t);
+    if(file.size > RICH_MAX) throw new Error('Файл больше 6 МБ — сожмите его');
+    var tag = t === 'png' ? 'apng' : t === 'webp' ? 'awebp' : t === 'gif' ? (sn.anim ? 'agif' : 'gif') : t;
+    if(!srvOk()){
+      if(video || file.size > 300 * 1024) throw new Error('Анимированный баннер загружается, когда приложение подключено к серверу');
+      return asDataUrl(file, MIME[t]);
+    }
+    return asDataUrl(file, MIME[t]).then(function(d){
+      return window.bpMediaPut(d).then(function(u){ return u + '#' + tag; }, function(e){
+        if(e && e.message === 'nologin') throw new Error('Чтобы загрузить анимированный баннер, войдите в аккаунт');
+        throw e;
+      });
+    });
+  });
 }
 
 /* ═══ 2. РЕДАКТОР ПРОФИЛЯ: КАНАЛЫ ═══
@@ -90797,7 +90913,9 @@ function tiles(k){
   var what = k === 'banners' ? 'баннер' : 'фото';
   var h = '<div class="cwo-tiles" data-k="' + k + '">';
   arr.forEach(function(u, i){
-    h += '<div class="cwo-tile"><img src="' + esc(imgSrc(u)) + '" alt="' + (k === 'banners' ? 'Баннер ' : 'Фото товара ') + (i + 1) + '">'
+    var tg = animTag(u);
+    h += '<div class="cwo-tile">' + mediaTag(imgSrc(u), (k === 'banners' ? 'Баннер ' : 'Фото товара ') + (i + 1))
+      + (tg ? '<span class="cwo-badge">' + tg + '</span>' : '')
       + '<button type="button" class="cwo-tile-x" data-cwo="del" data-k="' + k + '" data-i="' + i + '" aria-label="Убрать ' + what + ' ' + (i + 1) + '">' + XI + '</button></div>';
   });
   for(var b = 0; b < n; b++) h += '<div class="cwo-tile busy" role="status">Загружаем…</div>';
@@ -90823,7 +90941,7 @@ function renderMaterials(){
   if(!INTRO[t]) t = 'other';
   var H = '<div class="cwn2-intro">' + INFO + '<div>' + INTRO[t] + '</div></div>';
   if(t === 'banners'){
-    H += fld('Баннер', true, tiles('banners'), 'PNG, JPG или WebP. До трёх вариантов — например, квадрат 1:1 и вертикаль 9:16.');
+    H += fld('Баннер', true, tiles('banners'), 'Из «Файлов»: PNG, JPG, WebP, анимированный GIF или видео MP4 — до 6 МБ. До трёх вариантов, например квадрат 1:1 и вертикаль 9:16.');
     H += fld('Куда ведёт баннер', false, inp('cwoBannerLink', 'https://ваш-сайт.ru/акция', d.bannerLink, true), 'Блогер поставит эту ссылку рядом с баннером.');
   } else if(t === 'clips'){
     H += fld('Исходники для нарезки', true,
@@ -90859,11 +90977,16 @@ function redrawCover(){
   var tmp = document.createElement('div'); tmp.innerHTML = coverHtml((D() || {}).photo);
   old.parentNode.replaceChild(tmp.firstChild, old);
 }
-function fileInput(){
-  var i = $('cwoFileInput');
+function fileInput(k){
+  var id = k === 'banners' ? 'cwoFileInputB' : 'cwoFileInput';
+  var i = $(id);
   if(i) return i;
   i = document.createElement('input');
-  i.type = 'file'; i.id = 'cwoFileInput'; i.accept = 'image/png,image/jpeg,image/webp'; i.multiple = true;
+  i.type = 'file'; i.id = id; i.multiple = true;
+  /* Баннер — из «Файлов». Список из одних картинок Андроид и Телеграм
+     открывают галереей: там нет GIF из загрузок и видео-баннеров.
+     Без accept открывается файловый менеджер; тип проверяем сами. */
+  if(k !== 'banners') i.accept = 'image/png,image/jpeg,image/webp';
   i.style.display = 'none'; i.setAttribute('aria-hidden', 'true'); i.tabIndex = -1;
   i.addEventListener('change', function(){
     var files = Array.prototype.slice.call(i.files || []), k = i.__k;
@@ -91082,7 +91205,7 @@ function addSummary(){
       var a = el.getAttribute('data-cwo'), d = D();
       if(!d) return;
       ensure();
-      if(a === 'add'){ var i = fileInput(); i.__k = el.getAttribute('data-k'); i.click(); return; }
+      if(a === 'add'){ var k0 = el.getAttribute('data-k'), i = fileInput(k0); i.__k = k0; i.click(); return; }
       if(a === 'del'){
         var k = el.getAttribute('data-k'), n = +el.getAttribute('data-i');
         if(Array.isArray(d[k]) && n >= 0) d[k].splice(n, 1);
@@ -91118,7 +91241,9 @@ function linkRow(u, copy){
 function imgTiles(arr, label){
   return '<div class="tko-tiles">' + arr.map(function(u, i){
     var s = imgSrc(u); if(!s) return '';
-    return '<button type="button" class="tko-tile" data-tko-img="' + esc(s) + '" aria-label="Открыть: ' + esc(label) + ' ' + (i + 1) + '"><img src="' + esc(s) + '" alt="" loading="lazy"></button>';
+    var tg = animTag(u);
+    return '<button type="button" class="tko-tile" data-tko-img="' + esc(s) + '" aria-label="Открыть: ' + esc(label) + ' ' + (i + 1) + '">'
+      + mediaTag(s, '') + (tg ? '<span class="cwo-badge">' + tg + '</span>' : '') + '</button>';
   }).join('') + '</div>';
 }
 function materialsHtml(c){
@@ -91150,7 +91275,9 @@ function materialsHtml(c){
 function download(src, name){
   var abs = src;
   try{ abs = new URL(src, location.href).href; }catch(e){}
-  var ext = /^data:image\/png/.test(src) ? '.png' : /^data:image\/webp/.test(src) ? '.webp' : '.jpg';
+  var e0 = extOf(src);
+  var ext = '.' + ({ agif:'gif', apng:'png', awebp:'webp', jpeg:'jpg' }[e0] || e0 || 'jpg');
+  abs = abs.replace(/#[a-z0-9]{2,5}$/i, '');
   try{
     var w = window.Telegram && window.Telegram.WebApp;
     if(inTg() && typeof w.downloadFile === 'function' && /^https:/.test(abs)
@@ -91187,7 +91314,13 @@ function addMaterials(id){
   body.addEventListener('click', function(e){
     var t = e.target.closest('[data-tko-img],[data-tko-dl],[data-tko-open],[data-tko-copy]');
     if(!t) return;
-    if(t.hasAttribute('data-tko-img')){ var s = t.getAttribute('data-tko-img'); if(typeof window.bpImgOpen === 'function') window.bpImgOpen(s); else openUrl(s); return; }
+    if(t.hasAttribute('data-tko-img')){
+      var s = t.getAttribute('data-tko-img');
+      /* просмотрщик умеет только картинки — видео открываем как есть */
+      if(!isVideo(s) && typeof window.bpImgOpen === 'function') window.bpImgOpen(s.replace(/#[a-z0-9]{2,5}$/i, ''));
+      else openUrl(new URL(s, location.href).href.replace(/#[a-z0-9]{2,5}$/i, ''));
+      return;
+    }
     if(t.hasAttribute('data-tko-dl')){ download(t.getAttribute('data-tko-dl'), t.getAttribute('data-tko-name') || 'banner'); return; }
     if(t.hasAttribute('data-tko-open')){ openUrl(t.getAttribute('data-tko-open')); return; }
     if(t.hasAttribute('data-tko-copy')) copy(t.getAttribute('data-tko-copy'));
@@ -91529,6 +91662,377 @@ function glow(id){
     };
   }
 })();
+})();
+</script>
+<style id="bp-tkcard-css">
+/* ══════════════════════════════════════════════════════════════════════
+   КАРТОЧКА ЗАДАНИЯ: ДЕНЬГИ ВПЕРЕДИ  (слой bp-tkcard)
+   ──────────────────────────────────────────────────────────────────────
+   Владелец: «блок задания тусклый и слабый, не цепляет, что деньги
+   большие». Старая карточка начиналась с «Выплачено блогерам 0 ₽» —
+   первым в глаза бросался ноль. Теперь нижняя часть карточки —
+   денежная полоса: крупно свободный бюджет, тонкая шкала «сколько
+   ещё свободно» и строка «сколько получите вы». Формат, площадки и
+   срок — тонкой строкой над названием.
+
+   Зелёный не трогаем: он только для денег, которые уже пришли.
+   Возможный заработок — белый и синий; янтарь — срок и кончающийся
+   бюджет. Глубина держится на заливке и рамке, а не на тенях:
+   html.bp-lite гасит box-shadow на слабых телефонах.
+   Выбран из трёх вариантов (05.10.2026); откат — удалить
+   style#bp-tkcard-css и script#bp-tkcard.
+   ══════════════════════════════════════════════════════════════════════ */
+
+html body #pg-tasks .tk-card.hx{
+  position:relative;overflow:hidden;
+  padding:15px 16px 0;
+  border-radius:20px;
+  background:var(--card,#191e27);
+  border:1px solid rgba(255,255,255,.09);
+  -webkit-tap-highlight-color:transparent;
+  transition:border-color .16s cubic-bezier(.22,1,.36,1),transform .16s cubic-bezier(.22,1,.36,1);
+}
+html body #pg-tasks .tk-card.hx:hover{background:var(--card,#191e27);border-color:rgba(91,147,245,.30)}
+html body #pg-tasks .tk-card.hx:active{transform:scale(.985)}
+html body #pg-tasks .tk-card.hx:focus-visible{outline:2px solid #5b93f5;outline-offset:2px}
+html body #pg-tasks .tk-card.hx .tk-mine{margin-bottom:10px}
+
+/* ── строка формата: формат · площадки · срок ── */
+.hx-meta{
+  display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;
+  min-height:22px;margin-bottom:8px;
+}
+.hx-fmt{
+  /* inline-block, а не flex: у flex-контейнера многоточие не рисуется */
+  display:inline-block;vertical-align:middle;height:22px;line-height:20px;padding:0 9px;box-sizing:border-box;
+  border-radius:999px;background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.09);
+  font-size:11px;font-weight:700;letter-spacing:.1px;color:var(--t2,#c9cdd4);
+  white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;
+}
+html body #pg-tasks .tk-card.hx .hx-meta .tk-plats{display:flex;align-items:center}
+html body #pg-tasks .tk-card.hx .hx-meta .tk-plat{
+  width:22px;height:22px;margin-right:-6px;border-width:2px;
+  border-color:var(--card,#191e27);
+}
+html body #pg-tasks .tk-card.hx .hx-meta .tk-plat:last-child{margin-right:0}
+html body #pg-tasks .tk-card.hx .hx-meta .tk-plat svg{width:12px;height:12px}
+html body #pg-tasks .tk-card.hx:hover .hx-meta .tk-plat{border-color:var(--card,#191e27)}
+.hx-due{
+  margin-left:auto;display:inline-flex;align-items:center;gap:5px;
+  font-size:11.5px;font-weight:700;color:var(--t3,#8f97a5);white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+.hx-due svg{width:13px;height:13px;flex:none}
+.hx-due.is-soon{color:#f5a524}
+
+/* ── название и рекламодатель ── */
+html body #pg-tasks .tk-card.hx .hx-name{
+  font-size:17px;font-weight:800;line-height:1.3;letter-spacing:-.35px;
+  color:var(--t1,#fff);margin:0 0 5px;
+  text-wrap:pretty;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.hx-by{
+  display:flex;align-items:center;gap:7px;min-width:0;margin-bottom:14px;
+  font-size:12.5px;font-weight:600;color:var(--t3,#8f97a5);
+}
+.hx-ava{
+  width:20px;height:20px;flex:none;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:#242b39;border:1px solid rgba(255,255,255,.12);
+  font-size:10px;font-weight:800;color:var(--t1,#fff);
+  background-size:cover;background-position:center;
+}
+.hx-by-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+
+/* ── денежная полоса: нижняя часть карточки, край в край ── */
+.hx-bank{
+  margin:0 -16px;padding:12px 16px 13px;
+  background:
+    radial-gradient(130% 140% at 0% 0%, rgba(74,128,235,.30) 0%, rgba(74,128,235,0) 58%),
+    linear-gradient(180deg,#1b2842 0%,#172031 100%);
+  border-top:1px solid rgba(120,165,255,.24);
+}
+html body #pg-tasks .tk-card-joined.hx .hx-bank{box-shadow:inset 3px 0 0 0 #2f6ce0!important}
+.hx-top{
+  display:flex;align-items:baseline;justify-content:space-between;gap:8px;
+  font-size:12px;font-weight:600;color:#a9bde3;line-height:1.3;
+}
+.hx-of{color:#8496b8;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hx-amt{
+  display:flex;align-items:baseline;gap:5px;margin:2px 0 10px;
+  font-size:34px;font-weight:800;line-height:1.1;letter-spacing:-1.2px;
+  color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.hx-amt small,.hx-amt em{font-size:23px;font-weight:700;font-style:normal;letter-spacing:0;color:#93b4f2}
+.hx-amt em{font-size:19px}
+.hx-amt.is-none{font-size:18px;letter-spacing:-.3px;color:#c9d4ea;margin-bottom:4px}
+.hx-bar{
+  height:5px;border-radius:99px;overflow:hidden;
+  background:rgba(255,255,255,.10);
+}
+.hx-bar i{
+  display:block;height:100%;border-radius:inherit;min-width:5px;
+  background:linear-gradient(90deg,#2f6ce0,#6ea2ff);
+}
+.hx-bar.is-low i{background:#f5a524}
+
+.hx-earn{
+  display:flex;align-items:center;gap:12px;
+  margin-top:12px;padding-top:11px;
+  border-top:1px solid rgba(140,180,255,.14);
+}
+.hx-earn-t{flex:1;min-width:0}
+.hx-rate{
+  display:flex;align-items:baseline;flex-wrap:wrap;gap:0 6px;
+  font-size:13px;font-weight:600;color:#b6c4de;line-height:1.3;
+}
+.hx-rate b{
+  font-size:19px;font-weight:800;letter-spacing:-.4px;color:#fff;
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.hx-cap{
+  margin-top:2px;font-size:12px;font-weight:600;color:#8ea2c6;line-height:1.35;
+  font-variant-numeric:tabular-nums;
+}
+.hx-cap b{color:#dfe8fa;font-weight:800}
+.hx-go{
+  width:34px;height:34px;flex:none;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:#2f6ce0;color:#fff;
+}
+.hx-go svg{width:17px;height:17px}
+/* срок вышел или бюджет разобран — стрелка гаснет, денег здесь уже нет */
+.hx-go.is-dead{background:rgba(255,255,255,.08);color:#8496b8}
+/* подпись: крупная сумма выше — бюджет оффера, а это — ваша оплата */
+.hx-k{font-size:11.5px;font-weight:600;color:#8ea2c6;line-height:1.3;margin-bottom:1px}
+.hx-due.is-none{color:var(--t3,#8f97a5);font-weight:600}
+.hx-st{
+  flex:none;padding:6px 10px;border-radius:999px;white-space:nowrap;
+  font-size:12px;font-weight:700;color:#cfe0ff;
+  background:rgba(47,108,224,.22);border:1px solid rgba(91,147,245,.4);
+}
+.hx-st.is-warn{color:#f5a524;background:rgba(245,165,36,.1);border-color:rgba(245,165,36,.36)}
+.hx-st.is-mute{color:var(--t3,#8f97a5);background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
+.hx-ava img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
+.hx-ava{overflow:hidden}
+
+@media (max-width:340px){
+  html body #pg-tasks .tk-card.hx{padding:14px 13px 0}
+  .hx-bank{margin:0 -13px;padding:12px 13px 13px}
+  .hx-amt{font-size:30px;letter-spacing:-1px}
+  .hx-amt small{font-size:20px}
+  .hx-rate b{font-size:17px}
+  html body #pg-tasks .tk-card.hx .hx-name{font-size:16px}
+}
+@media (prefers-reduced-motion:reduce){
+  html body #pg-tasks .tk-card.hx{transition:none}
+  html body #pg-tasks .tk-card.hx:active{transform:none}
+}
+</style>
+<script id="bp-tkcard">
+(function(){
+  'use strict';
+  if(window.__bpTkCard) return; window.__bpTkCard = 1;
+
+  var DAY = 864e5;
+  function esc(x){ return String(x==null?'':x).replace(/[&<>"']/g,function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+  function num(v){ var n = Number(String(v==null?0:v).replace(/[^\d.]/g,'')); return isFinite(n) && n > 0 ? n : 0; }
+  function rub(n){ return Math.round(n).toLocaleString('ru'); }
+  function plural(n, one, few, many){
+    var a = Math.abs(n) % 100, b = a % 10;
+    if(a > 10 && a < 20) return many;
+    if(b > 1 && b < 5) return few;
+    if(b === 1) return one;
+    return many;
+  }
+  function camps(){ try{ return JSON.parse(localStorage.getItem('bp_campaigns')||'[]') || []; }catch(e){ return []; } }
+  function safeImg(u){
+    u = String(u||'').trim();
+    return (/^https?:\/\//i.test(u) || /^data:image\/(png|jpe?g|webp|gif|avif);/i.test(u)) ? u : '';
+  }
+
+  /* Бюджет — точная копия budgetInfo из bp-tasks (там он не отдан
+     наружу): иначе карточка и шапка «Общий бюджет» разошлись бы. */
+  function budget(c){
+    if(!c) return null;
+    if(Number(c.budgetExact) > 0) return {v:Number(c.budgetExact), exact:true};
+    if(typeof c.budget === 'number' && c.budget > 0) return {v:c.budget, exact:true};
+    var lbl = String(c.budgetLabel || '');
+    var nums = (lbl.match(/\d[\d\s\u00a0]*/g) || [])
+      .map(function(x){ return Number(String(x).replace(/\D/g,'')); })
+      .filter(function(n){ return n > 0; });
+    if(nums.length >= 2) return {v:nums[1], exact:false};
+    if(nums.length === 1) return {v:nums[0], exact:true};
+    var raw = String(c.budget == null ? '' : c.budget);
+    var m = raw.match(/^(\d+)k?\s*[-–—]\s*(\d+)k?$/i);
+    if(m){ var mul = /k/i.test(raw) ? 1000 : 1; return {v:Number(m[2])*mul, exact:false}; }
+    var n = Number(raw.replace(/[^\d]/g,''));
+    if(n > 0 && !/[a-zA-Zа-яА-Я]/.test(raw.replace(/₽/g,''))) return {v:n, exact:true};
+    return null;
+  }
+
+
+  var ICO = {
+    clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+    go:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>'
+  };
+
+  function daysLeft(c){
+    if(!c.deadline) return null;
+    var t = Date.parse(c.deadline); if(!t) return null;
+    return Math.ceil((t - Date.now()) / DAY);
+  }
+  /* Срок: «ещё 12 дней», ближе к концу — янтарём, после — «срок вышел».
+     Без срока пишем об этом, чтобы правый край строки был у всех. */
+  function due(c){
+    var d = daysLeft(c);
+    if(d == null) return '<span class="hx-due is-none">Без срока</span>';
+    var txt = d <= 0 ? 'срок вышел'
+            : d === 1 ? 'последний день'
+            : d <= 3 ? 'осталось ' + d + ' ' + plural(d, 'день', 'дня', 'дней')
+            : 'ещё ' + d + ' ' + plural(d, 'день', 'дня', 'дней');
+    return '<span class="hx-due'+(d <= 3 ? ' is-soon' : '')+'" title="До конца задания">'+ICO.clock+esc(txt)+'</span>';
+  }
+
+  /* Статус участия — только однозначные: остальным оставляем стрелку. */
+  var JOIN_ST = { submitted:['На проверке', ''], rejected:['Переделать', 'is-warn'], finished:['Завершено', 'is-mute'] };
+  function earn(c, free, exact, dead, joinSt){
+    var fixed = c.payMode === 'fixed' && num(c.fixedPrice);
+    var rate = num(c.rate);
+    var cap = num(c.maxPayout) || num(c.payMax);
+    /* у баннера нет ролика — платят за публикацию */
+    var ban = (c.taskType || c.format) === 'banners';
+    var per = ban ? 'за публикацию' : 'за ролик';
+    var main = '', sub = '';
+    if(fixed){
+      main = '<b>'+rub(fixed)+' ₽</b><span>'+per+'</span>';
+      var n = (free != null && exact) ? Math.floor(free / fixed) : 0;
+      if(n >= 1) sub = 'бюджета хватит ещё на <b>'+n+'</b> '+(ban ? plural(n,'публикацию','публикации','публикаций') : plural(n,'ролик','ролика','роликов'));
+      /* свободного меньше одной выплаты — обещать полную цену нельзя */
+      else if(free != null && free > 0 && free < fixed){ sub = 'в бюджете меньше одной выплаты'; dead = true; }
+    } else if(rate && cap){
+      /* бо́льшая цифра — первой: «до 15 000 ₽ за ролик» цепляет сильнее «120 ₽» */
+      main = '<b>до '+rub(cap)+' ₽</b><span>'+per+'</span>';
+      sub = '<b>'+rub(rate)+' ₽</b> за 1 000 просмотров';
+    } else if(rate){
+      main = '<b>'+rub(rate)+' ₽</b><span>за 1 000 просмотров</span>';
+    } else if(cap){
+      main = '<b>до '+rub(cap)+' ₽</b><span>'+per+'</span>';
+    }
+    var js = joinSt && JOIN_ST[joinSt];
+    var tail = js ? '<span class="hx-st '+js[1]+'">'+js[0]+'</span>'
+             : '<span class="hx-go'+(dead ? ' is-dead' : '')+'" aria-hidden="true">'+ICO.go+'</span>';
+    /* условий оплаты нет (старые записи) — статус участия всё равно виден */
+    if(!main) return js ? '<div class="hx-earn"><div class="hx-earn-t"></div>' + tail + '</div>' : '';
+    return '<div class="hx-earn"><div class="hx-earn-t">'
+      + '<div class="hx-k">Вы получите</div>'
+      + '<div class="hx-rate">'+main+'</div>'
+      + (sub ? '<div class="hx-cap">'+sub+'</div>' : '')
+      + '</div>' + tail + '</div>';
+  }
+
+  function bank(c, joinSt){
+    var b = budget(c);
+    var spent = num(c.stats && c.stats.totalSpent);
+    var hold  = num(c.stats && c.stats.totalHold);
+    var top, amt, bar = '', free = null, exact = false;
+    if(!b){
+      top = '<span>Бюджет</span>';
+      amt = '<div class="hx-amt is-none">не указан</div>';
+    } else {
+      free = Math.max(0, b.v - spent - hold); exact = b.exact;
+      var share = b.v ? free / b.v : 0;
+      var pct = Math.max(0, Math.min(100, Math.round(share * 100)));
+      top = '<span>Свободно в бюджете</span>'
+        + (free < b.v ? '<span class="hx-of">из '+(b.exact?'':'до ')+rub(b.v)+' ₽</span>' : '');
+      amt = free > 0
+        ? '<div class="hx-amt">'+(b.exact?'':'<em>до</em>')+rub(free)+'<small>₽</small></div>'
+        : '<div class="hx-amt is-none">всё распределено</div>';
+      bar = '<div class="hx-bar'+(pct <= 15 ? ' is-low' : '')+'" role="img" aria-label="Свободно '+pct+'% бюджета">'
+        + (pct > 0 ? '<i style="width:'+pct+'%"></i>' : '') + '</div>';
+    }
+    var dl = daysLeft(c);
+    var dead = (free != null && free <= 0) || (dl != null && dl <= 0);
+    return '<div class="hx-bank"><div class="hx-top">'+top+'</div>'+amt+bar+earn(c, free, exact, dead, joinSt)+'</div>';
+  }
+
+  function inner(c, joined){
+    var plats = '';
+    try{ plats = window.bpTaskPlatBadges ? window.bpTaskPlatBadges(c) : ''; }catch(e){ plats = ''; }
+    var fmt = c.formatLabel || c.format || '';
+    var nm = String(c.advertiserName || c.brand || 'Рекламодатель');
+    var letter = (Array.from ? Array.from(nm.trim())[0] : nm.trim().charAt(0)) || 'Р';
+    /* картинка — тегом <img>, а не url() в style: экранирование HTML
+       не защищает CSS-строку от кавычки и скобки в адресе */
+    var img = safeImg(c.advertiserPhoto || c.brandLogo || '');
+    var joinSt = '';
+    if(joined){ try{ var j = window.bpJoinOf ? window.bpJoinOf(c.id) : null; joinSt = j ? String(j.status || '') : ''; }catch(e){} }
+    var meta = (fmt ? '<span class="hx-fmt">'+esc(fmt)+'</span>' : '') + plats + due(c);
+    return (joined ? '<div class="tk-mine">Вы участвуете</div>' : '')
+      + (meta ? '<div class="hx-meta">'+meta+'</div>' : '')
+      + '<div class="tk-name hx-name">'+esc(c.name || c.title || 'Без названия')+'</div>'
+      + '<div class="hx-by"><span class="hx-ava">'
+      +   (img ? '<img src="'+esc(img)+'" alt="">' : esc(letter.toUpperCase())) + '</span>'
+      +   '<span class="hx-by-n">'+esc(nm)+'</span></div>'
+      + bank(c, joinSt);
+  }
+
+  var RX = /bpTaskOpen\('((?:[^'\\]|\\.)*)'\)/;
+  function enhance(){
+    var page = document.getElementById('pg-tasks'); if(!page) return;
+    var cards = page.querySelectorAll('.tk-list > .tk-card:not(.hx)');
+    if(!cards.length) return;
+    var all = camps(), byId = {};
+    for(var i = 0; i < all.length; i++) if(all[i] && all[i].id != null) byId[String(all[i].id)] = all[i];
+    for(var j = 0; j < cards.length; j++){
+      var el = cards[j];
+      try{
+        var m = RX.exec(el.getAttribute('onclick') || '');
+        var c = m && byId[m[1]];
+        if(!c) continue;
+        var joined = el.classList.contains('tk-card-joined') || !!el.querySelector('.tk-mine');
+        el.innerHTML = inner(c, joined);
+        el.classList.add('hx');
+      }catch(e){ try{ console.warn('bp-tkcard:', e && e.message); }catch(_){} }
+    }
+  }
+
+  /* Список перерисовывают и снаружи (bpTasksRender), и изнутри
+     модуля (фильтр, поиск, сортировка, вступление) — там зовётся
+     локальная renderList, мимо window. Поэтому следим за самой
+     страницей: колбэк наблюдателя — микрозадача, до отрисовки кадра,
+     и старая карточка на экран не попадает. */
+  function watch(){
+    var page = document.getElementById('pg-tasks');
+    if(!page || page.__hxWatched || typeof MutationObserver === 'undefined') return;
+    page.__hxWatched = 1;
+    new MutationObserver(function(){ enhance(); }).observe(page, {childList:true});
+  }
+
+  var orig = window.bpTasksRender;
+  if(typeof orig === 'function'){
+    window.bpTasksRender = function(){
+      var r = orig.apply(this, arguments);
+      try{ watch(); enhance(); }catch(e){}
+      return r;
+    };
+  }
+  var og = window.goTo;
+  if(typeof og === 'function'){
+    window.goTo = function(id){
+      var r = og.apply(this, arguments);
+      if(String(id) === 'tasks'){ try{ watch(); enhance(); }catch(e){} }
+      return r;
+    };
+  }
+
+  /* Enter/пробел по карточке уже обрабатывает bp-a11y-js (role=button) —
+     своего обработчика не ставим, иначе задание открывалось бы дважды. */
+
+  watch(); enhance();
 })();
 </script>
 </body>

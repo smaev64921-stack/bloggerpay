@@ -96,6 +96,28 @@ try {
   const head = await get(BASE + p.body.url, { method: 'HEAD' });
   ok(head.status === 200 && Number(head.headers.get('content-length')) === PNG.length, 'HEAD отвечает размером');
 
+  /* Анимированный баннер и видео: без пережатия, до 6 МБ */
+  const GIF = Buffer.concat([Buffer.from('GIF89a', 'latin1'), Buffer.alloc(3 * 1024 * 1024, 3)]);
+  const gi = await api('POST', '/api/media', { data: url('image/gif', GIF) }, T);
+  const gg = await get(BASE + gi.body.url);
+  ok(gi.status === 200 && gg.headers.get('content-type') === 'image/gif', 'GIF на 3 МБ принят и отдан как gif', gi.body);
+  const MP4 = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypmp42', 'latin1'), Buffer.alloc(5000, 9)]);
+  const mv = await api('POST', '/api/media', { data: url('video/mp4', MP4) }, T);
+  ok(mv.status === 200, 'видео MP4 принято', mv.body);
+  const r1 = await fetch(BASE + mv.body.url, { headers: { Range: 'bytes=4-11' } });
+  const r1b = Buffer.from(await r1.arrayBuffer());
+  ok(r1.status === 206 && r1b.toString('latin1') === 'ftypmp42' && r1.headers.get('content-range') === 'bytes 4-11/' + MP4.length, 'кусок видео по Range (206)', { st: r1.status, cr: r1.headers.get('content-range') });
+  const r2 = await fetch(BASE + mv.body.url, { headers: { Range: 'bytes=-4' } });
+  const r2b = Buffer.from(await r2.arrayBuffer());
+  ok(r2.status === 206 && r2b.length === 4, 'хвост видео по Range');
+  const r3 = await get(BASE + mv.body.url, { headers: { Range: 'bytes=999999-' } });
+  ok(r3.status === 416, 'Range за концом файла — 416', r3.status);
+  const HEIC = Buffer.concat([Buffer.from([0, 0, 0, 0x18]), Buffer.from('ftypheic', 'latin1'), Buffer.alloc(3000, 5)]);
+  const he = await api('POST', '/api/media', { data: url('video/mp4', HEIC) }, T);
+  ok(he.status === 400, 'фото HEIC под видом MP4 не принять', he.body);
+  const huge = await api('POST', '/api/media', { data: url('image/gif', Buffer.concat([Buffer.from('GIF89a', 'latin1'), Buffer.alloc(6 * 1024 * 1024 + 10, 1)])) }, T);
+  ok(huge.status === 400 || huge.status === 413, 'GIF больше 6 МБ не принять', huge.body);
+
   ok((await get(BASE + '/media/' + '0'.repeat(32))).status === 404, 'несуществующая — 404');
   ok((await get(BASE + '/media/../server.js')).status === 404, 'путь наружу не открывается');
   ok((await get(BASE + '/media/ABC')).status === 404, 'кривой адрес — 404');

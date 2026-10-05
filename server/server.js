@@ -690,7 +690,10 @@ const qm = {
   get: db.prepare('SELECT mime, data FROM media WHERE id = ?'),
   stat: db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS bytes FROM media WHERE user_id = ?'),
 };
-const MEDIA_MAX = 1024 * 1024;              /* одна картинка — до 1 МБ */
+const MEDIA_MAX = 1024 * 1024;              /* JPEG — до 1 МБ: приложение само его ужимает */
+/* Анимированный баннер (GIF, анимированные PNG и WebP) и видео-баннер
+   пережимать нельзя — анимация пропадёт. Им до 6 МБ (05.10.2026). */
+const MEDIA_MAX_RICH = 6 * 1024 * 1024;
 const MEDIA_USER_FILES = 300;
 const MEDIA_USER_BYTES = 150 * 1024 * 1024;
 /* Тип проверяем по первым байтам, а не по подписи в data:-адресе:
@@ -699,6 +702,12 @@ function mediaKind(buf) {
   if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
   if (buf.length > 8 && buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
   if (buf.length > 12 && buf.slice(0, 4).toString('latin1') === 'RIFF' && buf.slice(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+  if (buf.length > 6 && /^GIF8[79]a$/.test(buf.slice(0, 6).toString('latin1'))) return 'image/gif';
+  /* «ftyp» есть и у фото HEIC/AVIF с iPhone, и у аудио M4A — видео
+     только по марке видеоконтейнера */
+  if (buf.length > 12 && buf.slice(4, 8).toString('latin1') === 'ftyp'
+      && /^(isom|iso[2-9]|mp41|mp42|avc1|dash|m4v |qt  |3gp\d|3g2\w|mmp4|f4v )$/i.test(buf.slice(8, 12).toString('latin1'))) return 'video/mp4';
+  if (buf.length > 4 && buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return 'video/webm';
   return '';
 }
 
@@ -3409,15 +3418,17 @@ const routes = {
      без входа: адрес из 32 случайных знаков не угадать, а блогеру баннер
      нужен без лишних шагов. */
   'POST /api/media': async (req, body) => {
-    if (!rateLimit(req, 'media', 30, 60000)) return tooOften;
+    /* частоту проверяет диспетчер ДО чтения тела (до 8,6 МБ) */
     const u = auth(req);
     if (!u) return { status: 401, body: { error: 'Нужен вход' } };
-    const m = /^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(body.data || ''));
-    if (!m) return { status: 400, body: { error: 'Нужна картинка jpeg, png или webp' } };
+    const m = /^data:(?:image\/(?:jpeg|png|webp|gif)|video\/(?:mp4|webm));base64,([A-Za-z0-9+/=]+)$/.exec(String(body.data || ''));
+    if (!m) return { status: 400, body: { error: 'Нужна картинка (JPG, PNG, WebP, GIF) или видео MP4' } };
     const buf = Buffer.from(m[1], 'base64');
-    if (buf.length > MEDIA_MAX) return { status: 400, body: { error: 'Картинка больше 1 МБ — уменьшите её' } };
     const mime = mediaKind(buf);
     if (!mime) return { status: 400, body: { error: 'Файл не похож на картинку' } };
+    if (buf.length > (mime === 'image/jpeg' ? MEDIA_MAX : MEDIA_MAX_RICH)) {
+      return { status: 400, body: { error: mime === 'image/jpeg' ? 'Картинка больше 1 МБ — уменьшите её' : 'Файл больше 6 МБ — сожмите его' } };
+    }
     const st = qm.stat.get(u.id) || {};
     if (Number(st.n) >= MEDIA_USER_FILES || Number(st.bytes) + buf.length > MEDIA_USER_BYTES) {
       return { status: 400, body: { error: 'Место для картинок закончилось — удалите старые задания' } };
@@ -5009,13 +5020,30 @@ const handler = async (req, res) => {
     const row = qm.get.get(url.pathname.slice(7));
     if (!row) return send(res, 404, { error: 'Картинки нет' });
     const buf = Buffer.from(row.data);
-    res.writeHead(200, Object.assign({}, PAGE_SECURITY, {
+    const head = Object.assign({}, PAGE_SECURITY, {
       'Content-Type': row.mime,
-      'Content-Length': buf.length,
+      'Accept-Ranges': 'bytes',
       'Cache-Control': 'public, max-age=31536000, immutable',
       'Access-Control-Allow-Origin': '*',
       'Cross-Origin-Resource-Policy': 'cross-origin',
-    }));
+    });
+    /* Видео-баннер Safari (и Телеграм на iPhone) без ответа по кускам
+       (206) не проигрывает вовсе. */
+    const rg = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
+    if (rg && (rg[1] !== '' || rg[2] !== '')) {
+      const len = buf.length;
+      let s, e;
+      if (rg[1] === '') { s = Math.max(0, len - Number(rg[2])); e = len - 1; }
+      else { s = Number(rg[1]); e = rg[2] === '' ? len - 1 : Math.min(Number(rg[2]), len - 1); }
+      if (!(s >= 0 && s <= e && s < len)) {
+        res.writeHead(416, Object.assign(head, { 'Content-Range': 'bytes */' + len }));
+        return res.end();
+      }
+      res.writeHead(206, Object.assign(head, { 'Content-Range': 'bytes ' + s + '-' + e + '/' + len, 'Content-Length': e - s + 1 }));
+      if (req.method === 'HEAD') return res.end();
+      return res.end(buf.subarray(s, e + 1));
+    }
+    res.writeHead(200, Object.assign(head, { 'Content-Length': buf.length }));
     if (req.method === 'HEAD') return res.end();
     return res.end(buf);
   }
@@ -5051,7 +5079,12 @@ const handler = async (req, res) => {
       && (url.pathname === '/api/kyc/submit' || url.pathname === '/api/cards' || url.pathname === '/api/sync/put'
           || url.pathname === '/api/media');
     if (isBig && !auth(req)) return send(res, 401, { error: 'Нужен вход' });
-    const maxBody = isBig ? 1500 * 1024 : undefined;
+    /* /api/media: лимит частоты — до того, как тело до 8,6 МБ ляжет в память */
+    if (req.method === 'POST' && url.pathname === '/api/media' && !rateLimit(req, 'media', 30, 60000)) {
+      return send(res, tooOften.status, tooOften.body);
+    }
+    /* /api/media: анимированный баннер до 6 МБ — в base64 это ~8 МБ */
+    const maxBody = isBig ? (url.pathname === '/api/media' ? 8600 * 1024 : 1500 * 1024) : undefined;
     const body = req.method === 'POST' ? await readBody(req, maxBody) : {};
     const out = await handler(req, body, url);
     send(res, out.status, out.body, out.headers);
