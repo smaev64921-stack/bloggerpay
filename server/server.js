@@ -671,6 +671,37 @@ db.exec(`CREATE TABLE IF NOT EXISTS admin_log (
   detail  TEXT
 )`);
 
+/* Картинки заданий (05.10.2026): баннеры, фото товара, обложки. Раньше
+   они ехали внутри задания строкой base64, и запись задания упиралась в
+   предел 400 КБ (POST /api/sync/put): задание с крупной обложкой молча
+   не доходило до блогеров. Теперь картинка лежит здесь отдельно, а в
+   задании — только её адрес /media/<id>. */
+db.exec(`CREATE TABLE IF NOT EXISTS media (
+  id         TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL,
+  mime       TEXT NOT NULL,
+  data       BLOB NOT NULL,
+  size       INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec('CREATE INDEX IF NOT EXISTS media_user ON media(user_id)');
+const qm = {
+  ins: db.prepare('INSERT INTO media (id, user_id, mime, data, size) VALUES (?,?,?,?,?)'),
+  get: db.prepare('SELECT mime, data FROM media WHERE id = ?'),
+  stat: db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS bytes FROM media WHERE user_id = ?'),
+};
+const MEDIA_MAX = 1024 * 1024;              /* одна картинка — до 1 МБ */
+const MEDIA_USER_FILES = 300;
+const MEDIA_USER_BYTES = 150 * 1024 * 1024;
+/* Тип проверяем по первым байтам, а не по подписи в data:-адресе:
+   иначе под видом картинки можно было бы положить что угодно. */
+function mediaKind(buf) {
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf.length > 8 && buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (buf.length > 12 && buf.slice(0, 4).toString('latin1') === 'RIFF' && buf.slice(8, 12).toString('latin1') === 'WEBP') return 'image/webp';
+  return '';
+}
+
 /* ── Мелкая утварь ─────────────────────────────────────────────────── */
 
 const q = {
@@ -3373,6 +3404,29 @@ const routes = {
      Сервер заявку только хранит; смотрит и решает оператор в консоли
      (/operator, раздел «Верификация»). */
 
+  /* Картинка задания: баннер, фото товара, обложка. Только для вошедших;
+     на человека — не больше 300 файлов и 150 МБ. Отдаётся по GET /media/<id>
+     без входа: адрес из 32 случайных знаков не угадать, а блогеру баннер
+     нужен без лишних шагов. */
+  'POST /api/media': async (req, body) => {
+    if (!rateLimit(req, 'media', 30, 60000)) return tooOften;
+    const u = auth(req);
+    if (!u) return { status: 401, body: { error: 'Нужен вход' } };
+    const m = /^data:image\/(?:jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(body.data || ''));
+    if (!m) return { status: 400, body: { error: 'Нужна картинка jpeg, png или webp' } };
+    const buf = Buffer.from(m[1], 'base64');
+    if (buf.length > MEDIA_MAX) return { status: 400, body: { error: 'Картинка больше 1 МБ — уменьшите её' } };
+    const mime = mediaKind(buf);
+    if (!mime) return { status: 400, body: { error: 'Файл не похож на картинку' } };
+    const st = qm.stat.get(u.id) || {};
+    if (Number(st.n) >= MEDIA_USER_FILES || Number(st.bytes) + buf.length > MEDIA_USER_BYTES) {
+      return { status: 400, body: { error: 'Место для картинок закончилось — удалите старые задания' } };
+    }
+    const id = crypto.randomBytes(16).toString('hex');
+    qm.ins.run(id, u.id, mime, buf, buf.length);
+    return { status: 200, body: { ok: true, id, url: '/media/' + id } };
+  },
+
   'POST /api/kyc/submit': async (req, body) => {
     if (!rateLimit(req, 'kyc', 6, 60000)) return tooOften;
     const u = auth(req);
@@ -4950,6 +5004,21 @@ const handler = async (req, res) => {
   if (req.method === 'GET' && /^\/r\/[a-f0-9]{32}$/i.test(url.pathname)) {
     return sendRecoverPage(res);
   }
+  /* Картинки заданий (POST /api/media). Неизменны — кэшируем надолго. */
+  if ((req.method === 'GET' || req.method === 'HEAD') && /^\/media\/[a-f0-9]{32}$/.test(url.pathname)) {
+    const row = qm.get.get(url.pathname.slice(7));
+    if (!row) return send(res, 404, { error: 'Картинки нет' });
+    const buf = Buffer.from(row.data);
+    res.writeHead(200, Object.assign({}, PAGE_SECURITY, {
+      'Content-Type': row.mime,
+      'Content-Length': buf.length,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'Access-Control-Allow-Origin': '*',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
+    }));
+    if (req.method === 'HEAD') return res.end();
+    return res.end(buf);
+  }
   /* Сам сайт. Раздаём его отсюда же, из папки над сервером: тогда всё
      хозяйство — сайт, касса и бот — живёт по одному адресу, и боту
      некуда ссылаться, кроме как на нас. Отдельный хостинг для статики
@@ -4979,7 +5048,8 @@ const handler = async (req, res) => {
        Но большой буфер — только для вошедших: токен проверяем ДО чтения
        тела, чтобы аноним не заставлял сервер глотать по полтора мегабайта. */
     const isBig = req.method === 'POST'
-      && (url.pathname === '/api/kyc/submit' || url.pathname === '/api/cards' || url.pathname === '/api/sync/put');
+      && (url.pathname === '/api/kyc/submit' || url.pathname === '/api/cards' || url.pathname === '/api/sync/put'
+          || url.pathname === '/api/media');
     if (isBig && !auth(req)) return send(res, 401, { error: 'Нужен вход' });
     const maxBody = isBig ? 1500 * 1024 : undefined;
     const body = req.method === 'POST' ? await readBody(req, maxBody) : {};
