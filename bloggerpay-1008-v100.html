@@ -91666,165 +91666,182 @@ function glow(id){
 </script>
 <style id="bp-tkcard-css">
 /* ══════════════════════════════════════════════════════════════════════
-   КАРТОЧКА ЗАДАНИЯ: ДЕНЬГИ ВПЕРЕДИ  (слой bp-tkcard)
+   КАРТОЧКА ЗАДАНИЯ: ДЕНЬГИ ВПЕРЕДИ  (слой bp-tkcard, 05.10.2026, v2)
    ──────────────────────────────────────────────────────────────────────
    Владелец: «блок задания тусклый и слабый, не цепляет, что деньги
-   большие». Старая карточка начиналась с «Выплачено блогерам 0 ₽» —
-   первым в глаза бросался ноль. Теперь нижняя часть карточки —
-   денежная полоса: крупно свободный бюджет, тонкая шкала «сколько
-   ещё свободно» и строка «сколько получите вы». Формат, площадки и
-   срок — тонкой строкой над названием.
-
+   большие». Первый заход (денежная полоса край в край с синим свечением)
+   он забраковал и прислал макет. Теперь по макету:
+   • сверху формат и площадки; слева название и рекламодатель, справа —
+     плитка срока «Осталось 27 дней» с календарём;
+   • снизу — денежная панель со своими скруглёнными углами и спокойным
+     тёмно-синим градиентом: «Свободно в бюджете», крупная белая сумма,
+     толстая шкала свободного остатка, под чертой «Вы получите» и синяя
+     круглая стрелка;
+   • обложка оффера, если рекламодатель её загрузил, — сверху карточки.
    Зелёный не трогаем: он только для денег, которые уже пришли.
-   Возможный заработок — белый и синий; янтарь — срок и кончающийся
-   бюджет. Глубина держится на заливке и рамке, а не на тенях:
-   html.bp-lite гасит box-shadow на слабых телефонах.
-   Выбран из трёх вариантов (05.10.2026); откат — удалить
-   style#bp-tkcard-css и script#bp-tkcard.
+   Глубина — заливкой и рамкой, не тенями (html.bp-lite гасит тени).
+   Откат: удалить style#bp-tkcard-css и script#bp-tkcard.
    ══════════════════════════════════════════════════════════════════════ */
 
 html body #pg-tasks .tk-card.hx{
   position:relative;overflow:hidden;
-  padding:15px 16px 0;
-  border-radius:20px;
-  background:var(--card,#191e27);
-  border:1px solid rgba(255,255,255,.09);
+  padding:16px 16px 0;
+  border-radius:22px;
+  background:linear-gradient(180deg,#171c26 0%,#141922 100%);
+  border:1px solid rgba(255,255,255,.08);
   -webkit-tap-highlight-color:transparent;
   transition:border-color .16s cubic-bezier(.22,1,.36,1),transform .16s cubic-bezier(.22,1,.36,1);
 }
-html body #pg-tasks .tk-card.hx:hover{background:var(--card,#191e27);border-color:rgba(91,147,245,.30)}
+html body #pg-tasks .tk-card.hx:hover{background:linear-gradient(180deg,#171c26 0%,#141922 100%);border-color:rgba(91,147,245,.28)}
 html body #pg-tasks .tk-card.hx:active{transform:scale(.985)}
 html body #pg-tasks .tk-card.hx:focus-visible{outline:2px solid #5b93f5;outline-offset:2px}
 html body #pg-tasks .tk-card.hx .tk-mine{margin-bottom:10px}
 
-/* ── строка формата: формат · площадки · срок ── */
-.hx-meta{
-  display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;
-  min-height:22px;margin-bottom:8px;
+/* ── обложка оффера ── */
+.hx-cover{
+  position:relative;margin:-16px -16px 14px;height:148px;overflow:hidden;
+  background:#10141b;
 }
+.hx-cover img{width:100%;height:100%;object-fit:cover;display:block}
+.hx-cover::after{
+  content:'';position:absolute;left:0;right:0;bottom:0;height:56px;pointer-events:none;
+  background:linear-gradient(180deg,rgba(23,28,38,0) 0%,rgba(23,28,38,.92) 100%);
+}
+
+/* ── формат и площадки ── */
+.hx-meta{display:flex;align-items:center;gap:10px;min-height:26px;margin-bottom:10px}
 .hx-fmt{
   /* inline-block, а не flex: у flex-контейнера многоточие не рисуется */
-  display:inline-block;vertical-align:middle;height:22px;line-height:20px;padding:0 9px;box-sizing:border-box;
-  border-radius:999px;background:rgba(255,255,255,.06);
-  border:1px solid rgba(255,255,255,.09);
-  font-size:11px;font-weight:700;letter-spacing:.1px;color:var(--t2,#c9cdd4);
-  white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;
+  display:inline-block;vertical-align:middle;box-sizing:border-box;
+  height:26px;line-height:24px;padding:0 11px;border-radius:999px;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);
+  font-size:12px;font-weight:700;letter-spacing:.1px;color:var(--t2,#c9cdd4);
+  white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis;
 }
 html body #pg-tasks .tk-card.hx .hx-meta .tk-plats{display:flex;align-items:center}
 html body #pg-tasks .tk-card.hx .hx-meta .tk-plat{
-  width:22px;height:22px;margin-right:-6px;border-width:2px;
-  border-color:var(--card,#191e27);
+  width:24px;height:24px;margin-right:-6px;border-width:2px;border-color:#161b25;
 }
 html body #pg-tasks .tk-card.hx .hx-meta .tk-plat:last-child{margin-right:0}
-html body #pg-tasks .tk-card.hx .hx-meta .tk-plat svg{width:12px;height:12px}
-html body #pg-tasks .tk-card.hx:hover .hx-meta .tk-plat{border-color:var(--card,#191e27)}
-.hx-due{
-  margin-left:auto;display:inline-flex;align-items:center;gap:5px;
-  font-size:11.5px;font-weight:700;color:var(--t3,#8f97a5);white-space:nowrap;
-  font-variant-numeric:tabular-nums;
-}
-.hx-due svg{width:13px;height:13px;flex:none}
-.hx-due.is-soon{color:#f5a524}
+html body #pg-tasks .tk-card.hx .hx-meta .tk-plat svg{width:13px;height:13px}
+html body #pg-tasks .tk-card.hx:hover .hx-meta .tk-plat{border-color:#161b25}
 
-/* ── название и рекламодатель ── */
+/* ── название, рекламодатель, плитка срока ── */
+.hx-row{display:flex;align-items:flex-start;gap:12px}
+.hx-who{flex:1;min-width:0}
 html body #pg-tasks .tk-card.hx .hx-name{
-  font-size:17px;font-weight:800;line-height:1.3;letter-spacing:-.35px;
-  color:var(--t1,#fff);margin:0 0 5px;
+  font-size:19px;font-weight:800;line-height:1.25;letter-spacing:-.4px;
+  color:var(--t1,#fff);margin:2px 0 8px;
   text-wrap:pretty;overflow-wrap:anywhere;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
 }
 .hx-by{
-  display:flex;align-items:center;gap:7px;min-width:0;margin-bottom:14px;
-  font-size:12.5px;font-weight:600;color:var(--t3,#8f97a5);
+  display:flex;align-items:center;gap:9px;min-width:0;
+  font-size:14px;font-weight:600;color:#9aa3b2;
 }
 .hx-ava{
-  width:20px;height:20px;flex:none;border-radius:50%;
+  width:24px;height:24px;flex:none;border-radius:50%;overflow:hidden;
   display:inline-flex;align-items:center;justify-content:center;
-  background:#242b39;border:1px solid rgba(255,255,255,.12);
-  font-size:10px;font-weight:800;color:var(--t1,#fff);
-  background-size:cover;background-position:center;
+  background:#1d2330;border:1px solid rgba(255,255,255,.12);
+  font-size:11px;font-weight:800;color:var(--t1,#fff);
 }
+.hx-ava img{width:100%;height:100%;object-fit:cover;display:block}
 .hx-by-n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 
-/* ── денежная полоса: нижняя часть карточки, край в край ── */
+.hx-due{
+  flex:none;display:flex;align-items:center;gap:10px;
+  padding:9px 10px 9px 12px;border-radius:15px;
+  background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.09);
+  color:#c3cad6;
+}
+.hx-due > svg{width:19px;height:19px;flex:none;color:#aeb6c4}
+.hx-due span{display:flex;flex-direction:column;line-height:1.2}
+.hx-due i{font-style:normal;font-size:11.5px;font-weight:600;color:#8f98a8}
+.hx-due b{font-size:15px;font-weight:800;color:#fff;white-space:nowrap;font-variant-numeric:tabular-nums}
+.hx-due .hx-chev{width:15px;height:15px;color:#7f8898;margin-left:2px}
+.hx-due.is-soon{border-color:rgba(245,165,36,.34);background:rgba(245,165,36,.06)}
+.hx-due.is-soon > svg,.hx-due.is-soon b{color:#f5a524}
+.hx-due.is-over b{color:#ff8090}
+.hx-due.is-over > svg{color:#ff8090}
+.hx-due.is-none b{font-size:13.5px;color:#c3cad6}
+
+/* ── денежная панель ── */
 .hx-bank{
-  margin:0 -16px;padding:12px 16px 13px;
+  position:relative;
+  /* край в край, как на макете: перекрываем поля и рамку карточки */
+  margin:16px -17px -1px;padding:16px 16px 17px;
+  border-radius:20px 20px 22px 22px;
   background:
-    radial-gradient(130% 140% at 0% 0%, rgba(74,128,235,.30) 0%, rgba(74,128,235,0) 58%),
-    linear-gradient(180deg,#1b2842 0%,#172031 100%);
-  border-top:1px solid rgba(120,165,255,.24);
+    linear-gradient(100deg,#151b26 0%,#172033 55%,#1b2944 100%);
+  border:1px solid rgba(255,255,255,.08);
+  border-top-color:rgba(255,255,255,.12);
 }
 html body #pg-tasks .tk-card-joined.hx .hx-bank{box-shadow:inset 3px 0 0 0 #2f6ce0!important}
 .hx-top{
   display:flex;align-items:baseline;justify-content:space-between;gap:8px;
-  font-size:12px;font-weight:600;color:#a9bde3;line-height:1.3;
+  font-size:13.5px;font-weight:600;color:#98a2b3;line-height:1.3;
 }
-.hx-of{color:#8496b8;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hx-of{color:#7f8aa0;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:12.5px}
 .hx-amt{
-  display:flex;align-items:baseline;gap:5px;margin:2px 0 10px;
-  font-size:34px;font-weight:800;line-height:1.1;letter-spacing:-1.2px;
-  color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap;
+  display:flex;align-items:baseline;gap:8px;margin:6px 0 14px;
+  font-size:40px;font-weight:800;line-height:1.05;letter-spacing:-1.6px;
+  color:#fff;white-space:nowrap;
 }
-.hx-amt small,.hx-amt em{font-size:23px;font-weight:700;font-style:normal;letter-spacing:0;color:#93b4f2}
-.hx-amt em{font-size:19px}
-.hx-amt.is-none{font-size:18px;letter-spacing:-.3px;color:#c9d4ea;margin-bottom:4px}
-.hx-bar{
-  height:5px;border-radius:99px;overflow:hidden;
-  background:rgba(255,255,255,.10);
-}
+.hx-amt small{font-size:27px;font-weight:700;letter-spacing:0;color:#eef3ff}
+.hx-amt em{font-size:20px;font-weight:700;font-style:normal;letter-spacing:0;color:#c9d6f2}
+.hx-amt.is-none{font-size:19px;letter-spacing:-.3px;color:#c9d4ea;margin-bottom:10px}
+.hx-bar{height:8px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.08)}
 .hx-bar i{
-  display:block;height:100%;border-radius:inherit;min-width:5px;
-  background:linear-gradient(90deg,#2f6ce0,#6ea2ff);
+  display:block;height:100%;border-radius:inherit;min-width:8px;
+  background:linear-gradient(90deg,#2f6ce0 0%,#4f8bf0 55%,#7aaeff 100%);
 }
-.hx-bar.is-low i{background:#f5a524}
+.hx-bar.is-low i{background:linear-gradient(90deg,#d98a12,#f5a524)}
 
 .hx-earn{
   display:flex;align-items:center;gap:12px;
-  margin-top:12px;padding-top:11px;
-  border-top:1px solid rgba(140,180,255,.14);
+  margin-top:16px;padding-top:15px;
+  border-top:1px solid rgba(255,255,255,.07);
 }
 .hx-earn-t{flex:1;min-width:0}
+.hx-k{font-size:13.5px;font-weight:600;color:#98a2b3;line-height:1.3;margin-bottom:3px}
 .hx-rate{
-  display:flex;align-items:baseline;flex-wrap:wrap;gap:0 6px;
-  font-size:13px;font-weight:600;color:#b6c4de;line-height:1.3;
+  display:flex;align-items:baseline;flex-wrap:wrap;gap:0 8px;
+  font-size:15px;font-weight:600;color:#aab4c5;line-height:1.3;
 }
-.hx-rate b{
-  font-size:19px;font-weight:800;letter-spacing:-.4px;color:#fff;
-  font-variant-numeric:tabular-nums;white-space:nowrap;
-}
+.hx-rate b{font-size:22px;font-weight:800;letter-spacing:-.5px;color:#fff;white-space:nowrap}
 .hx-cap{
-  margin-top:2px;font-size:12px;font-weight:600;color:#8ea2c6;line-height:1.35;
-  font-variant-numeric:tabular-nums;
+  margin-top:3px;font-size:13.5px;font-weight:600;color:#98a2b3;line-height:1.35;
 }
-.hx-cap b{color:#dfe8fa;font-weight:800}
+.hx-cap b{color:#eef2fa;font-weight:700}
 .hx-go{
-  width:34px;height:34px;flex:none;border-radius:50%;
+  width:44px;height:44px;flex:none;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
   background:#2f6ce0;color:#fff;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18);
 }
-.hx-go svg{width:17px;height:17px}
+.hx-go svg{width:19px;height:19px}
 /* срок вышел или бюджет разобран — стрелка гаснет, денег здесь уже нет */
-.hx-go.is-dead{background:rgba(255,255,255,.08);color:#8496b8}
-/* подпись: крупная сумма выше — бюджет оффера, а это — ваша оплата */
-.hx-k{font-size:11.5px;font-weight:600;color:#8ea2c6;line-height:1.3;margin-bottom:1px}
-.hx-due.is-none{color:var(--t3,#8f97a5);font-weight:600}
+.hx-go.is-dead{background:rgba(255,255,255,.08);color:#8496b8;box-shadow:none}
 .hx-st{
-  flex:none;padding:6px 10px;border-radius:999px;white-space:nowrap;
-  font-size:12px;font-weight:700;color:#cfe0ff;
+  flex:none;padding:7px 12px;border-radius:999px;white-space:nowrap;
+  font-size:12.5px;font-weight:700;color:#cfe0ff;
   background:rgba(47,108,224,.22);border:1px solid rgba(91,147,245,.4);
 }
 .hx-st.is-warn{color:#f5a524;background:rgba(245,165,36,.1);border-color:rgba(245,165,36,.36)}
 .hx-st.is-mute{color:var(--t3,#8f97a5);background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.1)}
-.hx-ava img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
-.hx-ava{overflow:hidden}
 
-@media (max-width:340px){
+@media (max-width:360px){
   html body #pg-tasks .tk-card.hx{padding:14px 13px 0}
-  .hx-bank{margin:0 -13px;padding:12px 13px 13px}
-  .hx-amt{font-size:30px;letter-spacing:-1px}
-  .hx-amt small{font-size:20px}
-  .hx-rate b{font-size:17px}
-  html body #pg-tasks .tk-card.hx .hx-name{font-size:16px}
+  .hx-cover{margin:-14px -13px 12px;height:132px}
+  .hx-bank{margin:14px -14px -1px;padding:14px 13px 15px}
+  .hx-amt{font-size:34px;letter-spacing:-1.2px}
+  .hx-amt small{font-size:23px}
+  .hx-rate b{font-size:19px}
+  html body #pg-tasks .tk-card.hx .hx-name{font-size:17px}
+  .hx-by{font-size:13px}
+  .hx-due{padding:8px 9px 8px 10px;gap:8px}
+  .hx-due b{font-size:14px}
+  .hx-due .hx-chev{display:none}
 }
 @media (prefers-reduced-motion:reduce){
   html body #pg-tasks .tk-card.hx{transition:none}
@@ -91853,6 +91870,12 @@ html body #pg-tasks .tk-card-joined.hx .hx-bank{box-shadow:inset 3px 0 0 0 #2f6c
     u = String(u||'').trim();
     return (/^https?:\/\//i.test(u) || /^data:image\/(png|jpe?g|webp|gif|avif);/i.test(u)) ? u : '';
   }
+  /* обложка: свой сервер (/media/<id>), https или data:image */
+  function coverSrc(c){
+    var u = String((c && (c.cover || c.photo)) || '').trim();
+    if(/^\/media\/[a-f0-9]{32}(#[a-z0-9]{2,5})?$/.test(u)) return u;
+    return safeImg(u);
+  }
 
   /* Бюджет — точная копия budgetInfo из bp-tasks (там он не отдан
      наружу): иначе карточка и шапка «Общий бюджет» разошлись бы. */
@@ -91861,7 +91884,7 @@ html body #pg-tasks .tk-card-joined.hx .hx-bank{box-shadow:inset 3px 0 0 0 #2f6c
     if(Number(c.budgetExact) > 0) return {v:Number(c.budgetExact), exact:true};
     if(typeof c.budget === 'number' && c.budget > 0) return {v:c.budget, exact:true};
     var lbl = String(c.budgetLabel || '');
-    var nums = (lbl.match(/\d[\d\s\u00a0]*/g) || [])
+    var nums = (lbl.match(/\d[\d\s ]*/g) || [])
       .map(function(x){ return Number(String(x).replace(/\D/g,'')); })
       .filter(function(n){ return n > 0; });
     if(nums.length >= 2) return {v:nums[1], exact:false};
@@ -91874,10 +91897,11 @@ html body #pg-tasks .tk-card-joined.hx .hx-bank{box-shadow:inset 3px 0 0 0 #2f6c
     return null;
   }
 
-
+  var SV = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
   var ICO = {
-    clock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
-    go:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>'
+    cal:'<svg ' + SV + ' stroke-width="2"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>',
+    chev:'<svg class="hx-chev" ' + SV + ' stroke-width="2.4"><polyline points="9 6 15 12 9 18"/></svg>',
+    go:'<svg ' + SV + ' stroke-width="2.4"><path d="M5 12h13M13 6l6 6-6 6"/></svg>'
   };
 
   function daysLeft(c){
@@ -91885,16 +91909,18 @@ html body #pg-tasks .tk-card-joined.hx .hx-bank{box-shadow:inset 3px 0 0 0 #2f6c
     var t = Date.parse(c.deadline); if(!t) return null;
     return Math.ceil((t - Date.now()) / DAY);
   }
-  /* Срок: «ещё 12 дней», ближе к концу — янтарём, после — «срок вышел».
-     Без срока пишем об этом, чтобы правый край строки был у всех. */
-  function due(c){
-    var d = daysLeft(c);
-    if(d == null) return '<span class="hx-due is-none">Без срока</span>';
-    var txt = d <= 0 ? 'срок вышел'
-            : d === 1 ? 'последний день'
-            : d <= 3 ? 'осталось ' + d + ' ' + plural(d, 'день', 'дня', 'дней')
-            : 'ещё ' + d + ' ' + plural(d, 'день', 'дня', 'дней');
-    return '<span class="hx-due'+(d <= 3 ? ' is-soon' : '')+'" title="До конца задания">'+ICO.clock+esc(txt)+'</span>';
+  /* Плитка срока справа от названия, как на макете владельца. */
+  function dueTile(c){
+    var d = daysLeft(c), k, v, cls = '';
+    if(d == null){ k = 'Срок'; v = 'без срока'; cls = ' is-none'; }
+    else if(d <= 0){ k = 'Срок'; v = 'вышел'; cls = ' is-over'; }
+    else {
+      k = (d % 10 === 1 && d % 100 !== 11) ? 'Остался' : 'Осталось';
+      v = d + ' ' + plural(d, 'день', 'дня', 'дней');
+      if(d <= 3) cls = ' is-soon';
+    }
+    return '<div class="hx-due' + cls + '" title="До конца задания">' + ICO.cal
+      + '<span><i>' + k + '</i><b>' + esc(v) + '</b></span>' + ICO.chev + '</div>';
   }
 
   /* Статус участия — только однозначные: остальным оставляем стрелку. */
@@ -91910,7 +91936,7 @@ html body #pg-tasks .tk-card-joined.hx .hx-bank{box-shadow:inset 3px 0 0 0 #2f6c
     if(fixed){
       main = '<b>'+rub(fixed)+' ₽</b><span>'+per+'</span>';
       var n = (free != null && exact) ? Math.floor(free / fixed) : 0;
-      if(n >= 1) sub = 'бюджета хватит ещё на <b>'+n+'</b> '+(ban ? plural(n,'публикацию','публикации','публикаций') : plural(n,'ролик','ролика','роликов'));
+      if(n >= 1) sub = 'хватит ещё на <b>'+n+'</b> '+(ban ? plural(n,'публикацию','публикации','публикаций') : plural(n,'ролик','ролика','роликов'));
       /* свободного меньше одной выплаты — обещать полную цену нельзя */
       else if(free != null && free > 0 && free < fixed){ sub = 'в бюджете меньше одной выплаты'; dead = true; }
     } else if(rate && cap){
@@ -91968,15 +91994,19 @@ html body #pg-tasks .tk-card-joined.hx .hx-bank{box-shadow:inset 3px 0 0 0 #2f6c
     /* картинка — тегом <img>, а не url() в style: экранирование HTML
        не защищает CSS-строку от кавычки и скобки в адресе */
     var img = safeImg(c.advertiserPhoto || c.brandLogo || '');
+    var cov = coverSrc(c);
     var joinSt = '';
     if(joined){ try{ var j = window.bpJoinOf ? window.bpJoinOf(c.id) : null; joinSt = j ? String(j.status || '') : ''; }catch(e){} }
-    var meta = (fmt ? '<span class="hx-fmt">'+esc(fmt)+'</span>' : '') + plats + due(c);
-    return (joined ? '<div class="tk-mine">Вы участвуете</div>' : '')
+    var meta = (fmt ? '<span class="hx-fmt">'+esc(fmt)+'</span>' : '') + plats;
+    return (cov ? '<div class="hx-cover"><img src="'+esc(cov)+'" alt="" loading="lazy" decoding="async"></div>' : '')
+      + (joined ? '<div class="tk-mine">Вы участвуете</div>' : '')
       + (meta ? '<div class="hx-meta">'+meta+'</div>' : '')
-      + '<div class="tk-name hx-name">'+esc(c.name || c.title || 'Без названия')+'</div>'
-      + '<div class="hx-by"><span class="hx-ava">'
-      +   (img ? '<img src="'+esc(img)+'" alt="">' : esc(letter.toUpperCase())) + '</span>'
-      +   '<span class="hx-by-n">'+esc(nm)+'</span></div>'
+      + '<div class="hx-row"><div class="hx-who">'
+      +   '<div class="tk-name hx-name">'+esc(c.name || c.title || 'Без названия')+'</div>'
+      +   '<div class="hx-by"><span class="hx-ava">'
+      +     (img ? '<img src="'+esc(img)+'" alt="">' : esc(letter.toUpperCase())) + '</span>'
+      +     '<span class="hx-by-n">'+esc(nm)+'</span></div>'
+      + '</div>' + dueTile(c) + '</div>'
       + bank(c, joinSt);
   }
 
@@ -91996,6 +92026,9 @@ html body #pg-tasks .tk-card-joined.hx .hx-bank{box-shadow:inset 3px 0 0 0 #2f6c
         var joined = el.classList.contains('tk-card-joined') || !!el.querySelector('.tk-mine');
         el.innerHTML = inner(c, joined);
         el.classList.add('hx');
+        /* обложка не открылась — убираем пустой прямоугольник */
+        var ci = el.querySelector('.hx-cover img');
+        if(ci) ci.addEventListener('error', function(){ var w = this.parentNode; if(w && w.parentNode) w.parentNode.removeChild(w); });
       }catch(e){ try{ console.warn('bp-tkcard:', e && e.message); }catch(_){} }
     }
   }
