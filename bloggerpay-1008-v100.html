@@ -43590,13 +43590,37 @@ html.bp-screen-open #campAddBanner{
     if(attrMo) attrMo.observe(el, {attributes:true, attributeFilter:['style','class']});
   }
 
+  /* bp-card12: scan говорит, нашлась ли НОВАЯ шторка. */
   function scan(node){
-    if(!node || node.nodeType !== 1) return;
+    if(!node || node.nodeType !== 1) return false;
+    var n0 = watched.length;
     mark(node);
     if(node.querySelectorAll){
       var found = node.querySelectorAll(SEL);
       for(var i = 0; i < found.length; i++) mark(found[i]);
     }
+    return watched.length !== n0;
+  }
+  /* bp-card12: убрали узел, внутри которого была шторка. */
+  function holdsSheet(node){
+    if(!node || node.nodeType !== 1) return false;
+    for(var i = 0; i < watched.length; i++){
+      if(watched[i] === node || (node.contains && node.contains(watched[i]))) return true;
+    }
+    return false;
+  }
+  /* bp-card12: проверка «после кадра». isOpen спрашивает у браузера
+     прямоугольники — это пересчёт вёрстки, если она не готова. Звать его
+     на каждую правку разметки в приложении (смена канала в карточке,
+     набор текста, докрутка цифр) значило пересчитывать вёрстку посреди
+     каждого действия — на телефоне десятки миллисекунд. После отрисовки
+     кадра вёрстка уже посчитана, и та же проверка почти ничего не стоит. */
+  var pend = 0;
+  function syncLater(){
+    if(pend) return;
+    pend = 1;
+    var go = function(){ pend = 0; sync(); };
+    try{ requestAnimationFrame(function(){ setTimeout(go, 0); }); }catch(e){ setTimeout(go, 16); }
   }
 
   function boot(){
@@ -43607,13 +43631,18 @@ html.bp-screen-open #campAddBanner{
     /* часть шторок создаётся на лету — подхватываем их при появлении */
     try{
       new MutationObserver(function(list){
-        var touched = false;
+        /* Появилась или пропала сама шторка — сверяемся сразу, как
+           раньше. Любая другая правка разметки — после кадра (bp-card12):
+           она тоже может открыть или спрятать шторку косвенно, но цена
+           ошибки на один кадр — размытие, а не пустой экран. */
+        var now = false, touched = false;
         for(var i = 0; i < list.length; i++){
-          var added = list[i].addedNodes;
-          for(var j = 0; j < added.length; j++){ scan(added[j]); touched = true; }
-          if(list[i].removedNodes && list[i].removedNodes.length) touched = true;
+          var added = list[i].addedNodes, removed = list[i].removedNodes;
+          for(var j = 0; j < added.length; j++){ if(scan(added[j])) now = true; touched = true; }
+          if(removed) for(var k = 0; k < removed.length; k++){ if(!now && holdsSheet(removed[k])) now = true; touched = true; }
         }
-        if(touched) sync();
+        if(now) sync();
+        else if(touched) syncLater();
       }).observe(document.body, {childList:true, subtree:true});
     }catch(e){ if(typeof BPERR === 'function') BPERR(e); }
   }
@@ -56567,7 +56596,13 @@ else setTimeout(boot, 350);
   display:grid;grid-template-columns:1fr 1fr;column-gap:10px;
   align-items:start;
 }
-#campModal .cwn-page:has(#cwnRate) > *{grid-column:1 / -1}
+/* bp-card12: здесь стояло «#campModal .cwn-page:has(#cwnRate) > *
+   {grid-column:1 / -1}». :has() с «> *» справа браузер не умеет
+   проверять точечно: на ЛЮБУЮ правку разметки в приложении он
+   пересчитывал стили всего документа — около тысячи элементов, на
+   телефоне 30–45 мс на каждое нажатие (замер трассой 05.10.2026).
+   Сетку этого шага давно выключил слой ниже (.cwn-page{display:block
+   !important}, «одна колонка»), так что правило ничего не делало. */
 /* Пары зависят от способа оплаты: в режиме фиксированной цены поля
    ставки и потолка выплаты скрыты, и их напарники остались бы в
    строке поодиночке — с пустой половиной рядом. */
@@ -59953,14 +59988,23 @@ function bpSetStat(cardEl, label, value){
        канале, число подписчиков у него совпадало с уже написанным — и
        просмотры с ER навсегда оставались от прошлого канала. */
     if(!v) continue;
-    if(v.textContent.trim() === String(value)) continue;
+    /* bp-card12: ячейка, которая ещё докручивалась к числу прошлого
+       канала, из очереди уходит — иначе твин дописал бы чужое число
+       поверх нового значения (прочерка или совпавшего с экраном). */
+    var q0 = cardEl.__bpTwQ;
+    var unq = function(){ if(q0) for(var k0 = 0; k0 < q0.length; k0++) if(q0[k0].el === v){ q0.splice(k0, 1); break; } };
+    if(v.textContent.trim() === String(value)){ unq(); continue; }
     if(v.__bpTw){ cancelAnimationFrame(v.__bpTw); v.__bpTw = 0; }
     var to = bpStatParse(value);
     if(!to || _bpStatRM || !window.requestAnimationFrame || cardEl.__bpNoTw){   /* bp-card10: сборка — без твина */
+      unq();
       /* нечисловое значение или reduced-motion — короткая смена вспышкой */
       bpStatWrite(v, String(value));
       v.classList.remove('bp-val-swap');
-      void v.offsetWidth;               /* перезапуск анимации без таймера */
+      /* перезапуск анимации без таймера; у карточки на сборке (bp-card10,
+         черновик предпросмотра) её ещё никто не видел — пересчёт вёрстки
+         там только тормозил сборку (bp-card12) */
+      if(!cardEl.__bpNoTw) void v.offsetWidth;
       v.classList.add('bp-val-swap');
       return;
     }
@@ -60160,15 +60204,28 @@ function bpEnhanceCard(cardEl, storeOverride){
       el.setAttribute('role', 'button');
       el.setAttribute('tabindex', '0');
       el.setAttribute('aria-label', 'Показать данные канала ' + items[index].label);
+      /* bp-card12: слушатели вешаются ОДИН раз на узел, а номер канала
+         берётся на момент нажатия. Раньше каждая пересборка (bp-card6
+         переставляет значки по охвату) добавляла ещё пару слушателей со
+         старым номером, и одно нажатие переключало канал дважды — сперва
+         на чужой, потом на нужный: карточка перерисовывалась два раза. */
+      el.__bpChIdx = index;
+      el.__bpChCard = cardEl;
+      /* bp-card12: когда у карточки есть пилюли каналов (bp-card6), сами
+         значки спрятаны и в порядок Tab не входят — иначе Enter по
+         невидимому значку переключал канал мимо пилюль и без перехода. */
+      if(cardEl.querySelector('.bpc6-chans')) el.setAttribute('tabindex', '-1');
+      if(el.__bpChBound) return;
+      el.__bpChBound = 1;
       el.addEventListener('click', function(e){
         /* карточка целиком тоже отзывается на нажатие — не пускаем выше */
         e.stopPropagation(); e.preventDefault();
-        bpChSelect(cardEl, index);
+        bpChSelect(el.__bpChCard, el.__bpChIdx);
       });
       el.addEventListener('keydown', function(e){
         if(e.key === 'Enter' || e.key === ' '){
           e.preventDefault(); e.stopPropagation();
-          bpChSelect(cardEl, index);
+          bpChSelect(el.__bpChCard, el.__bpChIdx);
         }
       });
     })(items[q].el, q);
@@ -68000,6 +68057,14 @@ function grab(id){
         var html=grab(cid);
         if(!html && btn && btn.closest){ var c=btn.closest('.blc'); if(c) html=c.outerHTML; }
         if(html) snapSave(cid, html);
+        /* bp-card12: звезду нажимают и сразу после смены канала — тогда в
+           снимок попадали недокрученные цифры и цена (чужие для обоих
+           каналов). Когда докрутка закончилась, снимаем ещё раз. */
+        setTimeout(function(){
+          try{
+            if((typeof saved!=='undefined') && saved.has(key)){ var h2=grab(cid); if(h2) snapSave(cid, h2); }
+          }catch(e){}
+        }, 800);
       }
     }
     return o.apply(this, arguments);
@@ -81779,12 +81844,21 @@ var OK_SVG = '<svg class="bpc5-ok" viewBox="0 0 24 24" fill="currentColor" aria-
 var STAR = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">'
   + '<path d="M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.4l6.5-.9L12 2.6z"/></svg>';
 
+/* bp-card12: разбор хранилища — только когда строка в нём поменялась.
+   Каждое нажатие по каналу заново разбирало весь bp_my_cards (вместе с
+   фотографиями карточек) по нескольку раз в том же кадре, что и смена
+   канала. Записи отсюда только читают. */
+var _cRaw = null, _cArr = [];
 function cards(){
   try{
-    var a = JSON.parse(localStorage.getItem('bp_my_cards') || '[]');
-    a = Array.isArray(a) ? a : [];
+    var raw = localStorage.getItem('bp_my_cards') || '[]';
+    if(raw !== _cRaw){
+      var a = JSON.parse(raw);
+      _cArr = Array.isArray(a) ? a : [];
+      _cRaw = raw;
+    }
     /* предпросмотр мастера карты (bp-abc2 paintReal): черновик виден слою, в хранилище его нет */
-    return window.__bpPv ? a.concat([window.__bpPv]) : a;
+    return window.__bpPv ? _cArr.concat([window.__bpPv]) : _cArr;
   }
   catch(e){ return []; }
 }
@@ -81926,8 +82000,13 @@ function paintHead(el, card, pid){
     if(ava && P){
       var box = ava.querySelector('.bpc5-plt');
       if(!box){ box = document.createElement('i'); box.className = 'bpc5-plt'; ava.appendChild(box); }
-      box.innerHTML = '<img loading="lazy" class="soc-img" alt="" src="https://cdn.jsdelivr.net/npm/simple-icons@11/icons/'
-        + P.ic + '.svg">';
+      /* bp-card12: значок той же площадки не пересоздаём — новая картинка
+         декодируется заново и на кадр пропадает. */
+      if(box.getAttribute('data-pid') !== pid || !box.querySelector('img')){
+        box.innerHTML = '<img loading="lazy" class="soc-img" alt="" src="https://cdn.jsdelivr.net/npm/simple-icons@11/icons/'
+          + P.ic + '.svg">';
+        box.setAttribute('data-pid', pid);
+      }
     }
 
     var sub = el.querySelector('.bpc5-sub');
@@ -82085,6 +82164,24 @@ function roll(b, from, to){
    название (цена — в подписи для экранного диктора), а CPM сразу лежит в
    скрытом исходнике, откуда его забирает полоса чисел. Перерисовка
    идемпотентна: одинаковая разметка второй раз не пишется. */
+/* bp-card12: подпись «Выберите размещение» встаёт и прячется в том же
+   такте, что и ряд размещений. Раньше её вставлял проход bp-card7 через
+   120 мс после нажатия — вторым скачком высоты карточки. Узел тот же,
+   что делает bp-card7 (span.bpc7-pick), поэтому его проход ничего не
+   находит. */
+function pickLabel(row, show){
+  try{
+    var lab = row.previousElementSibling;
+    if(!(lab && lab.classList.contains('bpc7-pick'))){
+      if(!show) return;
+      lab = document.createElement('span');
+      lab.className = 'bpc7-pick';
+      lab.textContent = 'Выберите размещение';
+      row.parentNode.insertBefore(lab, row);
+    }
+    if(lab.hidden === show) lab.hidden = !show;
+  }catch(e){ E(e); }
+}
 function paintDeal(el){
   try{
     var card = cardOf(el.getAttribute('data-cardid'));
@@ -82131,8 +82228,12 @@ function paintDeal(el){
 
     var row = el.querySelector('.bpc5-fmt');
     if(fs.length < 2){
-      if(row) row.remove();
+      /* bp-card12: ряд прячем, а не удаляем — так он уходит плавно, а при
+         возврате к каналу с несколькими форматами встаёт без пересборки.
+         Подпись над ним прячется вместе с ним. */
+      if(row){ if(!row.hidden) row.hidden = true; pickLabel(row, false); }
     } else {
+      if(row && row.hidden) row.hidden = false;
       if(!row){
         row = document.createElement('div');
         row.className = 'bpc5-fmt';
@@ -82156,8 +82257,11 @@ function paintDeal(el){
             + esc(f.name) + '</button>';
         }).join('');
       }
+      pickLabel(row, true);
     }
     try{ if(typeof window.bpCard6One === 'function') window.bpCard6One(el); }catch(e2){ E(e2); }
+    /* bp-card12: цвет выбранного размещения — в том же кадре (bp-card7). */
+    try{ if(typeof window.bpCard7One === 'function') window.bpCard7One(el); }catch(e3){ E(e3); }
     /* Докрутку цены запускаем ПОСЛЕ доводки: fitPrice меряет длину
        конечной цены, а не промежуточной. */
     if(price && price.__roll){ var pr0 = price.__roll; price.__roll = null; if(!el.__bpNoTw) roll(price.querySelector('b'), pr0.from, pr0.to); }
@@ -82213,12 +82317,11 @@ function dress(el){
         tag.className = 'bpc5-chtag';
         tag.hidden = true;
         pr.appendChild(tag);
-        if(!pr.__bpc5){
-          pr.__bpc5 = 1;
-          pr.addEventListener('click', function(){
-            el.__head = ''; setTimeout(function(){ paintDeal(el); }, 80);
-          }, true);
-        }
+        /* bp-card12: здесь висел слушатель «перерисовать через 80 мс после
+           нажатия по каналу». Перерисовку давно делает переключатель сам, в
+           том же кадре (bpAfterChSelect), а этот повтор срабатывал дважды на
+           нажатие и через 80 мс заново собирал строку под именем и значок
+           площадки — карточка менялась во второй раз. */
       }
       aud.appendChild(strip);
       var g = el.querySelector('.blc-aud');
@@ -84665,7 +84768,17 @@ function sweep(){
 }
 
 var timer = null;
-function later(){ if(timer) return; timer = setTimeout(function(){ timer = 0; sweep(); }, 140); }
+function later(){
+  if(timer) return;
+  timer = setTimeout(function(){
+    timer = 0;
+    /* bp-card12: пока карточка плавно переходит к другому каналу, общий
+       проход по ВСЕМ карточкам ждёт: нужное этой карточке уже сделано в
+       том же кадре (bpCard6One), а проход отнимал бы кадры у перехода. */
+    if(typeof window.bpCard12Busy === 'function' && window.bpCard12Busy()) return later();
+    sweep();
+  }, 140);
+}
 
 function watch(){
   try{
@@ -84695,10 +84808,46 @@ setTimeout(watch, 1200);
 setTimeout(later, 2600);
 setInterval(function(){ if(!document.hidden){ watch(); later(); } }, 4000);
 
+/* bp-card12: подсветка нажатой пилюли, цвет площадки (полоса сверху,
+   подложка аватара) и скрытие ника-дубля — в том же кадре, что и цифры.
+   Раньше их ставил только общий проход build() через 140 мс после
+   первой мутации, и пилюля догоняла содержимое на глазах, а при
+   быстром двойном нажатии не догоняла вовсе. build() потом видит то же
+   состояние и ничего не трогает. */
+function syncPills(el){
+  try{
+    var a = el.querySelector('.blc-pr-soc.bp-ch-on');
+    if(!a) return;
+    var pid = '';
+    for(var k in BY_CLASS) if(a.classList.contains(k)){ pid = BY_CLASS[k]; break; }
+    var pl = PLAT[pid];
+    if(!pl) return;
+    if(String(el.style.getPropertyValue('--bpc6-plt')).trim() !== pl.rgb) el.style.setProperty('--bpc6-plt', pl.rgb);
+    var row = el.querySelector('.bpc6-chans');
+    if(row) Array.prototype.forEach.call(row.children, function(b){
+      var on = b.getAttribute('data-p') === pid;
+      if(b.classList.contains('on') !== on){
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      }
+    });
+    /* Спрятанные значки — не в порядке Tab и не для экранного диктора:
+       канал выбирают пилюлями (их нажатие и ведёт плавный переход). */
+    if(row){
+      var socs = el.querySelector('.blc-pr-socs');
+      if(socs && socs.getAttribute('aria-hidden') !== 'true') socs.setAttribute('aria-hidden', 'true');
+      el.querySelectorAll('.blc-pr-socs .blc-pr-soc').forEach(function(ic){
+        if(ic.getAttribute('tabindex') !== '-1') ic.setAttribute('tabindex', '-1');
+      });
+    }
+    hideNick(el, el.getAttribute('data-bpc6-name') || '');
+  }catch(e){ E(e); }
+}
+
 window.bpCard6Now = function(){ sweep(); };
 /* bp-card8: разовая доводка одной карточки — зовёт bp-card5 сразу после
    своей перерисовки, чтобы CPM и размер цены встали в том же кадре. */
-window.bpCard6One = function(el){ try{ moveCpm(el); trimFmt(el); fitPrice(el); }catch(e){ E(e); } };
+window.bpCard6One = function(el){ try{ syncPills(el); moveCpm(el); trimFmt(el); fitPrice(el); }catch(e){ E(e); } };
 })();
 </script>
 
@@ -86327,6 +86476,8 @@ function previewHost(){
         + 'В каталоге первым откроется <b>' + esc(PLAT[mainPid()].name) + '</b> — у него больше всего подписчиков.</div>' : '');
 }
 var _realSeq = 0;
+var _pvSnap = null;   /* bp-card12: снимок прежней карточки при смене канала */
+var _pvSan = null;    /* bp-card12: высота блока предупреждений до смены */
 function paintReal(){
   var host = root && root.querySelector('#a3RealCard');
   if(!host || !readyChans().length) return;
@@ -86344,7 +86495,7 @@ function paintReal(){
   function ccBack(){
     try{ if(ccEl && ccTxt != null && ccEl.textContent !== ccTxt) ccEl.textContent = ccTxt; }catch(_){}
   }
-  function fallback(){ if(seq === _realSeq){ host.innerHTML = previewHtml(); host.classList.add('a3-real-fb'); } }
+  function fallback(){ _pvSnap = null; _pvSan = null; if(seq === _realSeq){ host.innerHTML = previewHtml(); host.classList.add('a3-real-fb'); } }
   if(!cat || typeof window.renderMyCard !== 'function' || !u) return fallback();
   try{ if(typeof window.bpFavMirror === 'function') window.bpFavMirror(); }catch(e){ E(e); }
   var cd;
@@ -86411,8 +86562,20 @@ function paintReal(){
           b.classList.toggle('on', on);
           b.setAttribute('aria-pressed', on ? 'true' : 'false');
         });
+        /* bp-card12: карточка собрана заново — от прежней остался снимок.
+           Слой ведёт высоту и блоки от старого вида к новому, ещё до кадра.
+           Вспышка проявления цифр (bp-val-swap) из черновика не нужна:
+           цифры меняются на месте, как в каталоге. Блок предупреждений под
+           карточкой меняет высоту вместе с ней. */
+        var ps = _pvSnap, sh0 = _pvSan; _pvSnap = null; _pvSan = null;
+        if(ps){
+          Array.prototype.forEach.call(card.querySelectorAll('.bls-val.bp-val-swap'), function(v){ v.classList.remove('bp-val-swap'); });
+          if(typeof window.bpCard12Play === 'function') window.bpCard12Play(card, ps);
+          var sn1 = root.querySelector('#a3Sanity');
+          if(sn1 && sh0 != null && typeof window.bpCard12Follow === 'function') window.bpCard12Follow(sn1, sh0);
+        }
       }
-    }catch(e){ E(e); fallback(); }
+    }catch(e){ E(e); _pvSnap = null; _pvSan = null; fallback(); }
     finally{ window.__bpPv = null; try{ if(el) el.remove(); }catch(_){} ccBack(); }
   });
 }
@@ -86461,7 +86624,17 @@ document.addEventListener('click', function(ev){
   if(!b) return;
   ev.preventDefault(); ev.stopPropagation();
   var p = b.getAttribute('data-p') || '';
-  if(p && readyChans().indexOf(p) >= 0 && p !== pvPid()){ S.pv = p; paintReal(); }
+  if(p && readyChans().indexOf(p) >= 0 && p !== pvPid()){
+    /* bp-card12: снимок карточки ДО пересборки — переход к новому каналу
+       играет тот же слой, что в каталоге. */
+    try{
+      var hc = root && root.querySelector('#a3RealCard > .blc');
+      _pvSnap = (hc && typeof window.bpCard12Snap === 'function') ? window.bpCard12Snap(hc) : null;
+      var sn0 = root && root.querySelector('#a3Sanity');
+      _pvSan = (_pvSnap && sn0) ? sn0.getBoundingClientRect().height : null;
+    }catch(e){ E(e); _pvSnap = null; _pvSan = null; }
+    S.pv = p; paintReal();
+  }
 }, true);
 function ensure(){
   var scroll = document.getElementById('abc-scroll');
@@ -87547,10 +87720,15 @@ var PLT = { youtube:'255,59,48', telegram:'49,166,232', tiktok:'37,244,238', ins
    принадлежать тому же каналу, что и цифры над ним. */
 function paintPlt(card){
   try{
-    var on = card.querySelector('.bpc6-ch.on, .blc-pr-soc.bp-ch, .blc-soc.bp-ch');
+    /* bp-card12: список через запятую отдавал ПЕРВЫЙ значок в разметке
+       (все значки несут .bp-ch), и цвет выбранного размещения всегда был
+       цветом главного канала. Сперва — нажатая пилюля, потом включённый
+       значок. */
+    var on = card.querySelector('.bpc6-ch.on') || card.querySelector('.blc-pr-soc.bp-ch-on')
+          || card.querySelector('.blc-soc.bp-ch-on');
     var pid = '';
     if(on){
-      pid = on.getAttribute('data-pid') || '';
+      pid = on.getAttribute('data-p') || on.getAttribute('data-pid') || '';
       if(!pid){
         var cls = String(on.className);
         if(/syt|youtube/.test(cls)) pid = 'youtube';
@@ -87577,17 +87755,6 @@ function addPickLabel(card){
     lab.className = 'bpc7-pick';
     lab.textContent = 'Выберите размещение';
     row.parentNode.insertBefore(lab, row);
-  }catch(e){ E(e); }
-}
-
-/* Короткое проявление при смене площадки. Класс снимаем сами: с
-   fill:both он остался бы висеть и приглушил бы следующую перерисовку. */
-function flash(card){
-  try{
-    card.classList.remove('bpc7-switch');
-    void card.offsetWidth;
-    card.classList.add('bpc7-switch');
-    setTimeout(function(){ try{ card.classList.remove('bpc7-switch'); }catch(e){} }, 700);
   }catch(e){ E(e); }
 }
 
@@ -87630,6 +87797,9 @@ function inView(card){
 function watchIn(card, i){
   try{
     if(!card || (seen && seen.has(card))) return;
+    /* bp-card12: черновик предпросмотра мастера живёт в каталоге один такт
+       и сразу удаляется — мерить его и ставить ему появление незачем. */
+    if(card.getAttribute('data-cardid') === '__bppv') return;
     if(inView(card)){ playIn(card, i); return; }
     if(!window.IntersectionObserver){ playIn(card, i); return; }
     if(!io){
@@ -87664,17 +87834,12 @@ function sweep(){
   }catch(e){ E(e); }
 }
 
-/* Нажатие по значку площадки — проявление. Слушаем на всплытии, ничего
-   не перехватывая: переключатель по-прежнему делает свою работу. */
-document.addEventListener('click', function(ev){
-  try{
-    var t = ev.target && ev.target.closest ? ev.target.closest('.bpc6-ch, .blc-pr-soc, .blc-soc') : null;
-    if(!t) return;
-    var card = t.closest('#catBloggerList .blc');
-    if(!card) return;
-    setTimeout(function(){ paintPlt(card); flash(card); }, 30);
-  }catch(e){ E(e); }
-}, true);
+/* bp-card12: здесь был слушатель нажатия по каналу — через 30 мс он
+   красил размещения и включал «вспышку» bpc7-switch. Вспышку давно
+   погасил bp-card9 (animation:none), а сама она дважды на нажатие
+   пересчитывала вёрстку посреди перехода. Цвет теперь ставится в том же
+   кадре, что и смена канала: bp-card5 зовёт window.bpCard7One. */
+window.bpCard7One = function(card){ try{ addPickLabel(card); paintPlt(card); }catch(e){ E(e); } };
 
 /* Список карточек пересобирают несколько слоёв — держимся наблюдателя,
    но работаем ИДЕМПОТЕНТНО: иначе своя же правка вызвала бы следующий
@@ -87683,10 +87848,18 @@ try{
   var host = document.getElementById('catBloggerList');
   if(host){
     var t = null;
-    new MutationObserver(function(){
+    var kick = function(){
       if(t) return;
-      t = setTimeout(function(){ t = null; sweep(); }, 120);
-    }).observe(host, { childList:true, subtree:true });
+      t = setTimeout(function(){
+        t = null;
+        /* bp-card12: во время перехода карточки к другому каналу проход
+           ждёт — он меряет каждую карточку (inView) и пересчитывал бы
+           вёрстку посреди движения. */
+        if(typeof window.bpCard12Busy === 'function' && window.bpCard12Busy()) return kick();
+        sweep();
+      }, 120);
+    };
+    new MutationObserver(kick).observe(host, { childList:true, subtree:true });
   }
 }catch(e){ E(e); }
 setTimeout(sweep, 600);
@@ -89022,5 +89195,432 @@ html #pg-add-blogger-card .a3-count.a4-cnt{
   font-weight:700!important;
 }
 </style>
+<style id="bp-card12-css">
+/* ══ КАРТОЧКА · СМЕНА КАНАЛА БЕЗ СКАЧКА (bp-card12, 05.10.2026) ═══════
+   Владелец: «при переключении между соцсетями, когда на одной мало —
+   нет аудитории, контента для детей, мало текста интеграции, — а на
+   другой всё это есть, карта сильно как будто лагает».
+   Замер по кадрам (375 px, YouTube со всем, Telegram без аудитории и с
+   одним форматом): YouTube → Telegram — высота 522 → 351 за один кадр,
+   карточка под ней прыгала на 171 px; обратно — два скачка (+140 и
+   через 150 мс ещё +31: подпись «Выберите размещение» вставлял
+   отдельный проход). Подсветка пилюли и цвет канала догоняли
+   содержимое через 150–200 мс, при двойном нажатии не догоняли вовсе.
+   Каждое нажатие переключало канал дважды — сперва на чужой.
+   Теперь всё меняется в одном кадре (правки по месту с пометкой
+   «bp-card12» в bp-fix8, bp-card5, bp-card6, bp-card7, bp-abc2), а
+   script#bp-card12 ведёт карточку от прежнего вида к новому: высота
+   меняется плавно, оставшиеся блоки съезжают на свои места, новые
+   проявляются, лишние гаснут на месте.
+   Откат: удалить пару bp-card12-css + bp-card12 (пометки по месту
+   работают и без неё — просто без движения). */
+
+/* Ряд размещений у канала с одним форматом теперь прячется, а не
+   удаляется (bp-card5), и подпись над ним — вместе с ним. Без
+   !important их показали бы правила display:flex / display:block слоёв
+   bp-card5 и bp-card7. Без предка — чтобы работало и в «Избранном», и в
+   предпросмотре мастера. */
+html .blc .bpc5-fmt[hidden], html .blc .bpc7-pick[hidden]{ display:none!important }
+</style>
+<script id="bp-card12">
+/* Пара к style#bp-card12-css. Пояснение — там же.
+
+   Как устроено. Нажатие по пилюле канала или по чипу размещения слушаем
+   на погружении — раньше, чем сработает переключатель, — и снимаем
+   положение каждого блока карточки и её высоту. Переключатель меняет
+   карточку синхронно, одним махом. В ближайшем кадре, ДО отрисовки,
+   меряем новый вид и играем разницу:
+   · высота карточки — от старой к новой (соседи ниже едут сами);
+   · блок, который сдвинулся, стартует с прежнего места и доезжает;
+   · появившийся блок проявляется с лёгким подъёмом;
+   · исчезнувший остаётся на прежнем месте поверх вёрстки и гаснет.
+   Только Element.animate: ни одной записи в разметку на каждом кадре,
+   соседние наблюдатели не просыпаются. Заливка анимаций — none или
+   backwards (правило bp-motion), всё временное снимается по окончании
+   и при новом нажатии посреди перехода: тогда переход начинается с
+   того, что сейчас на экране.
+
+   Предпросмотр в мастере собирает карточку заново на каждый канал —
+   там блоки сопоставляются по «адресу» в разметке (класс, площадка,
+   формат, номер среди соседей), снимок даёт bp-abc2 через
+   window.bpCard12Snap / window.bpCard12Play. */
+(function(){
+'use strict';
+if(window.__bpCard12) return; window.__bpCard12 = 1;
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'card12'); }catch(_){} }
+
+/* Кривая и время движения — те же, что у докрутки цифр и цены
+   (bpSetStat, roll: easeOutCubic, 360 и 320 мс): блоки и числа приезжают
+   вместе. Проявление — общей кривой приложения (bp-motion). */
+var EASE = 'cubic-bezier(.33,1,.68,1)', EASE_IN = 'cubic-bezier(.22,1,.36,1)';
+var MOVE = 340, IN = 260, IN_LATE = 180, IN_DELAY = 60, OUT = 90, LEAD = 60;
+/* Пока идёт переход, общие проходы слоёв по всем карточкам ждут
+   (bp-card6, bp-card7): им нечего менять, а кадры они отнимают. */
+var busyUntil = 0;
+window.bpCard12Busy = function(){
+  try{ return (window.performance ? performance.now() : Date.now()) < busyUntil; }catch(e){ return false; }
+};
+var SVGNS = 'http://www.w3.org/2000/svg';
+var TR = false;
+try{ TR = !!(window.CSS && CSS.supports && CSS.supports('translate', '1px 1px')); }catch(e){}
+
+function reduced(){
+  try{ return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }catch(e){ return false; }
+}
+function can(){
+  return !reduced() && !!(document.body && document.body.animate) && typeof Map === 'function' && typeof Set === 'function';
+}
+/* Сдвиг — отдельным свойством translate: оно складывается с transform,
+   который у блока может быть своим. */
+function shift(x, y, o){
+  o = o || {};
+  if(TR) o.translate = x + 'px ' + y + 'px'; else o.transform = 'translate(' + x + 'px,' + y + 'px)';
+  return o;
+}
+
+/* ── адрес узла: первый класс, площадка/формат/тематика, номер ─────── */
+function sig(n){
+  var c = (n.classList && n.classList.length) ? n.classList[0] : '';
+  var a = n.getAttribute('data-p') || n.getAttribute('data-fmt') || n.getAttribute('data-t') || '';
+  return n.localName + (c ? '.' + c : '') + (a ? '[' + a + ']' : '');
+}
+/* Все элементы карточки в порядке разметки → адрес. Внутрь svg не
+   спускаемся: значок двигается целиком. */
+function keys(root){
+  var out = new Map();
+  (function walk(p, pre){
+    var cnt = {};
+    for(var c = p.firstElementChild; c; c = c.nextElementSibling){
+      var s = sig(c);
+      cnt[s] = (cnt[s] || 0) + 1;
+      var k = pre + '/' + s + ':' + cnt[s];
+      out.set(c, k);
+      if(c.namespaceURI !== SVGNS) walk(c, k);
+    }
+  })(root, '');
+  return out;
+}
+
+/* ── учёт запущенного на карточке ─────────────────────────────────── */
+function runOf(card){ return card.__bp12 || (card.__bp12 = { anims: [], holds: [] }); }
+function play(card, el, frames, opts){
+  try{
+    var a = el.animate(frames, opts), run = runOf(card);
+    run.anims.push(a);
+    el.__bp12a = a;
+    var done = function(){
+      if(el.__bp12a === a) el.__bp12a = null;
+      var i = run.anims.indexOf(a); if(i >= 0) run.anims.splice(i, 1);
+    };
+    a.addEventListener('finish', done);
+    a.addEventListener('cancel', done);
+    return a;
+  }catch(e){ return null; }
+}
+/* Исчезнувший блок держим на прежнем месте вне потока. Встроенный стиль
+   с !important сильнее любого [hidden]{display:none!important}.
+   Пишем атрибут style ОДИН раз и одним разом возвращаем прежний: каждая
+   правка стиля заставляет браузер сверять сотни старых правил вида
+   [style*="…"], и десять setProperty на блок стоили заметно больше, чем
+   сам переход. */
+function hold(card, el, rec, left, top, ghost){
+  var was = el.getAttribute('style');
+  el.__bp12prev = { s: was, ghost: !!ghost };
+  var add = 'display:' + (rec.d || 'block') + '!important;position:absolute!important;margin:0!important;'
+    + 'right:auto!important;bottom:auto!important;left:' + left + 'px!important;top:' + top + 'px!important;'
+    + 'width:' + rec.w + 'px!important;height:' + rec.h + 'px!important;overflow:hidden!important;pointer-events:none!important';
+  el.setAttribute('style', (was ? String(was).replace(/;?\s*$/, ';') : '') + add);
+  runOf(card).holds.push(el);
+}
+/* a — анимация угасания, по которой пришло событие. События finish и
+   cancel приходят не сразу: старое угасание, снятое новым нажатием, не
+   должно отпустить блок, который уже держит следующий переход. */
+function release(card, el, a){
+  try{
+    if(a && el.__bp12h !== a) return;
+    el.__bp12h = null;
+    var prev = el.__bp12prev;
+    if(!prev) return;
+    el.__bp12prev = null;
+    /* вставленный на время угасания прежний узел (предпросмотр) — убрать */
+    if(prev.ghost){ if(el.parentNode) el.parentNode.removeChild(el); }
+    else if(prev.s == null) el.removeAttribute('style'); else el.setAttribute('style', prev.s);
+    var run = card.__bp12;
+    if(run){ var i = run.holds.indexOf(el); if(i >= 0) run.holds.splice(i, 1); }
+  }catch(e){ E(e); }
+}
+/* Всё запущенное — снять: карточка встаёт в свой настоящий вид. */
+function stop(card){
+  var run = card && card.__bp12;
+  if(!run) return;
+  run.anims.slice().forEach(function(a){ try{ a.cancel(); }catch(e){} });
+  run.holds.slice().forEach(function(el){ release(card, el); });
+  run.anims = []; run.holds = [];
+}
+
+/* ── снимок: где сейчас каждый блок (с учётом идущего перехода) ───── */
+function snap(card, byKey){
+  var cr = card.getBoundingClientRect();
+  var ks = keys(card), map = new Map(), bk = byKey ? new Map() : null;
+  ks.forEach(function(k, el){
+    var r = null;
+    if(el.getClientRects().length){
+      var b = el.getBoundingClientRect(), cs = getComputedStyle(el);
+      var op = parseFloat(cs.opacity); if(!(op >= 0)) op = 1;
+      r = { x: b.left - cr.left, y: b.top - cr.top, w: b.width, h: b.height, d: cs.display,
+            cop: op, op: el.__bp12a ? op : -1 };
+    }
+    var p = el.parentElement;
+    var e = { r: r, k: k, pk: (p === card) ? '' : (ks.get(p) || ''), el: byKey ? el : null };
+    map.set(el, e);
+    if(bk) bk.set(k, e);
+  });
+  return { h: cr.height, map: map, byKey: bk };
+}
+
+/* Точка отсчёта для position:absolute внутри карточки: ближайший предок
+   с position, своим сдвигом, фильтром или contain — или тот, кого мы
+   сейчас сдвигаем (translate тоже делает его точкой отсчёта). */
+function cbOf(el, card, moved){
+  for(var a = el.parentElement; a && a !== card; a = a.parentElement){
+    if(moved.has(a)) return a;
+    var cs = getComputedStyle(a);
+    if(cs.position !== 'static' || cs.transform !== 'none' || (cs.translate && cs.translate !== 'none')
+       || cs.filter !== 'none' || /paint|layout|strict|content/.test(cs.contain || '')
+       || String(cs.willChange || '').indexOf('transform') >= 0) return a;
+  }
+  return card;
+}
+
+/* ── переход от снимка к тому, что в разметке сейчас ─────────────── */
+var Z = { x: 0, y: 0 };
+/* easeOutCubic наоборот: какая доля времени нужна, чтобы пройти долю
+   пути p. По ней считаем, когда едущий блок минует место нового. */
+function tOf(p){ return p <= 0 ? 0 : (p >= 1 ? 1 : 1 - Math.pow(1 - p, 1 / 3)); }
+function hit(a, b, pad){
+  return a.x < b.x + b.w - pad && a.x + a.w > b.x + pad && a.y < b.y + b.h - pad && a.y + a.h > b.y + pad;
+}
+var lastLead = 0;
+function morph(card, s){
+  if(!card || !card.isConnected || !s) return;
+  stop(card);
+  var cr = card.getBoundingClientRect();
+  var ks = keys(card);
+  var now = null;
+  if(s.byKey){ now = new Set(); ks.forEach(function(k){ now.add(k); }); }
+  /* Родитель, чьё содержимое пересобрали (цена, чипы, строка под
+     именем), — новые дети в нём не «появляются», а встают на место
+     прежних. Проявлять их — значит мигнуть текстом, который и так был.
+     Считаем и невидимых прежних детей: замена остаётся заменой. */
+  var lost = new Set(), gone = new Map();
+  s.map.forEach(function(e, el){
+    if(!(s.byKey ? !now.has(e.k) : !el.isConnected)) return;
+    lost.add(e.pk);
+    if(e.r){ var g = gone.get(e.pk); if(!g) gone.set(e.pk, g = []); g.push(e.r); }
+  });
+  var acc = new Map(), st = new Map(), pos = new Map(), moved = new Set(), moves = [], ins = [], outs = [];
+  acc.set(card, Z);
+  pos.set(card, { x: 0, y: 0, w: cr.width, h: cr.height });
+  ks.forEach(function(k, el){
+    var p = el.parentElement, inh = acc.get(p) || Z, ps = st.get(p);
+    if(ps === 'in' || ps === 'out' || ps === 'pin'){ acc.set(el, inh); st.set(el, ps); return; }
+    var e = s.map.get(el) || (s.byKey ? s.byKey.get(k) : null);
+    var rec = e ? e.r : null;
+    /* Пилюли каналов и значок площадки на аватаре меняются на месте:
+       нажатая пилюля сжата (:active) — её сдвиг на пиксель не движение, а
+       значок должен смениться в том же кадре, что и цвет карточки (значок
+       YouTube нарисован псевдоэлементом и пропадает сразу). */
+    if(el.classList.contains('bpc6-chans') || el.classList.contains('bpc5-plt')){ acc.set(el, inh); st.set(el, 'pin'); return; }
+    if(el.getClientRects().length){
+      var b = el.getBoundingClientRect();
+      var x = b.left - cr.left, y = b.top - cr.top;
+      pos.set(el, { x: x, y: y, w: b.width, h: b.height });
+      if(rec){
+        var dx = rec.x - x, dy = rec.y - y, ox = dx - inh.x, oy = dy - inh.y;
+        if((Math.abs(ox) >= 1.5 || Math.abs(oy) >= 1.5) && getComputedStyle(el).display.indexOf('inline') !== 0){
+          moves.push({ el: el, x: ox, y: oy, op: rec.op });
+          moved.add(el);
+          acc.set(el, { x: dx, y: dy });
+        } else {
+          acc.set(el, inh);
+          if(rec.op >= 0 && rec.op < .99) ins.push({ el: el, op: rec.op });
+        }
+        st.set(el, 'keep');
+      } else {
+        acc.set(el, inh);
+        var pk = (p === card) ? '' : (ks.get(p) || '');
+        /* Новый ребёнок пересобранного родителя — замена, только если он
+           встал туда, где стоял прежний (в координатах родителя). Третий
+           чип на новой строке — новое, его проявляем. */
+        var swap = false;
+        if(!e && lost.has(pk)){
+          var po = s.map.get(p) || (s.byKey ? s.byKey.get(pk) : null), pn = pos.get(p);
+          var g = gone.get(pk) || [];
+          if(po && po.r && pn){
+            var me = { x: x - pn.x, y: y - pn.y, w: b.width, h: b.height };
+            for(var i = 0; i < g.length && !swap; i++){
+              if(hit(me, { x: g[i].x - po.r.x, y: g[i].y - po.r.y, w: g[i].w, h: g[i].h }, 1)) swap = true;
+            }
+          } else swap = true;
+        }
+        if(swap) st.set(el, 'keep');
+        else {
+          st.set(el, 'in');
+          /* Подъём — только у блока на своей строке. Тег или чип в ряду
+             поднимался бы относительно соседей, и ряд «плясал». */
+          var pcs = getComputedStyle(p), ds = getComputedStyle(el).display;
+          var inRow = /inline/.test(ds) || /grid/.test(pcs.display)
+                   || (/flex/.test(pcs.display) && String(pcs.flexDirection || 'row').indexOf('row') === 0);
+          ins.push({ el: el, op: 0, rise: !inRow, r: { x: x, y: y, w: b.width, h: b.height } });
+        }
+      }
+    } else {
+      acc.set(el, inh);
+      if(rec){
+        /* Куда поставить удержанный блок, считаем сразу, пока вёрстка
+           посчитана: position:absolute отсчитывается от ближайшего предка
+           с position или сдвигом — в том числе нашим, — и сдвиги предков
+           (inh) он получает вместе с ними. Второй замер после запуска
+           анимаций стоил бы ещё одного пересчёта стилей. */
+        var cb = cbOf(el, card, moved), cp = pos.get(cb) || Z, cbs = getComputedStyle(cb);
+        var bl = parseFloat(cbs.borderLeftWidth) || 0, bt = parseFloat(cbs.borderTopWidth) || 0;
+        st.set(el, 'out');
+        outs.push({ el: el, rec: rec, old: (s.byKey && e.el && e.el !== el && !e.el.isConnected) ? e.el : null,
+                    l: rec.x - inh.x - cp.x - bl, t: rec.y - inh.y - cp.y - bt });
+      }
+      else st.set(el, 'keep');
+    }
+  });
+
+  /* Порядок: лишнее гаснет на своём месте, и почти погасшим его уже
+     накрывает съезжающее содержимое. Если двигать сразу, цена и чипы на
+     несколько кадров ложились поверх ещё видимых блоков — текст по
+     тексту; если ждать полного угасания, карточка на миг стояла пустой,
+     а цифры успевали докрутиться раньше блоков. */
+  var lead = outs.some(function(o){ return o.rec.cop > .05; }) ? LEAD : 0;
+  lastLead = lead;
+
+  /* Новое проявляется, когда едущие мимо блоки уже прошли его место:
+     иначе цена проезжала сквозь появляющиеся чипы. */
+  ins.forEach(function(n){
+    n.delay = n.op > 0 ? 0 : lead + IN_DELAY;
+    if(n.op > 0 || !n.r) return;
+    moves.forEach(function(m){
+      if(m.el.contains(n.el) || n.el.contains(m.el)) return;
+      var mp = pos.get(m.el), tot = acc.get(m.el) || Z;
+      if(!mp) return;
+      var y0 = mp.y + tot.y, y1 = mp.y, pe;
+      var path = { x: Math.min(mp.x, mp.x + tot.x), y: Math.min(y0, y1),
+                   w: mp.w + Math.abs(tot.x), h: mp.h + Math.abs(y1 - y0) };
+      if(!hit(path, n.r, 1)) return;
+      if(y1 > y0) pe = (n.r.y + n.r.h - y0) / (y1 - y0);
+      else if(y1 < y0) pe = (y0 + mp.h - n.r.y) / (y0 - y1);
+      else pe = 1;
+      n.delay = Math.max(n.delay, lead + Math.round(tOf(Math.min(1, Math.max(0, pe))) * MOVE));
+    });
+  });
+
+  /* Удержанные блоки — вне потока: вёрстку остальных они не меняют. В
+     предпросмотре мастера карточка собрана заново, и на месте прежнего
+     блока лежит скрытый блок с данными ДРУГОГО канала — поэтому гасим
+     прежний узел, вставив его рядом на время угасания. */
+  outs.forEach(function(o){
+    if(o.old){
+      try{
+        o.old.setAttribute('aria-hidden', 'true');
+        o.old.setAttribute('inert', '');
+        o.el.parentNode.insertBefore(o.old, o.el.nextSibling);
+        o.el = o.old; o.ghost = true;
+      }catch(e){ o.ghost = false; }
+    }
+    hold(card, o.el, o.rec, o.l, o.t, o.ghost);
+  });
+
+  if(moves.length || ins.length || outs.length || Math.abs(cr.height - s.h) >= 1){
+    try{ busyUntil = Math.max(busyUntil, performance.now() + lead + MOVE + 120); }catch(e){}
+  }
+  var h0 = s.h, h1 = cr.height;
+  if(Math.abs(h1 - h0) >= 1){
+    play(card, card, [{ height: h0 + 'px' }, { height: h1 + 'px' }],
+         { duration: MOVE, delay: lead, easing: EASE, fill: 'backwards' });
+  }
+  moves.forEach(function(m){
+    var from = shift(m.x, m.y, { offset: 0 });
+    if(m.op >= 0 && m.op < .99) from.opacity = m.op;
+    play(card, m.el, [from], { duration: MOVE, delay: lead, easing: EASE, fill: 'backwards' });
+  });
+  ins.forEach(function(n){
+    var from = n.op > 0 ? { opacity: n.op, offset: 0 }
+             : (n.rise ? shift(0, 4, { opacity: 0, offset: 0 }) : { opacity: 0, offset: 0 });
+    var late = n.op <= 0 && n.delay > lead + IN_DELAY;
+    play(card, n.el, [from], { duration: late ? IN_LATE : IN, delay: n.delay, easing: EASE_IN, fill: 'backwards' });
+  });
+
+  outs.forEach(function(h){
+    var el = h.el;
+    var a = play(card, el, [{ opacity: h.rec.cop }, { opacity: 0 }],
+                 { duration: OUT, easing: 'cubic-bezier(0,0,.2,1)', fill: 'forwards' });
+    if(!a){ release(card, el); return; }
+    el.__bp12h = a;
+    a.addEventListener('finish', function(){ release(card, el, a); try{ a.cancel(); }catch(e){} });
+    a.addEventListener('cancel', function(){ release(card, el, a); });
+  });
+}
+
+/* ── нажатие в каталоге ───────────────────────────────────────────── */
+document.addEventListener('click', function(ev){
+  try{
+    var t = ev.target && ev.target.closest ? ev.target.closest('.bpc6-ch, .bpc5-fmt button, .blc-bm') : null;
+    if(!t) return;
+    var card = t.closest('#catBloggerList .blc');
+    if(!card) return;
+    /* Звезда кладёт в «Избранное» снимок разметки карточки — в нём не
+       должно остаться удержанных блоков. Само движение не трогаем:
+       анимации в разметку не пишутся, а оборвать их — тот же скачок
+       высоты, от которого и ушли. */
+    if(t.classList.contains('blc-bm')){
+      var rr = card.__bp12;
+      if(rr) rr.holds.slice().forEach(function(el){ release(card, el); });
+      return;
+    }
+    /* Нажатие на уже выбранный канал ничего не меняет — переход не
+       начинаем и идущий не обрываем. */
+    if(t.classList.contains('bpc6-ch') && t.classList.contains('on') && !card.__bp12s) return;
+    /* Сборка карточки и черновик предпросмотра (bp-card10, bp-abc2)
+       переключаются без человека — там двигаться нечему. */
+    if(card.__bpNoTw || !card.classList.contains('bpx-ok') || !can()) return;
+    if(card.__bp12s) return;            /* два нажатия в одном кадре — один переход */
+    var s = snap(card, false);
+    card.__bp12s = s;
+    requestAnimationFrame(function(){
+      var s2 = card.__bp12s; card.__bp12s = null;
+      if(s2) try{ morph(card, s2); }catch(e){ E(e); stop(card); }
+    });
+    /* Кадры не идут (вкладка спрятана) — снимок не должен ждать вечно. */
+    setTimeout(function(){ if(card.__bp12s === s) card.__bp12s = null; }, 500);
+  }catch(e){ E(e); }
+}, true);
+
+/* ── предпросмотр мастера (bp-abc2 paintReal) ─────────────────────── */
+window.bpCard12Snap = function(card){
+  try{ return (card && can()) ? snap(card, true) : null; }catch(e){ E(e); return null; }
+};
+window.bpCard12Play = function(card, s){
+  try{ if(card && s && can()) morph(card, s); }catch(e){ E(e); try{ stop(card); }catch(_){} }
+};
+/* Блок под карточкой (предупреждения в мастере) меняет высоту вместе с
+   ней — тем же временем и той же кривой, а не скачком. */
+window.bpCard12Follow = function(el, h0){
+  try{
+    if(!el || !can() || !(h0 >= 0)) return;
+    var h1 = el.getBoundingClientRect().height;
+    if(Math.abs(h1 - h0) < 1) return;
+    el.animate([{ height: h0 + 'px', clipPath: 'inset(0 0 0 0)', opacity: h0 ? 1 : 0, offset: 0 },
+                { height: h1 + 'px', clipPath: 'inset(0 0 0 0)', opacity: 1 }],
+               { duration: MOVE, delay: lastLead, easing: EASE, fill: 'backwards' });
+  }catch(e){ E(e); }
+};
+})();
+</script>
 </body>
 </html>
