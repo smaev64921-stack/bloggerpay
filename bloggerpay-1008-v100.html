@@ -40304,7 +40304,7 @@ else setTimeout(boot, 0);
     var formats = {};
     all.forEach(function(c){ if(c.format) formats[String(c.format).toLowerCase()] = c.formatLabel || c.format; });
 
-    page.innerHTML =
+    var html =
         '<div class="cat-hd"><h1>Задания</h1><span class="cat-cnt">'+list.length+' '+((list.length%10===1 && list.length%100!==11)?'задание':(list.length%10>=2 && list.length%10<=4 && (list.length%100<12 || list.length%100>14))?'задания':'заданий')+'</span></div>'
       + (all.length
         ? '<div class="tk-stats">'
@@ -40343,6 +40343,14 @@ else setTimeout(boot, 0);
               ? 'Попробуйте изменить поиск или фильтр'
               : 'Когда рекламодатели добавят офферы, они появятся здесь')+'</div>'
           + '</div>');
+    /* Фильтр, поиск и сортировка раньше меняли page.innerHTML целиком:
+       все блоки заново проигрывали каскад появления (экран на полсекунды
+       темнел), а поле поиска теряло фокус после первой буквы.
+       bpMorphPage (слой bp-calm) меняет только изменившиеся блоки. */
+    if(typeof window.bpMorphPage === 'function'){
+      try{ window.bpMorphPage(page, html); return; }catch(e){ BPERR(e); }
+    }
+    page.innerHTML = html;
   }
   window.bpTasksRender = renderList;
 
@@ -92082,8 +92090,8 @@ html body #pg-tasks .tk-card-joined.hx .hx-bank{box-shadow:inset 3px 0 0 0 #2f6c
    • крестик без рамки и подложки;
    • площадки — крупными плашками в цвете площадки, со словом; рядом
      плитки «за 1 000 просмотров» и «максимум», как в карточке списка;
-   • кнопки — на плавающей скруглённой полупрозрачной подложке с
-     размытием (в html.bp-lite — без размытия, плотнее);
+   • кнопки — на плавающей скруглённой почти прозрачной подложке с
+     лёгким размытием (одинаково и в html.bp-lite);
    • «Минимальная длина видео» для видеоформатов видна всегда — «любая»,
      если рекламодатель не задал (раньше строка просто пропадала);
    • маркировка одна: блок денег (bp-tasks-money) уже даёт строку с
@@ -92104,13 +92112,21 @@ html body #bpTaskSheet .tk-sheet-body,html body #bpSubmitSheet .tk-sheet-body{pa
 html body #bpTaskSheet .tk-sheet-foot,html body #bpSubmitSheet .tk-sheet-foot{
   position:absolute;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));
   z-index:3;gap:8px;padding:8px!important;border-radius:24px;
-  background:rgba(24,30,41,.58)!important;background-image:none!important;
-  -webkit-backdrop-filter:blur(18px) saturate(160%);backdrop-filter:blur(18px) saturate(160%);
+  /* 06.10: «фон прозрачный настолько, чтобы было видно, что под ним
+     текст, но не читался» — слабая вуаль и лёгкое размытие. Раньше в
+     html.bp-lite (почти любой телефон) подложка была плотной — её
+     владелец и видел; теперь она одинаковая везде: размывается
+     полоска высотой 66px, а не весь экран (см. bp-overlay-flicker). */
+  /* !important — иначе размытие снимает общее html.bp-lite [class*="sheet"] */
+  background:rgba(24,30,41,.24)!important;background-image:none!important;
+  -webkit-backdrop-filter:blur(5px) saturate(140%)!important;backdrop-filter:blur(5px) saturate(140%)!important;
   border:1px solid rgba(255,255,255,.10)!important;border-top-color:rgba(255,255,255,.16)!important;
-  box-shadow:0 14px 34px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05)!important;
+  box-shadow:0 14px 34px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.05)!important;
 }
-html.bp-lite body #bpTaskSheet .tk-sheet-foot,html.bp-lite body #bpSubmitSheet .tk-sheet-foot{
-  background:rgba(24,30,41,.97)!important;-webkit-backdrop-filter:none;backdrop-filter:none;
+@media (prefers-reduced-transparency:reduce){
+  html body #bpTaskSheet .tk-sheet-foot,html body #bpSubmitSheet .tk-sheet-foot{
+    background:rgba(24,30,41,.97)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+  }
 }
 html body #bpTaskSheet .tk-sheet-foot .tk-btn-ghost,html body #bpSubmitSheet .tk-sheet-foot .tk-btn-ghost{
   background:rgba(255,255,255,.07)!important;border:1px solid rgba(255,255,255,.12)!important;
@@ -92300,7 +92316,7 @@ html body #mainTopbar.topbar{
   margin:8px 10px 6px!important;
   padding:8px 9px 8px 9px!important;
   border-radius:22px!important;
-  background:rgba(22,27,37,.96)!important;
+  background:rgba(22,27,37,.84)!important;   /* 06.10: «немного прозрачнее» (было .96) */
   border:1px solid rgba(255,255,255,.09)!important;
   border-bottom:1px solid rgba(255,255,255,.09)!important;
   box-shadow:0 12px 30px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.05)!important;
@@ -92308,6 +92324,147 @@ html body #mainTopbar.topbar{
 html.bp-lite body #mainTopbar.topbar{box-shadow:0 8px 20px rgba(0,0,0,.4)!important}
 html body #mainTopbar .tb-ham,html body #mainTopbar .tb-bal,html body #mainTopbar .tb-ava{border-radius:14px!important}
 html body #mainTopbar .tb-ava{border-radius:50%!important}
+/* 06.10: «кнопка шторки в рамке — убери рамку»: только три полоски */
+html body #mainTopbar .tb-ham{background:transparent!important;border-color:transparent!important;box-shadow:none!important;-webkit-tap-highlight-color:transparent}
+html body #mainTopbar .tb-ham:active{background:rgba(255,255,255,.07)!important}
 </style>
+<style id="bp-calm-css">
+/* ══ ПЕРЕКЛЮЧЕНИЯ БЕЗ МИГАНИЯ (bp-calm, 06.10.2026) ═════════════════
+   Владелец: «между переключениями разделов в заданиях (типа «Баннеры»)
+   экран дёргается и на секунду чёрный — всё должно быть плавно».
+   Причина: каскад bpRise (bp-motion) играет на КАЖДОМ новом прямом
+   потомке .pg.on, а «Задания» на фильтр, поиск и сортировку
+   пересобирали страницу целиком — пять блоков проявлялись с нуля, и
+   полсекунды экран был почти пустым. Ещё короткий список укорачивал
+   страницу, и прокрутка прыгала.
+   • каскад играет только при входе: когда он доиграл, странице
+     ставится .bp-settled, и блоки, пришедшие позже, видны сразу;
+   • «Задания» меняют только изменившиеся блоки (bpMorphPage): шапка,
+     поиск и полоса разделов стоят на месте; оставшиеся карточки
+     переезжают на новое место (FLIP), новые проявляются.
+   Откат: удалить style#bp-calm-css и script#bp-calm.                 */
+.pg.on.bp-settled > *:not(.camps-empty):not(.sp-body):not(.wd-body):not(#abc-scroll):not(#chatsSectionWrap),
+.pg.on.bp-settled > .sp-body > *,
+.pg.on.bp-settled > .wd-body > *,
+.pg.on.bp-settled > #abc-scroll > *,
+.pg.on.bp-settled > #chatsSectionWrap > *{animation:none}
+@keyframes bpCalmIn{ from{ opacity:0; transform:translateY(10px) scale(.985) } }
+html body #pg-tasks .tk-list > .tk-card.bp-in,
+html body #pg-tasks .tk-empty.bp-in > *{
+  animation:bpCalmIn .3s cubic-bezier(.22,1,.36,1) backwards;
+  animation-delay:calc(var(--bp-in,0) * 40ms);
+}
+@media (prefers-reduced-motion:reduce){
+  html body #pg-tasks .tk-list > .tk-card.bp-in,html body #pg-tasks .tk-empty.bp-in > *{animation:none}
+}
+</style>
+<script id="bp-calm">
+(function(){
+'use strict';
+if(window.__bpCalm) return; window.__bpCalm = 1;
+var RM = false; try{ RM = matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
+
+/* 1 · страница «осела»: последний блок каскада доиграл */
+function watchLeave(pg){
+  if(pg.__calmMo || typeof MutationObserver === 'undefined') return;
+  /* classList.remove пишет атрибут, даже когда класса нет, — а это
+     новая запись для этого же наблюдателя. Без проверки contains
+     получался бесконечный круг микрозадач, и вкладка зависала. */
+  pg.__calmMo = new MutationObserver(function(){
+    if(pg.classList.contains('on')) return;
+    clearTimeout(pg.__calmT);
+    if(pg.classList.contains('bp-settled')) pg.classList.remove('bp-settled');
+  });
+  pg.__calmMo.observe(pg, {attributes:true, attributeFilter:['class']});
+}
+document.addEventListener('animationend', function(e){
+  if(e.animationName !== 'bpRise') return;
+  var t = e.target, pg = t && t.closest ? t.closest('.pg') : null;
+  if(!pg || !pg.classList.contains('on')) return;
+  watchLeave(pg);
+  clearTimeout(pg.__calmT);
+  pg.__calmT = setTimeout(function(){
+    if(pg.classList.contains('on') && !pg.classList.contains('bp-settled')) pg.classList.add('bp-settled');
+  }, 120);
+}, true);
+
+/* 2 · перерисовка страницы без пересборки */
+var RX = /bpTaskOpen\('((?:[^'\\]|\\.)*)'\)/;
+function cardId(el){ var m = RX.exec(el.getAttribute('onclick') || ''); return m ? m[1] : null; }
+function key(el){ return el.tagName + '.' + String(el.className || '').split(/\s+/)[0]; }
+function cardsOf(list){ return list ? [].filter.call(list.children, function(c){ return c.classList.contains('tk-card'); }) : []; }
+
+window.bpMorphPage = function(page, html){
+  var od = [].slice.call(page.children);
+  if(!od.length){ page.innerHTML = html; return; }
+  var live = page.classList.contains('on');
+  var y0 = window.scrollY || 0, before = {}, oldIds = [];
+  if(live) cardsOf(page.querySelector('.tk-list')).forEach(function(c){
+    var id = cardId(c); if(id != null){ before[id] = c.getBoundingClientRect().top; oldIds.push(id); }
+  });
+  var strip = page.querySelector('.tk-filters'), sl = strip ? strip.scrollLeft : 0;
+
+  var tmp = document.createElement('div'); tmp.innerHTML = html;
+  var pool = {};
+  od.forEach(function(o){ var k = key(o); (pool[k] = pool[k] || []).push(o); });
+  var fin = [].slice.call(tmp.children).map(function(n){
+    var arr = pool[key(n)], o = arr && arr.shift();
+    if(!o) return n;
+    /* строку поиска не трогаем: в ней фокус и то, что человек набирает */
+    if(/\btk-searchrow\b/.test(n.className) || o.outerHTML === n.outerHTML) return o;
+    return n;
+  });
+  od.forEach(function(o){ if(fin.indexOf(o) < 0) page.removeChild(o); });
+  fin.forEach(function(n, i){ var cur = page.children[i]; if(cur !== n) page.insertBefore(n, cur || null); });
+  var s2 = page.querySelector('.tk-filters'); if(s2 && s2 !== strip) s2.scrollLeft = sl;
+  if(!live) return;
+
+  var list = page.querySelector('.tk-list'), empty = page.querySelector('.tk-empty');
+  var changed = cardsOf(list).map(cardId).join('|') !== oldIds.join('|');
+  /* карточки дописывает наблюдатель bp-tkcard — его микрозадача уже в
+     очереди, наша идёт следом; всё это до отрисовки кадра */
+  Promise.resolve().then(function(){
+    try{
+      /* прокрутка на месте: короткий список не утягивает страницу —
+         страница временно держит высоту до следующей перерисовки */
+      if(page.style.minHeight) page.style.minHeight = '';
+      var de = document.documentElement, vh = Math.max(innerHeight || 0, de.clientHeight || 0);
+      /* два захода: первый замер идёт при уже поджатой прокрутке */
+      for(var i = 0; i < 3; i++){
+        var lack = y0 + vh - de.scrollHeight;
+        if(lack <= 0) break;
+        page.style.minHeight = Math.ceil(page.getBoundingClientRect().height + lack) + 'px';
+      }
+      if(Math.abs((window.scrollY || 0) - y0) > 1) window.scrollTo(0, y0);
+      if(!changed || RM || !page.classList.contains('bp-settled')) return;
+      var cards = cardsOf(list), moved = [], k = 0;
+      /* класс снимаем, когда доиграл: иначе проявление повторится при
+         следующем показе страницы (display:none → block) */
+      setTimeout(function(){
+        cards.forEach(function(c){ c.classList.remove('bp-in'); });
+        if(empty) empty.classList.remove('bp-in');
+      }, 700);
+      if(!list){ if(empty) empty.classList.add('bp-in'); return; }
+      cards.forEach(function(c){
+        var id = cardId(c);
+        if(id != null && before[id] != null){
+          var dy = before[id] - c.getBoundingClientRect().top;
+          if(Math.abs(dy) > 1 && Math.abs(dy) < innerHeight * 1.5){
+            c.style.transition = 'none'; c.style.transform = 'translateY(' + dy + 'px)'; moved.push(c);
+          }
+        }else{ c.style.setProperty('--bp-in', Math.min(k++, 5)); c.classList.add('bp-in'); }
+      });
+      if(moved.length){
+        void list.offsetWidth;
+        requestAnimationFrame(function(){
+          moved.forEach(function(c){ c.style.transition = 'transform .34s cubic-bezier(.22,1,.36,1)'; c.style.transform = ''; });
+          setTimeout(function(){ moved.forEach(function(c){ c.style.transition = ''; }); }, 420);
+        });
+      }
+    }catch(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'calm'); }catch(_){} }
+  });
+};
+})();
+</script>
 </body>
 </html>
