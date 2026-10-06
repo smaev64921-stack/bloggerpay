@@ -41715,8 +41715,14 @@ else setTimeout(boot, 0);
     document.documentElement.classList.toggle('bp-locked', any);
   }
 
+  /* Окно, которое прячется анимацией (opacity/visibility с переходом),
+     в момент снятия класса ещё «видно» — замок оставался навсегда, и
+     страница переставала листаться (06.10.2026: профиль после шторки
+     «Добавить канал»). Проверяем ещё раз, когда переход доиграл. */
+  var lateT = null;
+  function syncLate(){ syncLock(); clearTimeout(lateT); lateT = setTimeout(syncLock, 450); }
   var attrMo = (typeof MutationObserver === 'function')
-    ? new MutationObserver(syncLock) : null;
+    ? new MutationObserver(syncLate) : null;
 
   function mark(el){
     if(!el || el.nodeType !== 1) return;
@@ -41727,6 +41733,7 @@ else setTimeout(boot, 0);
     if(parseFloat(s.top) !== 0 || parseFloat(s.bottom) !== 0) return;
     el.classList.add('bp-fullscreen-ov');
     watched.push(el);
+    el.addEventListener('transitionend', function(e){ if(e.target === el) syncLock(); });
     // окно могут не удалять, а просто прятать — следим за style и class
     if(attrMo) attrMo.observe(el, {attributes:true, attributeFilter:['style','class']});
   }
@@ -92424,86 +92431,81 @@ window.bpMorphPage = function(page, html){
    Откат: удалить style#bp-pfmerge-css и script#bp-pfmerge (экран
    редактирования вырезан из разметки — вернуть его можно из git).     */
 
-/* ── шторка: плитки разделов ── */
-html body #drw .drw-nav .drw-item{padding:4px 6px 4px 9px!important;gap:11px!important}
+/* ── шторка: иконки разделов ──
+   06.10, владелец: «чтобы иконки не были в рамочке» — без плитки,
+   просто рисунок; вырез у зелёных значков — в цвет фона шторки. */
+html body #drw .drw-nav .drw-item{padding:7px 6px 7px 9px!important;gap:12px!important}
 html body #drw .drw-nav .drw-item .drw-item-lbl{line-height:1.25!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 html body #drw .drw-nav .drw-item .drw-item-ico{
-  --bp-tile:#1b2029;
-  width:36px!important;height:36px!important;flex:none!important;border-radius:11px!important;
-  display:grid!important;place-items:center!important;position:relative;color:#aab2c4;
-  background:linear-gradient(160deg,#20262f 0%,#181c25 100%)!important;
-  border:1px solid rgba(255,255,255,.07)!important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.05)!important;
-  transition:background .16s ease,border-color .16s ease;
+  --bp-tile:#13171f;
+  width:30px!important;height:30px!important;flex:none!important;border-radius:0!important;
+  display:grid!important;place-items:center!important;position:relative;color:#b4bccb;
+  background:none!important;border:none!important;box-shadow:none!important;
 }
-html body #drw .drw-nav .drw-item .drw-item-ico > svg{width:19px!important;height:19px!important}
+html body #drw .drw-nav .drw-item .drw-item-ico > svg{width:20px!important;height:20px!important}
 html body #drw .drw-nav .drw-item .drw-item-ico > svg.bpdi{
-  width:25px!important;height:25px!important;overflow:visible;
-  fill:none!important;stroke:currentColor!important;color:#aab2c4;stroke-width:1.6!important;
-  stroke-linecap:round;stroke-linejoin:round;
+  width:28px!important;height:28px!important;overflow:visible;
+  fill:none!important;stroke:currentColor!important;color:#b4bccb;stroke-width:1.55!important;
+  stroke-linecap:round;stroke-linejoin:round;transition:color .15s ease;
 }
 html body #drw .drw-nav .drw-item .drw-item-ico.bpdi-on > svg:not(.bpdi){display:none!important}
-html body #drw .drw-nav .drw-item:hover .drw-item-ico,html body #drw .drw-nav .drw-item:active .drw-item-ico{
-  background:linear-gradient(160deg,#262d38 0%,#1c212b 100%)!important;border-color:rgba(255,255,255,.11)!important;
-}
-html body #drw .drw-nav .drw-item:hover .drw-item-ico > svg.bpdi{color:#e9edf5}
+html body #drw .drw-nav .drw-item:hover .drw-item-ico > svg.bpdi,html body #drw .drw-nav .drw-item:active .drw-item-ico > svg.bpdi{color:#eef2f8}
 html body #drw .drw-nav .drw-item .drw-item-ico #drawerChatRedDot,
-html body #drw .drw-nav .drw-item .drw-item-ico #drawerNotifDot{top:-3px!important;right:-3px!important;z-index:2}
+html body #drw .drw-nav .drw-item .drw-item-ico #drawerNotifDot{top:-1px!important;right:-2px!important;z-index:2}
 /* «Задания» и «Мои задания» приходят своей разметкой — после сборки
    слоем они как остальные пункты */
 html body #drw .drw-nav .drw-item.bpdi-fix{color:inherit!important;font:inherit!important}
 
-/* ── шторка: карточка пользователя (размер прежний) ── */
-html body #drw .drw-user{
-  padding:11px!important;   /* +1px рамки с каждой стороны — внешний размер прежний */
-  grid-template-columns:auto minmax(0,1fr) auto!important;
-  background:
-    radial-gradient(90px 80px at 14% 0%,rgba(91,147,245,.30),transparent 72%),
-    linear-gradient(135deg,rgba(47,108,224,.16) 0%,rgba(47,108,224,.04) 45%,rgba(255,255,255,.035) 100%)!important;
-  border:1px solid rgba(255,255,255,.08)!important;border-top-color:rgba(255,255,255,.14)!important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.04)!important;
-}
-html body #drw .drw-user .drw-user-ava{box-shadow:0 0 0 2px #171c26,0 0 0 3.5px rgba(255,255,255,.16)!important}
-html body #drw .drw-user.bp-ver .drw-user-ava{box-shadow:0 0 0 2px #171c26,0 0 0 3.5px #3b82f6,0 0 14px rgba(59,130,246,.45)!important}
-html body #drw .drw-user .drw-uname{
-  font-size:15px!important;font-weight:800!important;letter-spacing:-.25px!important;color:#fff!important;
-  line-height:1.1!important;margin-bottom:2px!important;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;
-}
-html body #drw .drw-user .drw-uhandle{font-size:10.5px!important;line-height:1.2!important;color:#8e98ab!important;font-variant-numeric:tabular-nums;letter-spacing:.15px;margin-bottom:4px!important}
-html body #drw .drw-user .drw-ubadges{display:flex!important;align-items:center;gap:5px!important}
-html body #drw .drw-user #drwRoleBadge{
-  display:inline-flex!important;align-items:center;gap:4px;height:18px;box-sizing:border-box;flex:none;
-  padding:0 7px 0 5px!important;border-radius:999px!important;line-height:1!important;
-  font-size:10px!important;font-weight:700!important;letter-spacing:.1px;
-  background:rgba(47,108,224,.16)!important;border:1px solid rgba(91,147,245,.32)!important;color:#b3cdff!important;
-}
-html body #drw .drw-user #drwRoleBadge::before{
-  content:'';width:11px;height:11px;flex:none;background:currentColor;
-  -webkit-mask:var(--bpr-ic) center/contain no-repeat;mask:var(--bpr-ic) center/contain no-repeat;
-  --bpr-ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2.5' y='6' width='13' height='12' rx='2.5'/%3E%3Cpath d='m15.5 10.5 6-3.5v10l-6-3.5'/%3E%3C/svg%3E");
-}
-html body #drw .drw-user #drwRoleBadge.advertiser{background:rgba(245,158,11,.14)!important;border-color:rgba(245,158,11,.34)!important;color:#fcd38d!important}
-html body #drw .drw-user #drwRoleBadge.advertiser::before{
-  --bpr-ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10.5v3a1.5 1.5 0 0 0 1.5 1.5H7l7 4.5v-15L7 9H4.5A1.5 1.5 0 0 0 3 10.5z'/%3E%3Cpath d='M18 9a4 4 0 0 1 0 6'/%3E%3C/svg%3E");
-}
+/* ── шторка: карточка пользователя (размер прежний, 251×77) ──
+   Вариант задаёт html[data-drwv]: 1 — спокойный (по умолчанию),
+   2 — фирменный синий, 3 — прежняя раскладка с плашкой роли.
+   Общее: «Проверен» только у проверенных; фото обрезано кругом
+   (при смене фото лишняя картинка могла вылезти под кружок). */
+html body #drw .drw-user{padding:11px!important;grid-template-columns:auto minmax(0,1fr) auto!important;box-shadow:none!important;height:77px!important;box-sizing:border-box!important;align-items:center!important}
+html body #drw .drw-user .drw-uname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:165px;line-height:1.15!important}
 html body #drw .drw-user:not(.bp-ver) .drw-check{display:none!important}
-html body #drw .drw-user.bp-ver .drw-check{
-  display:inline-flex!important;align-items:center;gap:3px;width:auto!important;height:18px!important;box-sizing:border-box;
-  padding:0 6px 0 4px!important;border-radius:999px!important;flex:none;
-  background:rgba(18,168,138,.15)!important;border:1px solid rgba(18,168,138,.38)!important;color:#5fe0c2!important;
+html body #drw .drw-user .drw-user-ava{overflow:hidden!important;border-radius:50%!important}
+html body #drw .drw-user .drw-user-ava > img{position:absolute;inset:0}
+html body #drw .drw-user .drw-user-ava > img ~ img,
+html body #pg-profile .pf-ava-img > img ~ img,html body #mainTopbar .tb-ava > img ~ img{display:none!important}
+html body #pg-profile .pf-ava-img.bp-hasphoto{overflow:hidden!important;border-radius:50%!important}
+html body #drw .drw-user .drw-user-arr svg{width:14px!important;height:14px!important}
+
+/* 1 · спокойный: имя с галочкой, строкой ниже «Блогер · ID …» */
+html:not([data-drwv="2"]):not([data-drwv="3"]) body #drw .drw-user{background:rgba(255,255,255,.045)!important;border:1px solid rgba(255,255,255,.07)!important}
+html:not([data-drwv="2"]):not([data-drwv="3"]) body #drw .drw-user .drw-user-ava{width:46px!important;height:46px!important}
+html:not([data-drwv="2"]):not([data-drwv="3"]) body #drw .drw-user .drw-uname{font-size:16px!important;font-weight:800!important;letter-spacing:-.3px!important;color:#fff!important;margin-bottom:4px!important}
+html:not([data-drwv="2"]):not([data-drwv="3"]) body #drw .drw-user.bp-ver .drw-uname::after{
+  content:'';display:inline-block;width:15px;height:15px;margin-left:6px;vertical-align:-2px;border-radius:50%;
+  background:#3b82f6 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") center/9px no-repeat;
 }
-html body #drw .drw-user.bp-ver .drw-check svg{width:10px!important;height:10px!important;stroke:currentColor!important;stroke-width:3.2!important;fill:none}
-html body #drw .drw-user.bp-ver .drw-check::after{content:'Проверен';font-size:10px;font-weight:700;line-height:1}
-/* «Рекламодатель» длиннее — рядом с ним «Проверен» только галочкой */
-html body #drw .drw-user.bp-ver #drwRoleBadge.advertiser ~ .drw-check{width:18px!important;padding:0!important;justify-content:center}
-html body #drw .drw-user.bp-ver #drwRoleBadge.advertiser ~ .drw-check::after{content:none}
-html body #drw .drw-user .drw-ubadges{min-width:0}
-html body #drw .drw-user .drw-user-arr{
-  width:24px;height:24px;border-radius:50%;display:grid!important;place-items:center;
-  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.07);
-}
-html body #drw .drw-user .drw-user-arr svg{stroke:#a6afc0!important;width:12px!important;height:12px!important}
+html:not([data-drwv="2"]):not([data-drwv="3"]) body #drw .drw-user .drw-uhandle{font-size:12px!important;line-height:1.25!important;color:#8e98ab!important;font-variant-numeric:tabular-nums;margin:0!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html:not([data-drwv="2"]):not([data-drwv="3"]) body #drw .drw-user .drw-uhandle::before{content:attr(data-role) '  \00B7  ';color:#c4cbd8;font-weight:600}
+html:not([data-drwv="2"]):not([data-drwv="3"]) body #drw .drw-user .drw-ubadges{display:none!important}
+html:not([data-drwv="2"]):not([data-drwv="3"]) body #drw .drw-user .drw-user-arr{opacity:.5}
+html:not([data-drwv="2"]):not([data-drwv="3"]) body #drw .drw-user .drw-user-arr svg{stroke:#c4cbd8!important}
+
+/* 2 · фирменный синий */
+html[data-drwv="2"] body #drw .drw-user{background:linear-gradient(135deg,#3a7bf0 0%,#2152c4 100%)!important;border:none!important}
+html[data-drwv="2"] body #drw .drw-user .drw-user-ava{box-shadow:0 0 0 2px rgba(255,255,255,.85)!important}
+html[data-drwv="2"] body #drw .drw-user .drw-uname{font-size:15.5px!important;font-weight:800!important;color:#fff!important;margin-bottom:2px!important}
+html[data-drwv="2"] body #drw .drw-user .drw-uhandle{font-size:10.5px!important;line-height:1.2!important;color:rgba(255,255,255,.72)!important;margin-bottom:5px!important;font-variant-numeric:tabular-nums}
+html[data-drwv="2"] body #drw .drw-user .drw-ubadges{display:flex!important;align-items:center;gap:5px!important}
+html[data-drwv="2"] body #drw .drw-user #drwRoleBadge{background:rgba(255,255,255,.18)!important;border:none!important;color:#fff!important;padding:2px 8px!important;border-radius:999px!important;font-size:10px!important;font-weight:700!important}
+html[data-drwv="2"] body #drw .drw-user.bp-ver .drw-check{display:grid!important;place-items:center;width:17px!important;height:17px!important;border-radius:50%!important;background:#fff!important}
+html[data-drwv="2"] body #drw .drw-user.bp-ver .drw-check svg{width:10px!important;height:10px!important;stroke:#2152c4!important;stroke-width:3.4!important}
+html[data-drwv="2"] body #drw .drw-user .drw-user-arr{width:26px;height:26px;border-radius:50%;display:grid!important;place-items:center;background:rgba(255,255,255,.18)}
+html[data-drwv="2"] body #drw .drw-user .drw-user-arr svg{stroke:#fff!important;width:12px!important;height:12px!important}
+
+/* 3 · прежняя раскладка, спокойные цвета */
+html[data-drwv="3"] body #drw .drw-user{background:rgba(255,255,255,.045)!important;border:1px solid rgba(255,255,255,.07)!important}
+html[data-drwv="3"] body #drw .drw-user .drw-uname{font-size:15px!important;font-weight:800!important;color:#fff!important;margin-bottom:1px!important}
+html[data-drwv="3"] body #drw .drw-user .drw-uhandle{font-size:10.5px!important;line-height:1.2!important;color:#8e98ab!important;margin-bottom:4px!important;font-variant-numeric:tabular-nums}
+html[data-drwv="3"] body #drw .drw-user .drw-ubadges{display:flex!important;align-items:center;gap:5px!important}
+html[data-drwv="3"] body #drw .drw-user #drwRoleBadge{background:rgba(255,255,255,.08)!important;border:1px solid rgba(255,255,255,.10)!important;color:#d4d9e3!important;padding:1px 8px!important;line-height:1.3!important;border-radius:999px!important;font-size:10px!important;font-weight:700!important}
+html[data-drwv="3"] body #drw .drw-user.bp-ver .drw-check{display:grid!important;place-items:center;width:17px!important;height:17px!important;border-radius:50%!important;background:#3b82f6!important}
+html[data-drwv="3"] body #drw .drw-user.bp-ver .drw-check svg{width:10px!important;height:10px!important;stroke:#fff!important;stroke-width:3.4!important}
+html[data-drwv="3"] body #drw .drw-user .drw-user-arr{opacity:.5}
 
 /* ── профиль: фото по нажатию на аватар ── */
 html body #pg-profile .pf-ava{position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -92580,6 +92582,13 @@ html body #pg-profile .pf-edit{display:none!important}
 #epcSheet .epc-opt-ic,#epcBox .epc-ava,#epcBox .epc-badge{border-radius:50%!important}
 #epcSheet .epc-opt-ic,#epcBox .epc-ava.epc-sico,#epcBox .epc-badge{overflow:hidden}
 #epcBox .epc-badge{outline:2px solid #191e27}
+
+/* ── профиль листается с любого места ──
+   Общее правило [class*="-list"]{overscroll-behavior:contain} (~10673)
+   вместе с overflow:hidden у списков профиля (.pf2-list, .bpf-list)
+   держало прокрутку: палец, начавший движение на списке, страницу
+   не двигал — «иногда экран не реагирует». */
+html body #pg-profile [class*="-list"],html body #pg-profile [class*="-scroll"]{overscroll-behavior:auto!important}
 
 /* ── соцсети везде круглые ── */
 html body .bpc6-ic,html body .blp-soc-i,html body .cpw-soc-ic,html body #verifyPlatformIcon,
@@ -92706,6 +92715,9 @@ function paintUser(){
     var u = me(), k = (u && u.kyc && u.kyc.identity) || {};
     var ver = k.status === 'verified';
     if(box.classList.contains('bp-ver') !== ver) box.classList.toggle('bp-ver', ver);
+    var h = box.querySelector('.drw-uhandle'), rb = $('drwRoleBadge');
+    var role = rb ? String(rb.textContent || '').trim() : (isAdv() ? 'Рекламодатель' : 'Блогер');
+    if(h && h.getAttribute('data-role') !== role) h.setAttribute('data-role', role);
   }catch(e){ E(e); }
 }
 
