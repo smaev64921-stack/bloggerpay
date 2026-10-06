@@ -11865,9 +11865,6 @@ window.BP_LOGO="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccq
           </div>
         </div>
       </div>
-      <button class="pf-edit" onclick="openEditProfile()" title="Редактировать профиль">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--t1)" stroke-width="2" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-      </button>
     </div>
   </div>
 
@@ -25423,117 +25420,8 @@ textarea.ep-inp{ resize:none; line-height:1.5; font-weight:500; }
   text-transform:uppercase; letter-spacing:.5px; margin-bottom:2px; }
 </style>
 
-<div id="editProfileOverlay" style="display:none;position:fixed;inset:0;z-index:210;background:var(--bg);flex-direction:column">
-
-  <div class="ep-head">
-    <div class="ep-back" onclick="closeEditProfile()" role="button" tabindex="0" aria-label="Назад">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="2.2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-    </div>
-    <div class="ep-title">Профиль</div>
-    <button class="ep-save" onclick="saveEditProfile()">Сохранить</button>
-  </div>
-
-  <div class="ep-body">
-
-    <!-- Аватар -->
-    <div class="ep-top">
-      <div class="ep-ava-wrap" onclick="epPickAvatar()" role="button" tabindex="0">
-        <div class="ep-ava" id="epAvaCircle"><span id="epAvaInitial">Р</span></div>
-        <div class="ep-ava-edit">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#12151c" stroke-width="2.5" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
-        </div>
-      </div>
-      <div><span class="ep-ava-hint">Изменить фото</span></div>
-      <input type="file" id="epFileInput" accept="image/*" style="display:none" onchange="epHandlePhoto(this)">
-    </div>
-
-    <!-- Кто вы -->
-    <div class="ep-role">
-      <div class="ep-role-lbl">Кто вы</div>
-      <div class="ep-role-pick" id="epRolePick">
-        <button type="button" class="ep-role-opt" id="epRoleBlogger" onclick="epSetRole('blogger')">
-          <b>Блогер</b><span>Размещаю рекламу у себя и получаю оплату</span>
-        </button>
-        <button type="button" class="ep-role-opt" id="epRoleAdv" onclick="epSetRole('advertiser')">
-          <b>Рекламодатель</b><span>Покупаю размещения у блогеров</span>
-        </button>
-      </div>
-      <div class="ep-role-note">Аккаунт, деньги и сделки остаются теми же — меняется только то, каким приложение открывается.</div>
-    </div>
-
-    <!-- О себе -->
-    <div class="ep-sec">
-      <div class="ep-sec-h">О себе</div>
-      <div class="ep-card">
-        <div class="ep-row">
-          <div class="ep-row-h">Имя</div>
-          <input id="epName" class="ep-inp" type="text" maxlength="40" placeholder="Ваше имя">
-        </div>
-        <!-- Ряд «Юзернейм» удалён: у аккаунта есть имя и постоянный ID,
-             отдельный придуманный @ник ничего не решал и только путал. -->
-        <div class="ep-row">
-          <div class="ep-row-h">Описание <span id="epAboutCount">0/150</span></div>
-          <textarea id="epAbout" class="ep-inp" maxlength="150" rows="3" placeholder="Расскажите о себе и своём контенте"></textarea>
-        </div>
-      </div>
-    </div>
-
-    <!-- Тематика -->
-    <div class="ep-sec">
-      <div class="ep-sec-h">Тематика <em id="epNicheCount">0/5</em></div>
-      <div class="ep-chips" id="epNicheChips"></div>
-      <div class="ep-hint" id="epNicheHint">Выберите то, о чём ваш контент — по этому вас будут искать рекламодатели</div>
-    </div>
-
-    <!-- Площадки -->
-    <div class="ep-sec">
-      <div class="ep-sec-h">Площадки</div>
-      <div class="ep-soc">
-        <div class="ep-soc-row">
-          <div class="ep-soc-tile" style="background:#ff0000">
-            <img loading="lazy" class="soc-img" src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/youtube.svg" alt="">
-          </div>
-          <input id="epYt" class="ep-inp" type="url" placeholder="youtube.com/@канал">
-          <button type="button" class="ep-verify" id="epVerifyYt" onclick="bpVerifyOwn('youtube')">Подтвердить</button>
-        </div>
-        <div class="ep-soc-row">
-          <div class="ep-soc-tile" style="background:#161b23;border:1px solid rgba(255,255,255,.18)">
-            <img loading="lazy" class="soc-img" src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/tiktok.svg" alt="">
-          </div>
-          <input id="epTt" class="ep-inp" type="url" placeholder="tiktok.com/@ник">
-          <button type="button" class="ep-verify" id="epVerifyTt" onclick="bpVerifyOwn('tiktok')">Подтвердить</button>
-        </div>
-        <div class="ep-soc-row">
-          <div class="ep-soc-tile" style="background:#2aabee">
-            <img loading="lazy" class="soc-img" src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/telegram.svg" alt="">
-          </div>
-          <input id="epTg" class="ep-inp" type="url" placeholder="t.me/ваш_канал">
-        </div>
-        <div class="ep-soc-row">
-          <div class="ep-soc-tile" style="background:radial-gradient(circle at 30% 110%,#f9a825,#e6683c 30%,#dc2743 60%,#bc1888)">
-            <img loading="lazy" class="soc-img" src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/instagram.svg" alt="">
-          </div>
-          <input id="epIg" class="ep-inp" type="url" placeholder="instagram.com/ник">
-        </div>
-      </div>
-      <div class="ep-hint" id="epVerifyHint">«Подтвердить» — это вход в ваш аккаунт на площадке. Сервис узнаёт только имя канала и число подписчиков, доступа к публикациям не получает.</div>
-    </div>
-
-    <!-- Дополнительно -->
-    <div class="ep-sec">
-      <div class="ep-sec-h">Дополнительно</div>
-      <div class="ep-field">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-        <input id="epCity" class="ep-inp" type="text" maxlength="50" placeholder="Город">
-      </div>
-      <div class="ep-field">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-        <input id="epWebsite" class="ep-inp" type="url" maxlength="100" placeholder="Сайт">
-      </div>
-    </div>
-
-  </div>
-</div>
+<!-- Экран «Редактировать профиль» (#editProfileOverlay) убран 06.10.2026:
+     всё правится в профиле (слой bp-pfmerge). -->
 
 <!-- ══ DEAL DETAIL SCREEN (full page overlay) ══ -->
 <div id="dealDetailOverlay" style="display:none;position:fixed;inset:0;z-index:180;background:var(--bg);flex-direction:column;max-width:420px;margin:0 auto;overflow:hidden">
@@ -30159,8 +30047,9 @@ function _bdsAutodetectPlatform(url) {
   const match = platforms.find(p => p.re.test(url));
   if(match) {
     /* значения — только литералы из списка выше, чужого текста здесь нет */
-    inner.innerHTML = '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" '
-      + 'style="flex-shrink:0;fill:' + match.c + '"><path d="' + match.d + '"/></svg>'
+    /* значок — круг в цвете площадки, как везде (06.10.2026) */
+    inner.innerHTML = '<span aria-hidden="true" style="display:inline-grid;place-items:center;flex-shrink:0;width:18px;height:18px;border-radius:50%;vertical-align:-4px;margin-right:6px;background:' + match.c + '">'
+      + '<svg viewBox="0 0 24 24" width="11" height="11" style="fill:' + (match.c === '#e5e7ea' ? '#111' : '#fff') + '"><path d="' + match.d + '"/></svg></span>'
       + match.label + ' обнаружен';
     badge.style.display = 'block';
     badge.style.animation = 'bdsFadeUp .25s ease';
@@ -78050,7 +77939,7 @@ var GLYPH = {
 };
 var PLAT = {
   telegram:{ k:'tg', name:'Telegram' }, youtube:{ k:'yt', name:'YouTube' }, tiktok:{ k:'tt', name:'TikTok' },
-  instagram:{ k:'ig', name:'Instagram' }, vk:{ k:'vk', name:'VK' }
+  instagram:{ k:'ig', name:'Instagram' }
 };
 var SHORT2LONG = { tg:'telegram', yt:'youtube', tt:'tiktok', ig:'instagram', vk:'vk' };
 
@@ -78140,14 +78029,14 @@ function todo(){
   var k = kycOf(), id = k.identity || {}, items = [];
   var hasNiche = !!((u.niches && u.niches.length) || myCards().some(function(c){ return c.topics && c.topics.length; }));
   var pls = platforms();
-  items.push({ key:'photo', ok:!!(u.photo || u.avatar), t:'Добавить фото', s:'С лицом доверяют больше, чем букве', go:'edit' });
+  items.push({ key:'photo', ok:!!(u.photo || u.avatar), t:'Добавить фото', s:'С лицом доверяют больше, чем букве', go:'photo' });
   items.push({ key:'about', ok:!!(u.about && String(u.about).trim()), t:'Рассказать о себе', s:'Два-три предложения о вас и контенте', go:'about' });
   if(!isAdv()){
-    items.push({ key:'niche', ok:hasNiche, t:'Выбрать тематику', s:'До четырёх направлений — по ним вас находят', go:'edit' });
-    items.push({ key:'plat', ok:pls.length > 0, t:'Добавить площадки', s:'Ссылки на каналы, где выходит реклама', go:'edit' });
+    items.push({ key:'niche', ok:hasNiche, t:'Выбрать тематику', s:'До четырёх направлений — по ним вас находят', go:'niche' });
+    items.push({ key:'plat', ok:pls.length > 0, t:'Добавить площадки', s:'Ссылки на каналы, где выходит реклама', go:'plat' });
     /* Шага «разместить карточку» здесь больше нет: карточка — не пункт
        анкеты, а отдельная работа со своим экраном и своей подсказкой. */
-    items.push({ key:'city', ok:!!u.city, t:'Указать город', s:'Нужен для локальных кампаний', go:'edit' });
+    items.push({ key:'city', ok:!!u.city, t:'Указать город', s:'Нужен для локальных кампаний', go:'city' });
     items.push({ key:'kyc', ok:id.status === 'verified', pending:id.status === 'pending', t: id.status === 'pending' ? 'Личность на проверке' : 'Подтвердить личность',
       s: id.status === 'pending' ? 'Документы на проверке у оператора' : (id.status === 'rejected' ? 'Оператор вернул документы — посмотрите почему' : 'Понадобится для вывода денег'), go:'kyc' });
     /* Реквизиты имеет смысл спрашивать только после подтверждённой
@@ -78162,7 +78051,7 @@ function todo(){
   } else {
     var c = company();
     items.push({ key:'company', ok:!!(c && c.name && c.inn), t:'Заполнить данные компании', s: (c && c.name) ? 'ИНН не указан — нужен для счетов' : 'Нужны для счетов и закрывающих', go:'company' });
-    items.push({ key:'city', ok:!!u.city, t:'Указать город', s:'Поможет блогерам понять, где вы', go:'edit' });
+    items.push({ key:'city', ok:!!u.city, t:'Указать город', s:'Поможет блогерам понять, где вы', go:'city' });
   }
   var done = items.filter(function(i){ return i.ok; }).length;
   return { items:items, done:done, total:items.length };
@@ -78170,7 +78059,16 @@ function todo(){
 window.bpPf2Go = function(what){
   try{
     var u = me();
-    if(what === 'edit'){ if(typeof openEditProfile === 'function') openEditProfile(); return; }
+    /* экрана «Редактировать профиль» больше нет — всё правится здесь же */
+    if(what === 'edit'){ if(typeof window.bpPfFocus === 'function') window.bpPfFocus(); return; }
+    if(what === 'photo'){ if(typeof window.bpPfPickPhoto === 'function') window.bpPfPickPhoto(); return; }
+    if(what === 'niche'){ if(typeof window.bpPfNiches === 'function') window.bpPfNiches(); return; }
+    if(what === 'city'){ if(typeof window.bpPfFocus === 'function') window.bpPfFocus('city'); return; }
+    if(what === 'plat'){
+      var pl = $('pf2Plat'); if(pl) pl.scrollIntoView({ block:'center', behavior: reduced() ? 'auto' : 'smooth' });
+      setTimeout(function(){ try{ if(typeof window.bpEpcOpenSheet === 'function') window.bpEpcOpenSheet(); }catch(e){ E(e); } }, 260);
+      return;
+    }
     if(what === 'about'){
       var c = document.querySelector('#pg-profile .pf-card');
       if(c) c.scrollIntoView({ block:'center', behavior: reduced() ? 'auto' : 'smooth' });
@@ -78320,7 +78218,7 @@ function renderChips(){
   if(isAdv() && !list.length){ if(el) el.remove(); return; }
   if(!el){ el = document.createElement('div'); el.id = 'pf2Chips'; el.className = 'pf2-chips'; card.appendChild(el); }
   el.innerHTML = list.map(function(t){ return '<span class="pf2-chip">' + esc(t) + '</span>'; }).join('')
-    + (list.length ? '' : '<span class="pf2-chip add" role="button" tabindex="0" onclick="bpPf2Go(\'edit\')">+ Тематика</span>');
+    + '<span class="pf2-chip add" role="button" tabindex="0" onclick="bpPf2Go(\'niche\')">' + (list.length ? 'Изменить' : '+ Тематика') + '</span>';
 }
 
 function renderPlat(){
@@ -78340,6 +78238,15 @@ function renderPlat(){
   }
   var pls = platforms();
   if(!el){ el = sec('pf2Plat'); page.insertBefore(el, host || null); }
+  /* Каналы правятся прямо здесь — тем же блоком, что был в экране
+     «Редактировать профиль» (bp-offer: карточки, крестик, «Добавить канал»). */
+  if(typeof window.bpEpcRender === 'function'){
+    var hc = sec('pf2Plat', 'Каналы', pls.length ? 'Их видят рекламодатели в каталоге' : 'Добавьте канал — по нему вас находят', '', '');
+    el.innerHTML = hc._head + '<div id="bpfChHost"></div>';
+    window.bpEpcRender();
+    pullChannels(function(){ try{ renderDone(); }catch(e){ E(e); } });
+    return;
+  }
   var h = sec('pf2Plat', 'Площадки', pls.length ? 'Их видят рекламодатели в каталоге' : 'Каналы, где выходит реклама', pls.length ? 'Изменить' : '', 'edit');
   var rows = pls.map(function(p){
     var P = PLAT[p.pid];
@@ -79113,7 +79020,7 @@ var SNAP_KEY = 'bpsync_prof';        /* снимок профиля: по нем
 
    Что НЕ возим: пароль, ключи, реквизиты выплат, документы, баланс —
    их считает сервер, и им место не здесь. */
-var PROF_FIELDS = ['name', 'about', 'city', 'website', 'theme'];
+var PROF_FIELDS = ['name', 'about', 'city', 'address', 'website', 'theme'];
 
 function profRid(){ var n = mySrv(); return n == null ? '' : 'self:' + n; }
 function snap(){
@@ -79180,6 +79087,13 @@ function profOf(){
 
   var at = sn.at || {};
   Object.keys(val).forEach(function(k){
+    /* поле, которого в старом снимке не было (новое — например address),
+       не правка: записываем с отметкой 0, чтобы настоящее значение с
+       другого устройства победило, а не затёрлось пустым */
+    if(!(sn.val && Object.prototype.hasOwnProperty.call(sn.val, k))){
+      if(at[k] == null) at[k] = 0;
+      changed = true; return;
+    }
     var a = JSON.stringify(val[k]), b = JSON.stringify((sn.val || {})[k]);
     if(a !== b){ at[k] = now; changed = true; }
     else if(at[k] == null) at[k] = 0;
@@ -90550,7 +90464,12 @@ var PL = {
   instagram:{ k:'ig', name:'Instagram', pre:'instagram.com/', host:/^instagram\.com$/, re:/^[A-Za-z0-9_.]{1,30}$/, ph:'ник', mk:function(h){ return 'https://instagram.com/' + h; } },
   vk:       { k:'vk', name:'VK',        pre:'vk.com/',       host:/^(vk\.com|vk\.ru)$/, re:/^[A-Za-z0-9_.]{2,40}$/, ph:'сообщество', mk:function(h){ return 'https://vk.com/' + h; } }
 };
-var ORDER = ['youtube', 'tiktok', 'telegram', 'instagram', 'vk'];
+/* VK убран из выбора (06.10.2026, владелец) — уже сохранённая ссылка
+   остаётся в socialLinks.vk, но в списке и в шторке её больше нет. */
+var ORDER = ['youtube', 'tiktok', 'telegram', 'instagram'];
+/* значки — как в каталоге: картинку подменяет bp-soc-icons на фирменный
+   знак, плитка становится кругом (.soc-box-full) */
+function sico(p){ return '<img class="soc-img" alt="" src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/' + p + '.svg">'; }
 var INPUT = { yt:'epYt', tt:'epTt', tg:'epTg', ig:'epIg' };
 var ICO = {
   youtube:'<svg viewBox="0 0 24 24"><path d="M23 7.2c-.3-1-1-1.8-2-2C19.2 4.7 12 4.7 12 4.7s-7.2 0-9 .5c-1 .3-1.8 1-2 2C.5 9 .5 12 .5 12s0 3 .5 4.8c.3 1 1 1.8 2 2 1.8.5 9 .5 9 .5s7.2 0 9-.5c1-.3 1.8-1 2-2 .5-1.8.5-4.8.5-4.8s0-3-.5-4.8zM9.7 15.1V8.9l6 3.1-6 3.1z"/></svg>',
@@ -90585,22 +90504,30 @@ function commit(k, url){
   try{ if(typeof saveUsers === 'function') saveUsers(); }catch(e){ E(e); }
   try{ var u2 = me(); if(u2 && typeof saveSession === 'function') saveSession(u2); }catch(e){}
   try{ if(typeof window.bpPf2DropChannels === 'function') window.bpPf2DropChannels(); }catch(e){}
+  /* профиль: «Заполнить профиль» и подпись раздела «Каналы» */
+  if(edOpen()) setTimeout(function(){ try{ if(typeof updateProfileUI === 'function') updateProfileUI(); }catch(e){ E(e); } }, 220);
 }
-var V = { rows: [] };
+var V = { rows: [], uid: null };
+/* кэш подтверждённых каналов — только для текущего аккаунта: после
+   выхода и входа другим в профиле оставались чужие каналы */
+function vOwn(){ var u = me(), id = u ? String(u.id) : ''; if(V.uid !== id){ V.uid = id; V.rows = []; } return id; }
 function pullV(){
   try{
-    var s = srv();
-    if(!srvOk() || !(s.token && s.token())) return Promise.resolve();
-    return s.raw('GET', '/api/verify/list').then(function(j){ V.rows = (j && j.rows) || []; }).catch(function(e){ E(e); });
+    var s = srv(), id = vOwn();
+    if(!srvOk() || !(s.token && s.token())){ V.rows = []; return Promise.resolve(); }
+    return s.raw('GET', '/api/verify/list').then(function(j){ if(vOwn() === id) V.rows = (j && j.rows) || []; }).catch(function(e){ E(e); });
   }catch(e){ E(e); return Promise.resolve(); }
 }
+/* Экран «Редактировать профиль» убран (06.10.2026): блок живёт в профиле,
+   в #bpfChHost, который рисует раздел «Каналы» (bp-profile2 renderPlat).
+   Тот перерисовывается целиком — поэтому блок пересоздаём, если его
+   нет в документе, и переносим в текущее место. */
 function boxEl(){
-  var b = $('epcBox'); if(b) return b;
-  var hint = $('epVerifyHint'); if(!hint || !hint.parentNode) return null;
-  var sec = hint.parentNode;
-  var h = sec.querySelector('.ep-sec-h'); if(h) h.textContent = 'Каналы';
+  var host = $('bpfChHost'); if(!host) return null;
+  var b = $('epcBox');
+  if(b){ if(b.parentNode !== host) host.appendChild(b); return b; }
   b = document.createElement('div'); b.id = 'epcBox';
-  sec.appendChild(b);
+  host.appendChild(b);
   b.addEventListener('click', onBox);
   b.addEventListener('keydown', function(e){
     if(e.key !== 'Enter') return;
@@ -90612,14 +90539,14 @@ function boxEl(){
 function row(it){
   var P = PL[it.p], link = safeHttp(it.url);
   var ava = it.ava
-    ? '<img src="' + esc(it.ava) + '" alt="" data-epc-img="1"><span class="epc-badge epc-p p-' + it.p + '">' + ICO[it.p] + '</span>'
-    : ICO[it.p];
+    ? '<img src="' + esc(it.ava) + '" alt="" data-epc-img="1"><span class="epc-badge">' + sico(it.p) + '</span>'
+    : sico(it.p);
   var sub = P.name + (it.v
     ? (it.subs ? ' · ' + shortNum(it.subs) + ' ' + plural(it.subs, 'подписчик', 'подписчика', 'подписчиков') : ' · подтверждён входом')
     : ' · по ссылке');
   var del = it.v ? 'v|' + it.p + '|' + it.ext : 'l|' + it.k;
   return '<div class="epc-row"' + (link ? ' data-epc-open="' + esc(link) + '" role="link" tabindex="0"' : '') + '>'
-    + '<span class="epc-ava epc-p p-' + it.p + (it.ava ? ' has-img' : '') + '">' + ava + '</span>'
+    + '<span class="epc-ava p-' + it.p + (it.ava ? ' has-img' : ' epc-sico') + '">' + ava + '</span>'
     + '<span class="epc-tx"><b><span class="nm">' + esc(it.title) + '</span>' + (it.v ? OKI : '') + '</b>'
     + '<span class="sub">' + esc(sub) + '</span></span>'
     + '<button type="button" class="epc-x" data-epc-del="' + esc(del) + '" aria-label="Удалить канал ' + esc(it.title) + '">' + XI + '</button>'
@@ -90627,6 +90554,7 @@ function row(it){
 }
 function render(){
   var b = boxEl(); if(!b) return;
+  vOwn();
   var L = links(), items = [];
   ORDER.forEach(function(p){
     V.rows.forEach(function(r){
@@ -90642,12 +90570,12 @@ function render(){
   });
   b.innerHTML = items.map(row).join('')
     + '<button type="button" class="epc-add" data-epc-add="1"><span class="epc-add-ic">' + PLUS + '</span>'
-    + '<span><b>Добавить канал</b><i>' + (items.length ? 'Ещё один — на другой площадке или второй YouTube' : 'YouTube, TikTok, Telegram, Instagram, VK') + '</i></span></button>'
+    + '<span><b>Добавить канал</b><i>' + (items.length ? 'Ещё один — на другой площадке или второй YouTube' : 'YouTube, TikTok, Telegram, Instagram') + '</i></span></button>'
     + '<div class="epc-hint">' + (items.length
         ? 'Канал с синей галочкой подтверждён входом — рекламодатель видит отметку. Остальные — «со слов блогера».'
         : 'Добавьте хотя бы один канал — по нему рекламодатели находят блогеров.') + '</div>';
   Array.prototype.forEach.call(b.querySelectorAll('img[data-epc-img]'), function(im){
-    function fb(){ var w = im.parentNode; if(!w) return; var p = (/p-(\w+)/.exec(w.className) || [])[1]; w.classList.remove('has-img'); w.innerHTML = ICO[p] || ''; }
+    function fb(){ var w = im.parentNode; if(!w) return; var p = (/p-(\w+)/.exec(w.className) || [])[1]; w.classList.remove('has-img'); w.classList.add('epc-sico'); w.innerHTML = p ? sico(p) : ''; }
     im.addEventListener('error', fb);
     if(im.complete && !im.naturalWidth) fb();
   });
@@ -90730,7 +90658,7 @@ function menu(){
             : has ? 'Уже добавлен — можно заменить'
             : 'Укажите ' + (p === 'telegram' ? '@канал' : p === 'vk' ? 'сообщество' : '@ник');
     return '<button type="button" class="epc-opt" data-epc-pick="' + p + '">'
-      + '<span class="epc-opt-ic epc-p p-' + p + '">' + ICO[p] + '</span>'
+      + '<span class="epc-opt-ic">' + sico(p) + '</span>'
       + '<span class="epc-opt-tx"><b>' + P.name + '</b><i>' + esc(sub) + '</i></span>' + CHEV + '</button>';
   }).join('');
   card('<div class="epc-h">Добавить канал</div>'
@@ -90802,8 +90730,11 @@ function save(){
   closeSheet(); render();
   toast(P.name + ': канал добавлен', 'ok');
 }
-function edOpen(){ var o = $('editProfileOverlay'); return !!(o && o.style.display !== 'none'); }
+function edOpen(){ var p = $('pg-profile'); return !!(p && p.classList.contains('on') && $('bpfChHost')); }
 function refresh(){ render(); pullV().then(render); }
+window.bpEpcRender = function(){ try{ render(); }catch(e){ E(e); } };
+window.bpEpcRefresh = function(){ try{ refresh(); }catch(e){ E(e); } };
+window.bpEpcOpenSheet = function(){ try{ openSheet(); }catch(e){ E(e); } };
 (function(){
   var oe = window.openEditProfile;
   if(typeof oe === 'function'){
@@ -92324,6 +92255,12 @@ html body #mainTopbar.topbar{
 html.bp-lite body #mainTopbar.topbar{box-shadow:0 8px 20px rgba(0,0,0,.4)!important}
 html body #mainTopbar .tb-ham,html body #mainTopbar .tb-bal,html body #mainTopbar .tb-ava{border-radius:14px!important}
 html body #mainTopbar .tb-ava{border-radius:50%!important}
+/* узкий экран (320): панель отошла от краёв — сжимается название, а не
+   баланс (иначе обрезался значок кошелька) */
+html body #mainTopbar .tb-brand{min-width:0!important;overflow:hidden;flex-shrink:1!important}
+html body #mainTopbar .tb-brand .bn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block!important}
+html body #mainTopbar .tb-bal,html body #mainTopbar .tb-ava,html body #mainTopbar .tb-ham,html body #mainTopbar .tb-logo{flex-shrink:0!important}
+@media (max-width:340px){ html body #mainTopbar .tb-brand{display:none!important} html body #mainTopbar .tb-logo{margin-right:auto!important} }
 /* 06.10: «кнопка шторки в рамке — убери рамку»: только три полоски */
 html body #mainTopbar .tb-ham{background:transparent!important;border-color:transparent!important;box-shadow:none!important;-webkit-tap-highlight-color:transparent}
 html body #mainTopbar .tb-ham:active{background:rgba(255,255,255,.07)!important}
@@ -92464,6 +92401,515 @@ window.bpMorphPage = function(page, html){
     }catch(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'calm'); }catch(_){} }
   });
 };
+})();
+</script>
+<style id="bp-pfmerge-css">
+/* ══ ПРОФИЛЬ ОДНИМ ЭКРАНОМ, ИКОНКИ ШТОРКИ (bp-pfmerge, 06.10.2026) ══
+   Владелец: «удали полностью раздел «Редактировать профиль» и умести
+   всё, что там, в профиль — тебе остаётся добавить ввод адреса и
+   города»; «в «Добавить канал» убрать VK, иконки взять как в главном
+   меню; иконки соцсетей везде круглые»; «иконки для разделов — вставь
+   правильно, чтобы красиво»; «блок профиля в шторке проработать, не
+   меняя размеров».
+   • шторка: десять разделов на одинаковых плитках, рисунки — векторная
+     перерисовка присланных картинок (одна толщина линий, чётко на
+     любом экране); «Задания» собраны как остальные пункты; «Поддержка»
+     наконец открывает помощь;
+   • карточка в шторке: подсветка, кольцо у аватара, значок роли,
+     «Проверен» — только когда личность правда подтверждена (раньше
+     галочка висела у всех);
+   • профиль: фото меняется нажатием на аватар, раздел «Личные данные»
+     (имя, город, адрес, сайт, тематика) сохраняется сам, каналы — тем
+     же блоком, что был в редакторе.
+   Откат: удалить style#bp-pfmerge-css и script#bp-pfmerge (экран
+   редактирования вырезан из разметки — вернуть его можно из git).     */
+
+/* ── шторка: плитки разделов ── */
+html body #drw .drw-nav .drw-item{padding:4px 6px 4px 9px!important;gap:11px!important}
+html body #drw .drw-nav .drw-item .drw-item-lbl{line-height:1.25!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+html body #drw .drw-nav .drw-item .drw-item-ico{
+  --bp-tile:#1b2029;
+  width:36px!important;height:36px!important;flex:none!important;border-radius:11px!important;
+  display:grid!important;place-items:center!important;position:relative;color:#aab2c4;
+  background:linear-gradient(160deg,#20262f 0%,#181c25 100%)!important;
+  border:1px solid rgba(255,255,255,.07)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05)!important;
+  transition:background .16s ease,border-color .16s ease;
+}
+html body #drw .drw-nav .drw-item .drw-item-ico > svg{width:19px!important;height:19px!important}
+html body #drw .drw-nav .drw-item .drw-item-ico > svg.bpdi{
+  width:25px!important;height:25px!important;overflow:visible;
+  fill:none!important;stroke:currentColor!important;color:#aab2c4;stroke-width:1.6!important;
+  stroke-linecap:round;stroke-linejoin:round;
+}
+html body #drw .drw-nav .drw-item .drw-item-ico.bpdi-on > svg:not(.bpdi){display:none!important}
+html body #drw .drw-nav .drw-item:hover .drw-item-ico,html body #drw .drw-nav .drw-item:active .drw-item-ico{
+  background:linear-gradient(160deg,#262d38 0%,#1c212b 100%)!important;border-color:rgba(255,255,255,.11)!important;
+}
+html body #drw .drw-nav .drw-item:hover .drw-item-ico > svg.bpdi{color:#e9edf5}
+html body #drw .drw-nav .drw-item .drw-item-ico #drawerChatRedDot,
+html body #drw .drw-nav .drw-item .drw-item-ico #drawerNotifDot{top:-3px!important;right:-3px!important;z-index:2}
+/* «Задания» и «Мои задания» приходят своей разметкой — после сборки
+   слоем они как остальные пункты */
+html body #drw .drw-nav .drw-item.bpdi-fix{color:inherit!important;font:inherit!important}
+
+/* ── шторка: карточка пользователя (размер прежний) ── */
+html body #drw .drw-user{
+  padding:11px!important;   /* +1px рамки с каждой стороны — внешний размер прежний */
+  grid-template-columns:auto minmax(0,1fr) auto!important;
+  background:
+    radial-gradient(90px 80px at 14% 0%,rgba(91,147,245,.30),transparent 72%),
+    linear-gradient(135deg,rgba(47,108,224,.16) 0%,rgba(47,108,224,.04) 45%,rgba(255,255,255,.035) 100%)!important;
+  border:1px solid rgba(255,255,255,.08)!important;border-top-color:rgba(255,255,255,.14)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04)!important;
+}
+html body #drw .drw-user .drw-user-ava{box-shadow:0 0 0 2px #171c26,0 0 0 3.5px rgba(255,255,255,.16)!important}
+html body #drw .drw-user.bp-ver .drw-user-ava{box-shadow:0 0 0 2px #171c26,0 0 0 3.5px #3b82f6,0 0 14px rgba(59,130,246,.45)!important}
+html body #drw .drw-user .drw-uname{
+  font-size:15px!important;font-weight:800!important;letter-spacing:-.25px!important;color:#fff!important;
+  line-height:1.1!important;margin-bottom:2px!important;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;
+}
+html body #drw .drw-user .drw-uhandle{font-size:10.5px!important;line-height:1.2!important;color:#8e98ab!important;font-variant-numeric:tabular-nums;letter-spacing:.15px;margin-bottom:4px!important}
+html body #drw .drw-user .drw-ubadges{display:flex!important;align-items:center;gap:5px!important}
+html body #drw .drw-user #drwRoleBadge{
+  display:inline-flex!important;align-items:center;gap:4px;height:18px;box-sizing:border-box;flex:none;
+  padding:0 7px 0 5px!important;border-radius:999px!important;line-height:1!important;
+  font-size:10px!important;font-weight:700!important;letter-spacing:.1px;
+  background:rgba(47,108,224,.16)!important;border:1px solid rgba(91,147,245,.32)!important;color:#b3cdff!important;
+}
+html body #drw .drw-user #drwRoleBadge::before{
+  content:'';width:11px;height:11px;flex:none;background:currentColor;
+  -webkit-mask:var(--bpr-ic) center/contain no-repeat;mask:var(--bpr-ic) center/contain no-repeat;
+  --bpr-ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2.5' y='6' width='13' height='12' rx='2.5'/%3E%3Cpath d='m15.5 10.5 6-3.5v10l-6-3.5'/%3E%3C/svg%3E");
+}
+html body #drw .drw-user #drwRoleBadge.advertiser{background:rgba(245,158,11,.14)!important;border-color:rgba(245,158,11,.34)!important;color:#fcd38d!important}
+html body #drw .drw-user #drwRoleBadge.advertiser::before{
+  --bpr-ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10.5v3a1.5 1.5 0 0 0 1.5 1.5H7l7 4.5v-15L7 9H4.5A1.5 1.5 0 0 0 3 10.5z'/%3E%3Cpath d='M18 9a4 4 0 0 1 0 6'/%3E%3C/svg%3E");
+}
+html body #drw .drw-user:not(.bp-ver) .drw-check{display:none!important}
+html body #drw .drw-user.bp-ver .drw-check{
+  display:inline-flex!important;align-items:center;gap:3px;width:auto!important;height:18px!important;box-sizing:border-box;
+  padding:0 6px 0 4px!important;border-radius:999px!important;flex:none;
+  background:rgba(18,168,138,.15)!important;border:1px solid rgba(18,168,138,.38)!important;color:#5fe0c2!important;
+}
+html body #drw .drw-user.bp-ver .drw-check svg{width:10px!important;height:10px!important;stroke:currentColor!important;stroke-width:3.2!important;fill:none}
+html body #drw .drw-user.bp-ver .drw-check::after{content:'Проверен';font-size:10px;font-weight:700;line-height:1}
+/* «Рекламодатель» длиннее — рядом с ним «Проверен» только галочкой */
+html body #drw .drw-user.bp-ver #drwRoleBadge.advertiser ~ .drw-check{width:18px!important;padding:0!important;justify-content:center}
+html body #drw .drw-user.bp-ver #drwRoleBadge.advertiser ~ .drw-check::after{content:none}
+html body #drw .drw-user .drw-ubadges{min-width:0}
+html body #drw .drw-user .drw-user-arr{
+  width:24px;height:24px;border-radius:50%;display:grid!important;place-items:center;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.07);
+}
+html body #drw .drw-user .drw-user-arr svg{stroke:#a6afc0!important;width:12px!important;height:12px!important}
+
+/* ── профиль: фото по нажатию на аватар ── */
+html body #pg-profile .pf-ava{position:relative;cursor:pointer;-webkit-tap-highlight-color:transparent}
+html body #pg-profile .bpf-cam{
+  position:absolute;right:-3px;bottom:-3px;z-index:3;width:28px;height:28px;border-radius:50%;
+  display:grid;place-items:center;padding:0;cursor:pointer;
+  background:#2f6ce0;border:2.5px solid #12161e;color:#fff;
+}
+html body #pg-profile .bpf-cam svg{width:14px;height:14px}
+html body #pg-profile .bpf-cam:active{transform:scale(.94)}
+html body #pg-profile .pf-edit{display:none!important}
+
+/* ── профиль: «Личные данные» ── */
+#bpfData{margin-top:18px}
+#bpfData .bpf-list{display:flex;flex-direction:column;padding:4px 0;overflow:hidden}
+#bpfData .bpf-row{
+  display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 14px;box-sizing:border-box;width:100%;
+  background:none;border:none;text-align:left;font:inherit;color:inherit;cursor:text;position:relative;
+  -webkit-tap-highlight-color:transparent;
+}
+#bpfData .bpf-row + .bpf-row::before{content:'';position:absolute;left:58px;right:14px;top:0;height:1px;background:rgba(255,255,255,.06)}
+#bpfData .bpf-ic{
+  width:32px;height:32px;flex:none;border-radius:10px;display:grid;place-items:center;color:#9fb0cf;
+  background:rgba(47,108,224,.12);border:1px solid rgba(91,147,245,.18);
+}
+#bpfData .bpf-ic svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#bpfData .bpf-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+#bpfData .bpf-tx i{font-style:normal;font-size:11.5px;font-weight:600;color:#8e98ab;letter-spacing:.1px}
+#bpfData .bpf-tx input{
+  width:100%;min-width:0;box-sizing:border-box;padding:0;margin:0;border:none;outline:none;background:none;
+  font:inherit;font-size:15px;font-weight:600;color:#eef2f8;line-height:1.35;
+}
+#bpfData .bpf-tx input::placeholder{color:#5d6678;font-weight:500}
+#bpfData .bpf-row:focus-within .bpf-ic{background:rgba(47,108,224,.22);border-color:rgba(91,147,245,.4);color:#cfe0ff}
+#bpfData .bpf-ok{flex:none;width:18px;height:18px;color:#3ddc97;opacity:0;transform:scale(.6);transition:opacity .2s,transform .2s}
+#bpfData .bpf-ok.on{opacity:1;transform:none}
+#bpfData .bpf-ok svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+#bpfData button.bpf-row{cursor:pointer}
+#bpfData .bpf-nv{font-size:15px;font-weight:600;color:#eef2f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#bpfData .bpf-nv.empty{color:#5d6678;font-weight:500}
+#bpfData .bpf-chev{flex:none;width:14px;height:14px;fill:none;stroke:#6d7689;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+#bpfData .bpf-note{font-size:12px;line-height:1.45;color:#7d879a;margin:8px 4px 0}
+
+/* ── шторка тематик ── */
+#bpfNicheSheet{position:fixed;inset:0;z-index:620;display:flex;align-items:flex-end;justify-content:center;
+  background:rgba(5,7,12,0);pointer-events:none;visibility:hidden;transition:background .24s ease,visibility 0s linear .3s}
+#bpfNicheSheet.on{background:rgba(5,7,12,.62);pointer-events:auto;visibility:visible;transition:background .24s ease,visibility 0s}
+#bpfNicheSheet .bpfn-card{
+  width:100%;max-width:520px;box-sizing:border-box;padding:10px 18px calc(18px + env(safe-area-inset-bottom,0px));
+  background:#151a23;border-radius:24px 24px 0 0;border:1px solid rgba(255,255,255,.08);border-bottom:none;
+  transform:translateY(105%);transition:transform .3s cubic-bezier(.22,1,.36,1);
+}
+#bpfNicheSheet.on .bpfn-card{transform:none}
+#bpfNicheSheet .bpfn-grab{width:38px;height:4px;border-radius:4px;background:rgba(255,255,255,.18);margin:0 auto 14px}
+#bpfNicheSheet .bpfn-h{font-size:19px;font-weight:800;color:#fff;letter-spacing:-.3px}
+#bpfNicheSheet .bpfn-s{font-size:13px;color:#8e98ab;margin:4px 0 14px;line-height:1.45}
+#bpfNicheSheet .bpfn-chips{display:flex;flex-wrap:wrap;gap:8px}
+#bpfNicheSheet .bpfn-c{
+  height:38px;padding:0 14px;border-radius:999px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);color:#d6dbe5;
+  display:inline-flex;align-items:center;gap:6px;-webkit-tap-highlight-color:transparent;transition:background .15s,border-color .15s,color .15s;
+}
+#bpfNicheSheet .bpfn-c.on{background:#2f6ce0;border-color:#2f6ce0;color:#fff}
+#bpfNicheSheet .bpfn-c.dim{opacity:.4}
+#bpfNicheSheet .bpfn-c svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+#bpfNicheSheet .bpfn-go{
+  margin-top:18px;width:100%;height:50px;border-radius:16px;border:none;cursor:pointer;
+  background:#2f6ce0;color:#fff;font:inherit;font-size:15.5px;font-weight:800;
+}
+
+/* ── каналы в профиле: блок редактора, значки как в каталоге ── */
+#pg-profile #bpfChHost #epcBox{margin-top:2px}
+#epcBox .epc-ava.epc-sico:not(.soc-box-yt),#epcSheet .epc-opt-ic:not(.soc-box-yt){background:transparent!important;border:none!important}
+#epcSheet .epc-opt-ic,#epcBox .epc-ava,#epcBox .epc-badge{border-radius:50%!important}
+#epcSheet .epc-opt-ic,#epcBox .epc-ava.epc-sico,#epcBox .epc-badge{overflow:hidden}
+#epcBox .epc-badge{outline:2px solid #191e27}
+
+/* ── соцсети везде круглые ── */
+html body .bpc6-ic,html body .blp-soc-i,html body .cpw-soc-ic,html body #verifyPlatformIcon,
+html body #pg-profile .pf2-row .av[class*="p-"]{border-radius:50%!important}
+@media (prefers-reduced-motion:reduce){ #bpfNicheSheet,#bpfNicheSheet .bpfn-card{transition:none} }
+</style>
+<script id="bp-pfmerge">
+(function(){
+'use strict';
+if(window.__bpPfMerge) return; window.__bpPfMerge = 1;
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'pfmerge'); }catch(_){} }
+function $(id){ return document.getElementById(id); }
+function me(){ try{ return (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null; }catch(e){ return null; } }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function toast(m, k){ try{ if(typeof showAuthToast === 'function') showAuthToast(m, k || 'ok'); }catch(e){} }
+function isAdv(){ try{ return (typeof _isAdvertiser !== 'undefined') && !!_isAdvertiser; }catch(e){ return false; } }
+
+/* ═══ 1. ИКОНКИ РАЗДЕЛОВ ШТОРКИ ═══
+   Перерисованы вектором с присланных картинок: те же предметы и
+   акценты (синяя галочка, зелёные «+» и «✓»), одна толщина линий. */
+var IC = {
+  // 1. Задания — планшет: три строки, первая галочка синяя
+  tasks: '<path d="M8.4 4.8H7.3a2.5 2.5 0 0 0-2.5 2.5v12.2a2.5 2.5 0 0 0 2.5 2.5h9.4a2.5 2.5 0 0 0 2.5-2.5V7.3a2.5 2.5 0 0 0-2.5-2.5h-1.1"/>'
+       + '<path d="M9.4 3.6h1.2a1.5 1.5 0 0 1 2.8 0h1.2a.8.8 0 0 1 .8.8v1.4a.8.8 0 0 1-.8.8H9.4a.8.8 0 0 1-.8-.8V4.4a.8.8 0 0 1 .8-.8z"/>'
+       + '<g stroke-width="1.15"><rect x="7.1" y="8.9" width="3.7" height="3.7" rx=".9" stroke="#3b82f6"/><path d="M8 10.8l.85.85 1.2-1.45" stroke="#3b82f6"/>'
+       + '<rect x="7.1" y="13.9" width="3.7" height="3.7" rx=".9" opacity=".65"/>'
+       + '<path d="M12.8 10.75h3.9M12.8 15.75h3.9" stroke-width="1.35" opacity=".8"/></g>',
+  // 2. Главная — дом с дверью
+  home: '<path d="M4.4 10.3 12 4.3l7.6 6v9.1a1.6 1.6 0 0 1-1.6 1.6H6a1.6 1.6 0 0 1-1.6-1.6z"/><path d="M10 21v-5.2h4V21"/>',
+  // 3. Избранное — закладка
+  fav: '<path d="M7.3 3.8h9.4a1.4 1.4 0 0 1 1.4 1.4v15.3L12 15.9l-6.1 4.6V5.2a1.4 1.4 0 0 1 1.4-1.4z"/>',
+  // 4. Чаты — два облачка, в переднем две строки
+  chats: '<path d="M5.5 4h8a2.4 2.4 0 0 1 2.4 2.4v4.7a2.4 2.4 0 0 1-2.4 2.4H8.4l-3 2.5v-2.5A2.4 2.4 0 0 1 3.1 11V6.4A2.4 2.4 0 0 1 5.5 4z"/>'
+       + '<path d="M6.5 7.6h5.8M6.5 10h3.6" stroke-width="1.3" opacity=".85"/>'
+       + '<path d="M16 8.7h2.5a2.4 2.4 0 0 1 2.4 2.4v4.5a2.4 2.4 0 0 1-2.2 2.4V20l-2.9-2h-3.7a2.4 2.4 0 0 1-2.2-1.5"/>',
+  // 5. Уведомления — колокольчик
+  bell: '<path d="M12 3.3v1"/><path d="M6.5 10.4a5.5 5.5 0 0 1 11 0c0 4.5 1.4 6.2 2.3 7H4.2c.9-.8 2.3-2.5 2.3-7z"/><path d="M10.2 20.3a2 2 0 0 0 3.6 0"/>',
+  // 6. Настройки — шестерёнка
+  gear: '<path d="M10.3 3.3h3.4l.5 2.3a6.6 6.6 0 0 1 1.7 1l2.2-.8 1.7 2.9-1.8 1.6a6.7 6.7 0 0 1 0 2l1.8 1.6-1.7 2.9-2.2-.8a6.6 6.6 0 0 1-1.7 1l-.5 2.3h-3.4l-.5-2.3a6.6 6.6 0 0 1-1.7-1l-2.2.8-1.7-2.9 1.8-1.6a6.7 6.7 0 0 1 0-2L4.3 8.7 6 5.8l2.2.8a6.6 6.6 0 0 1 1.7-1z"/><circle cx="12" cy="12" r="2.6"/>',
+  // 7. Разместить карту блогера — карточка профиля и зелёный «+»
+  card: '<path d="M13.6 18H5.6a2.4 2.4 0 0 1-2.4-2.4V6.8a2.4 2.4 0 0 1 2.4-2.4h11.2a2.4 2.4 0 0 1 2.4 2.4v4.4"/>'
+      + '<circle cx="7.7" cy="8.9" r="2.4" stroke-width="1.3"/><circle cx="7.7" cy="8.3" r="1" fill="currentColor" stroke="none"/><path d="M6.1 10.6a2.1 2.1 0 0 1 3.2 0" stroke-width="1.2"/>'
+      + '<path d="M11.6 7.9h4.6M11.6 10.2h3" stroke-width="1.3" opacity=".85"/>'
+      + '<rect x="5.4" y="13.2" width="2.4" height="2.3" rx=".6" fill="currentColor" stroke="none" opacity=".5"/><rect x="9" y="13.2" width="2.4" height="2.3" rx=".6" fill="currentColor" stroke="none" opacity=".5"/>'
+      + '<circle cx="17.9" cy="17.6" r="4.4" fill="#12a88a" stroke="var(--bp-tile,#1a1f29)" stroke-width="1.5"/><path d="M17.9 15.7v3.8M16 17.6h3.8" stroke="#fff" stroke-width="1.6"/>',
+  // 8. Поддержка — гарнитура и облачко с точками
+  help: '<path d="M5 11.6a7 7 0 0 1 14 0"/>'
+      + '<rect x="3.3" y="11" width="3" height="5.6" rx="1.4"/><rect x="17.7" y="11" width="3" height="5.6" rx="1.4"/>'
+      + '<path d="M19.2 16.6v.4a3 3 0 0 1-3 3h-1.4" stroke-width="1.3"/><rect x="11" y="19" width="3.8" height="2.1" rx="1.05" fill="currentColor" stroke="none"/>'
+      + '<path d="M9.5 8.2h5a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3.4l-2 1.5v-1.6a1.5 1.5 0 0 1-1.1-1.4v-3a1.5 1.5 0 0 1 1.5-1.5z" stroke-width="1.3"/>'
+      + '<g fill="currentColor" stroke="none"><circle cx="10.3" cy="11.2" r=".7"/><circle cx="12" cy="11.2" r=".7"/><circle cx="13.7" cy="11.2" r=".7"/></g>',
+  // 9. Мои офферы — документ со списком и зелёная галочка
+  offers: '<path d="M13.4 20.4H6.6a2.2 2.2 0 0 1-2.2-2.2V5.6a2.2 2.2 0 0 1 2.2-2.2h7.6a2.2 2.2 0 0 1 2.2 2.2v5.6"/>'
+        + '<path d="M16.4 5.8h.4a2.2 2.2 0 0 1 2.2 2.2v3.2" opacity=".55"/>'
+        + '<rect x="6.5" y="5.6" width="3.1" height="3.1" rx=".7" fill="currentColor" stroke="none" opacity=".55"/>'
+        + '<g stroke-width="1.3"><path d="M11.1 6.4h3.2M11.1 8.2h2.2" opacity=".85"/>'
+        + '<circle cx="7.6" cy="12" r=".95" stroke="#12a88a"/><path d="M10.1 12h4.1" opacity=".85"/>'
+        + '<path d="M10.1 15.3h2.6" opacity=".85"/></g><circle cx="7.6" cy="15.3" r="1" fill="currentColor" stroke="none" opacity=".55"/>'
+        + '<circle cx="17.6" cy="17.6" r="4.4" fill="#12a88a" stroke="var(--bp-tile,#1a1f29)" stroke-width="1.5"/><path d="M15.7 17.7l1.3 1.3 2.6-2.8" stroke="#fff" stroke-width="1.6"/>',
+  // 10. Моя занятость — календарь (рисунка не было — в том же стиле)
+  cal: '<rect x="3.9" y="5.1" width="16.2" height="15.3" rx="2.6"/><path d="M8.3 3.3v3.4M15.7 3.3v3.4M3.9 9.7h16.2"/>'
+     + '<g stroke="none"><rect x="7" y="12.4" width="2.4" height="2.2" rx=".6" fill="currentColor" opacity=".55"/><rect x="10.8" y="12.4" width="2.4" height="2.2" rx=".6" fill="#3b82f6"/><rect x="14.6" y="12.4" width="2.4" height="2.2" rx=".6" fill="currentColor" opacity=".55"/><rect x="7" y="16" width="2.4" height="2.2" rx=".6" fill="currentColor" opacity=".55"/><rect x="10.8" y="16" width="2.4" height="2.2" rx=".6" fill="currentColor" opacity=".55"/></g>',
+};
+var CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" width="15" height="15"><polyline points="9 18 15 12 9 6"/></svg>';
+function keyOf(it){
+  if(it.id === 'drwTasks') return 'tasks';
+  if(it.id === 'bpNgMenuCal') return 'cal';
+  var oc = it.getAttribute('onclick') || '';
+  if(/goTo\('home'\)/.test(oc)) return 'home';
+  if(/goTo\('campaigns'\)/.test(oc)) return 'offers';
+  if(/goTo\('chats'\)/.test(oc)) return 'chats';
+  if(/goTo\('add-blogger-card'\)/.test(oc)) return 'card';
+  if(/goTo\('favorites'\)/.test(oc)) return 'fav';
+  if(/goTo\('settings'\)/.test(oc)) return 'gear';
+  if(/bpToggleNotifPanel/.test(oc)) return 'bell';
+  var lb = it.querySelector('.drw-item-lbl');
+  if(/^\s*Поддержка\s*$/.test(lb ? lb.textContent : '')) return 'help';
+  return '';
+}
+/* пункты, собранные без .drw-item-ico («Задания», «Мои задания»),
+   приводим к общей разметке: плитка, подпись, стрелка */
+function normalize(it){
+  if(it.querySelector(':scope > .drw-item-ico')) return;
+  var sv = it.querySelector(':scope > svg');
+  var txt = (it.textContent || '').replace(/\s+/g, ' ').trim();
+  var ico = document.createElement('div'); ico.className = 'drw-item-ico';
+  if(sv) ico.appendChild(sv);
+  it.textContent = '';
+  it.appendChild(ico);
+  var lb = document.createElement('span'); lb.className = 'drw-item-lbl'; lb.textContent = txt; it.appendChild(lb);
+  var ar = document.createElement('div'); ar.className = 'drw-item-arr'; ar.innerHTML = CHEV; it.appendChild(ar);
+  it.classList.add('bpdi-fix');
+}
+function paintItem(it){
+  try{
+    normalize(it);
+    var ico = it.querySelector(':scope > .drw-item-ico'); if(!ico) return;
+    if(!it.querySelector(':scope > .drw-item-arr')){
+      var ar = document.createElement('div'); ar.className = 'drw-item-arr'; ar.innerHTML = CHEV; it.appendChild(ar);
+    }
+    var k = keyOf(it);
+    if(k === 'help' && !it.__bpHelp){
+      it.__bpHelp = 1;
+      it.setAttribute('role', 'button'); if(!it.hasAttribute('tabindex')) it.tabIndex = 0;
+      it.addEventListener('click', function(){
+        try{ if(typeof closeDrawer === 'function') closeDrawer(); }catch(e){}
+        setTimeout(function(){ try{ if(typeof openHelpSheet === 'function') openHelpSheet(); }catch(e){ E(e); } }, 120);
+      });
+    }
+    if(!k || !IC[k] || ico.querySelector(':scope > svg.bpdi')) return;
+    ico.insertAdjacentHTML('afterbegin', '<svg class="bpdi" viewBox="0 0 24 24" aria-hidden="true">' + IC[k] + '</svg>');
+    ico.classList.add('bpdi-on');
+  }catch(e){ E(e); }
+}
+function paintNav(){
+  var nav = document.querySelector('#drw .drw-nav'); if(!nav) return;
+  [].forEach.call(nav.querySelectorAll(':scope > .drw-item'), paintItem);
+}
+
+/* ═══ 2. КАРТОЧКА ПОЛЬЗОВАТЕЛЯ В ШТОРКЕ ═══ */
+function paintUser(){
+  try{
+    var box = document.querySelector('#drw .drw-user'); if(!box) return;
+    var u = me(), k = (u && u.kyc && u.kyc.identity) || {};
+    var ver = k.status === 'verified';
+    if(box.classList.contains('bp-ver') !== ver) box.classList.toggle('bp-ver', ver);
+  }catch(e){ E(e); }
+}
+
+/* ═══ 3. ПРОФИЛЬ: ФОТО ═══ */
+var CAM = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.4-2h5l1.4 2h1.6A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.3"/></svg>';
+function fileInp(){
+  var f = $('bpfFile'); if(f) return f;
+  f = document.createElement('input'); f.type = 'file'; f.id = 'bpfFile'; f.accept = 'image/*';
+  f.style.cssText = 'position:fixed;left:-9999px;width:1px;height:1px;opacity:0';
+  f.addEventListener('change', function(){
+    try{ if(typeof epHandlePhoto === 'function') epHandlePhoto(f); }catch(e){ E(e); }
+    setTimeout(function(){ f.value = ''; }, 0);
+  });
+  document.body.appendChild(f);
+  return f;
+}
+window.bpPfPickPhoto = function(){ try{ fileInp().click(); }catch(e){ E(e); } };
+function mountAva(){
+  var ava = document.querySelector('#pg-profile .pf-ava'); if(!ava || ava.__bpf) return;
+  ava.__bpf = 1;
+  ava.setAttribute('role', 'button'); ava.setAttribute('aria-label', 'Сменить фото'); ava.tabIndex = 0;
+  var b = document.createElement('span'); b.className = 'bpf-cam'; b.innerHTML = CAM; b.setAttribute('aria-hidden', 'true');
+  ava.appendChild(b);
+  ava.addEventListener('click', function(e){ e.stopPropagation(); window.bpPfPickPhoto(); });
+  ava.addEventListener('keydown', function(e){ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); window.bpPfPickPhoto(); } });
+}
+
+/* ═══ 4. ПРОФИЛЬ: «ЛИЧНЫЕ ДАННЫЕ» ═══
+   Поля сохраняются сами, когда человек уходит из поля: кнопки
+   «Сохранить» больше нет. id без «name»/«site»: bp-validate вешает
+   проверку формата по словам в id. */
+var I = {
+  user:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3.7"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></svg>',
+  city:'<svg viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/></svg>',
+  home:'<svg viewBox="0 0 24 24"><path d="M4.5 10.3 12 4.3l7.5 6v8.9a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M10 20.7v-5h4v5"/></svg>',
+  web:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5S9.7 5.9 12 3.5z"/></svg>',
+  tag:'<svg viewBox="0 0 24 24"><path d="M3.8 12.6V5.3a1.5 1.5 0 0 1 1.5-1.5h7.3l7.6 7.6a1.5 1.5 0 0 1 0 2.1l-7.2 7.2a1.5 1.5 0 0 1-2.1 0z"/><circle cx="8.4" cy="8.4" r="1.4"/></svg>'
+};
+var OKI = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+var CH = '<svg class="bpf-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>';
+var FIELDS = [
+  { k:'name',    id:'bpfN',    ic:'user', t:'Имя',   ph:'Как к вам обращаться', max:40,  ac:'name' },
+  { k:'city',    id:'bpfCity', ic:'city', t:'Город', ph:'Например, Москва',     max:50,  ac:'address-level2' },
+  { k:'address', id:'bpfAddr', ic:'home', t:'Адрес', ph:'Улица, дом, квартира', max:120, ac:'street-address' },
+  { k:'website', id:'bpfWeb',  ic:'web',  t:'Сайт',  ph:'https://…',            max:100, ac:'url', type:'url' }
+];
+function nicheText(u){ var n = (u && Array.isArray(u.niches)) ? u.niches : []; return n.join(' · '); }
+function dataEl(){
+  var d = $('bpfData'); if(d) return d;
+  var card = document.querySelector('#pg-profile .pf-card'); if(!card || !card.parentNode) return null;
+  d = document.createElement('div'); d.id = 'bpfData'; d.className = 'pf2-sec';
+  var rows = FIELDS.map(function(f){
+    return '<label class="bpf-row" for="' + f.id + '"><span class="bpf-ic">' + I[f.ic] + '</span>'
+      + '<span class="bpf-tx"><i>' + f.t + '</i><input id="' + f.id + '" data-bpf="' + f.k + '" type="' + (f.type || 'text') + '"'
+      + ' maxlength="' + f.max + '" autocomplete="' + f.ac + '" enterkeyhint="done" placeholder="' + esc(f.ph) + '"></span>'
+      + '<span class="bpf-ok" aria-hidden="true">' + OKI + '</span></label>';
+  }).join('')
+    + '<button type="button" class="bpf-row" id="bpfNicheRow"><span class="bpf-ic">' + I.tag + '</span>'
+    + '<span class="bpf-tx"><i>Тематика</i><span class="bpf-nv" id="bpfNicheV"></span></span>' + CH + '</button>';
+  d.innerHTML = '<div class="pf2-h"><div><span style="display:inline;font-size:inherit;font-weight:inherit;color:inherit;margin:0">Личные данные</span>'
+    + '<span>Сохраняется само — кнопки «Сохранить» нет</span></div></div>'
+    + '<div class="pf2-list bpf-list">' + rows + '</div>'
+    + '<div class="bpf-note">Адрес видите только вы — рекламодателям он не показывается.</div>';
+  card.parentNode.insertBefore(d, card.nextSibling);
+  d.addEventListener('change', onChange);
+  d.addEventListener('keydown', function(e){
+    if(e.key === 'Enter' && e.target && e.target.hasAttribute('data-bpf')){ e.preventDefault(); e.target.blur(); }
+  });
+  $('bpfNicheRow').addEventListener('click', function(){ window.bpPfNiches(); });
+  return d;
+}
+function fill(){
+  var d = dataEl(), u = me(); if(!d || !u) return;
+  FIELDS.forEach(function(f){
+    var el = $(f.id); if(!el || el === document.activeElement) return;
+    var v = String(u[f.k] == null ? '' : u[f.k]);
+    if(el.value !== v) el.value = v;
+  });
+  var nv = $('bpfNicheV');
+  if(nv){ var t = nicheText(u); nv.textContent = t || 'Выберите до четырёх'; nv.classList.toggle('empty', !t); }
+}
+function persist(u){
+  try{ if(typeof saveUsers === 'function') saveUsers(); }catch(e){ E(e); }
+  try{ if(typeof saveSession === 'function') saveSession(u); }catch(e){ E(e); }
+  try{ if(typeof updateProfileUI === 'function') updateProfileUI(); }catch(e){ E(e); }
+}
+function onChange(e){
+  var el = e.target; if(!el || !el.hasAttribute || !el.hasAttribute('data-bpf')) return;
+  var k = el.getAttribute('data-bpf'), u = me(); if(!u) return;
+  var v = String(el.value || '').replace(/\s+/g, ' ').trim();
+  if(k === 'name' && !v){ el.value = u.name || ''; toast('Имя не может быть пустым', 'err'); return; }
+  if(k === 'website' && v && !/^https?:\/\//i.test(v)) v = 'https://' + v;
+  el.value = v;
+  if(String(u[k] == null ? '' : u[k]) === v) return;
+  u[k] = v;
+  persist(u);
+  var ok = el.closest('.bpf-row') && el.closest('.bpf-row').querySelector('.bpf-ok');
+  if(ok){ ok.classList.add('on'); clearTimeout(ok.__t); ok.__t = setTimeout(function(){ ok.classList.remove('on'); }, 1600); }
+}
+window.bpPfFocus = function(which){
+  try{
+    var d = dataEl(); if(!d) return;
+    fill();
+    d.scrollIntoView({ block:'center', behavior:'smooth' });
+    var el = $(which === 'city' ? 'bpfCity' : 'bpfN');
+    if(el) setTimeout(function(){ try{ el.focus({ preventScroll:true }); }catch(e){} }, 420);
+  }catch(e){ E(e); }
+};
+
+/* ═══ 5. ТЕМАТИКИ — шторка ═══ */
+var nsh = null, sel = [];
+function NICHES(){ try{ return EP_NICHES.slice(); }catch(e){ return ['Маркетинг','Лайфстайл','Финансы','Игры','Бьюти','Технологии','Бизнес','Мода','Еда','Путешествия','Спорт','Авто','Образование','Семья','Юмор']; } }
+function MAXN(){ try{ return EP_NICHE_MAX || 4; }catch(e){ return 4; } }
+function paintN(){
+  if(!nsh) return;
+  var max = MAXN(), full = sel.length >= max;
+  nsh.querySelector('.bpfn-chips').innerHTML = NICHES().map(function(n){
+    var on = sel.indexOf(n) >= 0;
+    return '<button type="button" class="bpfn-c' + (on ? ' on' : (full ? ' dim' : '')) + '" data-n="' + esc(n) + '" aria-pressed="' + on + '">'
+      + (on ? OKI : '') + esc(n) + '</button>';
+  }).join('');
+  nsh.querySelector('.bpfn-s').textContent = sel.length
+    ? 'Выбрано ' + sel.length + ' из ' + max + (full ? ' — это максимум' : '')
+    : 'До ' + max + ' направлений — ' + (isAdv() ? 'чем занимается ваш бизнес' : 'по ним рекламодатели находят блогеров');
+}
+function closeN(){ if(nsh){ nsh.classList.remove('on'); try{ var a = document.activeElement; if(a && nsh.contains(a)) a.blur(); }catch(e){} } }
+window.closeBpfNicheSheet = closeN;
+window.bpPfNiches = function(){
+  try{
+    var u = me(); if(!u) return;
+    sel = Array.isArray(u.niches) ? u.niches.slice(0, MAXN()) : (u.theme ? [u.theme] : []);
+    if(!nsh){
+      nsh = document.createElement('div'); nsh.id = 'bpfNicheSheet';
+      nsh.setAttribute('role', 'dialog'); nsh.setAttribute('aria-modal', 'true'); nsh.setAttribute('aria-label', 'Тематика');
+      nsh.innerHTML = '<div class="bpfn-card"><div class="bpfn-grab"></div><div class="bpfn-h">Тематика</div><div class="bpfn-s"></div>'
+        + '<div class="bpfn-chips"></div><button type="button" class="bpfn-go">Готово</button></div>';
+      nsh.addEventListener('click', function(e){
+        if(e.target === nsh){ closeN(); return; }
+        var c = e.target.closest('.bpfn-c');
+        if(c){
+          var n = c.getAttribute('data-n'), i = sel.indexOf(n);
+          if(i >= 0) sel.splice(i, 1);
+          else if(sel.length >= MAXN()){ toast('Можно выбрать до ' + MAXN(), 'err'); return; }
+          else sel.push(n);
+          paintN(); return;
+        }
+        if(e.target.closest('.bpfn-go')){
+          var u2 = me(); if(!u2) return;
+          u2.niches = sel.slice();
+          u2.theme = sel[0] || '';
+          persist(u2); fill(); closeN();
+          toast('Тематика сохранена', 'ok');
+        }
+      });
+      document.body.appendChild(nsh);
+    }
+    paintN();
+    /* системная «Назад» (bp-nav closeLayer) в крайнем случае ставит
+       display:none — снимаем, иначе шторка больше не откроется */
+    nsh.style.removeProperty('display');
+    requestAnimationFrame(function(){ nsh.classList.add('on'); });
+  }catch(e){ E(e); }
+};
+
+/* ═══ 6. ЭКРАН РЕДАКТИРОВАНИЯ УБРАН ═══
+   Разметка вырезана. Старые входы ведут в профиль, к «Личным данным».
+   saveEditProfile глушим: без полей экрана она стёрла бы «О себе» и
+   ссылки на каналы (читала пустые значения). */
+window.openEditProfile = function(){
+  try{
+    var pg = $('pg-profile');
+    if(typeof goTo === 'function' && !(pg && pg.classList.contains('on'))) goTo('profile');
+  }catch(e){ E(e); }
+  setTimeout(function(){ window.bpPfFocus(); }, 160);
+};
+window.closeEditProfile = function(){};
+window.saveEditProfile = function(){};
+
+/* ═══ сборка ═══ */
+function onProfile(){
+  try{
+    mountAva(); fill();
+    if(typeof window.bpEpcRefresh === 'function' && !isAdv()) window.bpEpcRefresh();
+  }catch(e){ E(e); }
+}
+function wrap(name, after){
+  var o = window[name]; if(typeof o !== 'function' || o.__bpf) return;
+  var w = function(){ var r = o.apply(this, arguments); try{ after.apply(this, arguments); }catch(e){ E(e); } return r; };
+  w.__bpf = 1; window[name] = w;
+}
+wrap('updateProfileUI', function(){ paintUser(); if($('bpfData')) fill(); });
+wrap('goTo', function(id){ if(String(id) === 'profile') setTimeout(onProfile, 80); });
+wrap('bpPf2RenderDone', function(){ paintUser(); });
+function boot(){
+  paintNav(); paintUser();
+  var nav = document.querySelector('#drw .drw-nav');
+  if(nav && typeof MutationObserver !== 'undefined') new MutationObserver(paintNav).observe(nav, { childList:true });
+  var drw = $('drw');
+  if(drw && typeof MutationObserver !== 'undefined') new MutationObserver(function(){ if(drw.classList.contains('open')) paintUser(); }).observe(drw, { attributes:true, attributeFilter:['class'] });
+  var pg = $('pg-profile');
+  if(pg && pg.classList.contains('on')) onProfile();
+}
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+setTimeout(function(){ paintNav(); paintUser(); }, 1500);
 })();
 </script>
 </body>
