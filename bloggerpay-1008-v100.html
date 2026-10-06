@@ -76572,8 +76572,8 @@ function pull(force){
     var have = {};
     a.forEach(function(r){ if(r && r.key) have[r.key] = 1; });
     rows.forEach(function(r){
-      /* Выплата за привязанное видео (bp-vbind): её проводит сам сервер в
-         конце подсчёта, ключ sys:vidpay:<номер ролика>, оффер — в dealId.
+      /* Выплата за загруженное видео (bp-vbind): её проводит сам сервер в
+         момент зачёта, ключ sys:vidpay:<номер ролика>, оффер — в dealId.
          Без этой записи «свободно в бюджете» не уменьшалось бы. */
       var mv = /^sys:vidpay:(\d+)$/.exec(String(r.opKey || ''));
       var md = /^camp:(.+)$/.exec(String(r.dealId || ''));
@@ -76582,7 +76582,7 @@ function pull(force){
         if(!have[vk]){
           a.push({ key: vk, kind: 'camp_payout', campId: md[1], userId: 'srv' + String(r.to || ''), round: 0,
                    amount: Number(r.paid), at: Date.parse(String(r.at || '').replace(' ', 'T') + 'Z') || Date.now(),
-                   server: 1, video: Number(mv[1]), reason: 'Выплата за видео из TikTok (касса)' });
+                   server: 1, video: Number(mv[1]), reason: 'Выплата за видео (касса)' });
           have[vk] = 1; added++;
         }
         return;
@@ -80797,6 +80797,7 @@ window.doLogout = function(){
     try{ localStorage.removeItem('bpVfyClaim'); }catch(e){}
     try{ if(typeof window.bpAbcDropCache === 'function') window.bpAbcDropCache(); }catch(e){ E(e); }
     try{ if(typeof window.bpPf2DropChannels === 'function') window.bpPf2DropChannels(); }catch(e){ E(e); }
+    try{ if(typeof window.bpVbDropCache === 'function') window.bpVbDropCache(); }catch(e){ E(e); }
     /* Память мастера карточки живёт до перезагрузки вкладки — чистим
        поля площадок руками, иначе новый человек увидит чужие ссылки. */
     try{
@@ -83520,7 +83521,7 @@ function busy(){
     if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return true;
     if(a && a.isContentEditable) return true;
     /* Открытая шторка — тоже занятость: человек в середине действия. */
-    if(document.querySelector('.sheet.on, .ov.on, #alkSheet, #bpInst, .glg-ov')) return true;
+    if(document.querySelector('.sheet.on, .ov.on, #alkSheet, #bpInst, .glg-ov, .vb-sheet.on, #bpTaskSheet')) return true;
   }catch(e){}
   return false;
 }
@@ -92995,15 +92996,29 @@ setTimeout(function(){ paintNav(); paintUser(); }, 1500);
 })();
 </script>
 <style id="bp-vbind-css">
-/* ══ «ПРИВЯЗАТЬ ВИДЕО» (bp-vbind, 06.10.2026) ═══════════════════════
-   Владелец: вместо «Сдать работу» — «Привязать видео»: блогер вставляет
-   ссылку на ролик из подтверждённого TikTok, сайт сам берёт данные и
-   пишет «Подключено»; данные обновляются каждый день; накрутку ловит
-   сервер и сообщает владельцу; рекламодатель проверяет интеграцию —
-   «всё верно» засчитывает видео, «есть проблема» уходит владельцу.
-   Источник правды — сервер (server/VIDEO-SPEC.md): просмотры в
-   приложении только показываются, сумму считает и платит касса.
-   Для баннеров, UGC и заданий без TikTok остаётся прежняя сдача.
+/* ══ «ЗАГРУЗИТЬ ВИДЕО» (bp-vbind v2, 06.10.2026) ════════════════════
+   Владелец: «в задании при вступлении кнопка ЗАГРУЗИТЬ ВИДЕО — блогер
+   выбирает аккаунт, на котором есть это видео, система смотрит, что
+   видео есть на этом аккаунте — и оно отправляется; если нет — пишет
+   причину»; «опирайся на механику и функционал как у More Views».
+   • кнопка «Загрузить видео» во всех заданиях с TikTok или YouTube
+     (клипы, баннеры, UGC, другое) — кроме офферов, где площадки заданы
+     и среди них нет ни TikTok, ни YouTube: там прежняя «Сдать работу»;
+   • окно «Загрузка видео»: аккаунт из подключённых (свой выпадающий
+     список, «+ Подключить аккаунт»), ссылка, отметка про рекламу;
+   • шторка задания — как страница задания у More Views: счётчики,
+     полоса бюджета, вкладки «Задача / Мои видео / Лидерборд / Участники»;
+   • засчитанное видео оплачивается сразу, по просмотрам в момент
+     проверки — считает и платит сервер (server/VIDEO-SPEC.md, раздел 10).
+   • 06.10, вечер: шторка задания один в один со страницей задания More
+     Views — сверху «Выплачено блогерам N ₽ из M ₽ · %», толстая полоса
+     (выплачено / в резерве / риска «Лимит выплат»), три плитки с иконками,
+     бирюзовая плашка; вкладки-таблетки с бейджами; «Лидерборд» таблицей
+     с «⇅ Сортировка» (по сумме выплаты ⇄ по просмотрам, board &sort=);
+     «Участники» таблицей с круглыми «Профиль» и «Чат»; вступившему —
+     плавающая синяя таблетка «⊕ Загрузить видео» по центру.
+   Имена классов обходят общие правила [class*="-list"], [class*="-sum"],
+   [class*="-plus"], [class*="-earned"], [class*="-x"][role].
    Откат: удалить style#bp-vbind-css и script#bp-vbind.               */
 
 /* карточка участника: без синих полос (две несостыкованные кромки) */
@@ -93016,7 +93031,20 @@ html body #pg-tasks .tk-card.hx .tk-mine{
 }
 html body #pg-tasks .tk-card.hx .tk-mine::before{content:'';width:6px;height:6px;border-radius:50%;background:#3ddc97;box-shadow:0 0 0 3px rgba(61,220,151,.18)}
 
-/* панель участия вместо «Свободно в бюджете» */
+/* ── значки площадок: круглые, как везде ── */
+.vb-pi{display:inline-grid;place-items:center;flex:none;border-radius:50%;width:22px;height:22px;background:#111;vertical-align:middle}
+.vb-pi svg{width:56%;height:56%;fill:#fff;display:block}
+.vb-pi.tt{background:#0f1115;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+.vb-pi.tt svg{filter:drop-shadow(.8px 0 0 #fe2c55) drop-shadow(-.8px 0 0 #25f4ee)}
+.vb-pi.yt{background:#ff0033}
+.vb-pi.yt svg{width:60%;height:60%}
+.vb-pi.vid{background:#2a3242}
+.vb-pi.sm{width:16px;height:16px}
+.vb-badge{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px 0 3px;border-radius:999px;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);font-size:11px;font-weight:700;color:#d6dbe5;white-space:nowrap;flex:none}
+.vb-badge .vb-pi{width:14px;height:14px}
+
+/* ── панель участия на карточке в списке ── */
 .vb-panel{
   margin:12px -15px -1px;padding:14px 15px 15px;border-radius:18px 18px 20px 20px;position:relative;
   background:linear-gradient(180deg,#19202d 0%,#141a25 100%);border-top:1px solid rgba(255,255,255,.07);
@@ -93027,166 +93055,547 @@ html body #pg-tasks .tk-card.hx .tk-mine::before{content:'';width:6px;height:6px
 .vb-p-go{
   margin-top:12px;width:100%;min-height:46px;border-radius:14px;border:none;cursor:pointer;
   display:flex;align-items:center;justify-content:center;gap:9px;font:inherit;font-size:14.5px;font-weight:800;
-  background:#2f6ce0;color:#fff;-webkit-tap-highlight-color:transparent;
+  background:#2f6ce0;color:#fff;-webkit-tap-highlight-color:transparent;transition:transform .16s cubic-bezier(.22,1,.36,1);
 }
+.vb-p-go svg{width:18px;height:18px;flex:none}
 .vb-p-go:active{transform:scale(.985)}
-.vb-p-go .vb-tt{width:20px;height:20px}
+.vb-p-go:focus-visible,.vb-go:focus-visible,.vb-dd-btn:focus-visible,.vb-tab:focus-visible,.vb-seg button:focus-visible,.vb-paste:focus-visible,.vb-mini:focus-visible{outline:2px solid #8fb6ff;outline-offset:2px}
 .vb-p-row{display:flex;align-items:center;gap:11px;margin-top:9px}
 .vb-p-row .vb-thumb{width:44px;height:58px;border-radius:10px}
 .vb-p-mid{flex:1;min-width:0}
 .vb-p-mid b{display:block;font-size:14px;font-weight:700;color:#eef2f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.vb-p-mid i{display:block;font-style:normal;font-size:12.5px;color:#98a2b3;margin-top:2px}
-.vb-p-money{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:11px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
-.vb-p-money span{font-size:12.5px;color:#98a2b3}
-.vb-p-money b{font-size:18px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums}
-.vb-bar{height:5px;border-radius:5px;background:rgba(255,255,255,.07);margin-top:8px;overflow:hidden}
-.vb-bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,#2f6ce0,#5b93f5)}
+.vb-p-mid i{display:block;font-style:normal;font-size:12.5px;color:#98a2b3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb-p-cnt{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.vb-p-cnt span{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:999px;box-sizing:border-box;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);font-size:12px;font-weight:600;color:#aab3c2;white-space:nowrap}
+.vb-p-cnt b{color:#fff;font-weight:800;font-variant-numeric:tabular-nums}
 .vb-more{font-size:12px;color:#7f8aa0;margin-top:8px}
 
-/* общие кусочки */
-.vb-tt{display:inline-grid;place-items:center;flex:none;border-radius:50%;background:#111;width:22px;height:22px}
-.vb-tt svg{width:58%;height:58%;fill:#fff;filter:drop-shadow(1px 0 0 #fe2c55) drop-shadow(-1px 0 0 #25f4ee)}
-.vb-thumb{position:relative;flex:none;overflow:hidden;background:linear-gradient(160deg,#25f4ee22,#fe2c5522),#10131a;display:grid;place-items:center}
+/* ── общие кусочки ── */
+.vb-thumb{position:relative;flex:none;overflow:hidden;background:linear-gradient(160deg,#25f4ee1f,#fe2c551f),#10131a;display:grid;place-items:center}
+.vb-thumb.yt{background:linear-gradient(160deg,#ff003322,#ff003308),#10131a}
 .vb-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.vb-thumb .vb-tt{width:24px;height:24px}
-.vb-thumb i{position:absolute;right:4px;bottom:4px;font-style:normal;font-size:10px;font-weight:700;color:#fff;background:rgba(0,0,0,.55);padding:1px 5px;border-radius:6px}
-.vb-pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;flex:none}
+.vb-thumb .vb-pi{width:24px;height:24px}
+.vb-thumb i{position:absolute;right:4px;bottom:4px;font-style:normal;font-size:10px;font-weight:700;color:#fff;background:rgba(0,0,0,.6);padding:1px 5px;border-radius:6px}
+.vb-pill{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap;flex:none;box-sizing:border-box}
 .vb-pill.is-wait{background:rgba(91,147,245,.14);color:#a9c6ff;border:1px solid rgba(91,147,245,.3)}
 .vb-pill.is-ok{background:rgba(61,220,151,.13);color:#7ff0bd;border:1px solid rgba(61,220,151,.32)}
 .vb-pill.is-warn{background:rgba(245,158,11,.13);color:#fcd38d;border:1px solid rgba(245,158,11,.32)}
 .vb-pill.is-bad{background:rgba(239,68,68,.12);color:#fca5a5;border:1px solid rgba(239,68,68,.3)}
 .vb-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:12px}
+.vb-stats.three{grid-template-columns:repeat(3,minmax(0,1fr))}
 .vb-st{padding:9px 6px 8px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);text-align:center;min-width:0}
 .vb-st b{display:block;font-size:15px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vb-st i{display:block;font-style:normal;font-size:11px;color:#8e98ab;margin-top:2px}
 .vb-st b small{font-size:10.5px;font-weight:700;color:#c4cbd8;margin-left:2px}
+.vb-ava{width:36px;height:36px;border-radius:50%;flex:none;display:grid;place-items:center;position:relative;
+  background:#232b38;color:#dce3ef;font-size:14px;font-weight:800;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.vb-ava img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:50%}
+.vb-ava > .vb-pi{width:100%;height:100%}
+.vb-ava .vb-pi-dot{position:absolute;right:-3px;bottom:-3px;width:16px;height:16px;box-shadow:0 0 0 2px var(--vb-ring,#151a23);z-index:1}
+#bpTaskSheet .vb-ava{--vb-ring:var(--bg2,#12161e)}
+.vb-opt .vb-ava{--vb-ring:#1b212c}
+.vb-dd-btn .vb-ava{--vb-ring:#0f131a}
+.vb-spin{width:18px;height:18px;border-radius:50%;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;animation:vbSpin .8s linear infinite;flex:none;box-sizing:border-box}
+@keyframes vbSpin{to{transform:rotate(360deg)}}
+.vb-sk{display:inline-block;min-width:44px;height:1em;border-radius:6px;background:rgba(255,255,255,.08);vertical-align:middle;animation:vbPulse 1.2s ease-in-out infinite}
+@keyframes vbPulse{50%{opacity:.45}}
 
-/* шторки */
+/* ── шторки ── */
 .vb-sheet{position:fixed;inset:0;z-index:720;display:flex;align-items:flex-end;justify-content:center;
-  background:rgba(5,7,12,0);pointer-events:none;visibility:hidden;transition:background .24s ease,visibility 0s linear .3s}
-.vb-sheet.on{background:rgba(5,7,12,.66);pointer-events:auto;visibility:visible;transition:background .24s ease,visibility 0s}
+  background:rgba(5,7,12,0);pointer-events:none;visibility:hidden;transition:background .22s ease,visibility 0s linear .26s}
+.vb-sheet.on{background:rgba(5,7,12,.66);pointer-events:auto;visibility:visible;transition:background .22s ease,visibility 0s}
 .vb-card{width:100%;max-width:520px;max-height:92dvh;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;
   padding:10px 18px calc(18px + env(safe-area-inset-bottom,0px));background:#151a23;border-radius:24px 24px 0 0;
-  border:1px solid rgba(255,255,255,.08);border-bottom:none;transform:translateY(105%);transition:transform .3s cubic-bezier(.22,1,.36,1)}
+  border:1px solid rgba(255,255,255,.08);border-bottom:none;transform:translateY(105%);transition:transform .26s cubic-bezier(.22,1,.36,1)}
 .vb-sheet.on .vb-card{transform:none}
+html body .vb-card:focus,html body .vb-card:focus-visible,html body .vb-dd-menu:focus,html body .vb-dd-menu:focus-visible{outline:none!important}
+.vb-dd-menu:focus-visible .vb-opt.act{box-shadow:inset 0 0 0 2px rgba(143,182,255,.75)}
 .vb-grab{width:38px;height:4px;border-radius:4px;background:rgba(255,255,255,.18);margin:0 auto 12px}
 .vb-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
-.vb-hd b{font-size:19px;font-weight:800;color:#fff;letter-spacing:-.3px}
-.vb-x{width:36px;height:36px;border:none;background:none;color:#c3cad6;font-size:26px;line-height:1;cursor:pointer;border-radius:10px;margin-right:-8px}
+.vb-hd b{font-size:19px;font-weight:800;color:#fff;letter-spacing:-.3px;min-width:0}
+.vb-x{width:44px;height:44px;border:none;background:none;color:#c3cad6;font-size:26px;line-height:1;cursor:pointer;border-radius:12px;margin:-6px -12px -6px 0;flex:none}
 .vb-x:active{background:rgba(255,255,255,.07)}
+.vb-x:focus-visible{outline:2px solid #8fb6ff;outline-offset:-4px}
 .vb-sub{font-size:13.5px;line-height:1.5;color:#98a2b3;margin:-4px 0 14px}
-.vb-acc{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:15px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
-.vb-acc-ava{width:40px;height:40px;border-radius:50%;overflow:hidden;flex:none;display:grid;place-items:center;background:#111}
-.vb-acc-ava img{width:100%;height:100%;object-fit:cover}
-.vb-acc-ava .vb-tt{width:40px;height:40px}
-.vb-acc-tx{flex:1;min-width:0}
-.vb-acc-tx b{display:block;font-size:14.5px;font-weight:700;color:#eef2f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.vb-acc-tx i{display:block;font-style:normal;font-size:12px;color:#7ff0bd;margin-top:1px}
+
+/* инфо-плашка, как у More Views */
+.vb-info{display:flex;gap:10px;padding:12px 13px;border-radius:14px;background:rgba(47,108,224,.09);border:1px solid rgba(91,147,245,.24)}
+.vb-info > svg{flex:none;width:19px;height:19px;color:#8fb6ff;margin-top:1px}
+.vb-info p{margin:0;font-size:13px;line-height:1.5;color:#c9d6ee}
+.vb-info p + p{margin-top:6px}
+.vb-info b{color:#fff}
+
+/* поле «Аккаунт»: свой выпадающий список */
 .vb-fld{display:block;margin-top:14px}
 .vb-fld-k{display:block;font-size:12.5px;font-weight:700;color:#98a2b3;margin-bottom:7px}
+.vb-dd-btn{width:100%;min-height:58px;box-sizing:border-box;display:flex;align-items:center;gap:11px;padding:9px 12px 9px 10px;border-radius:15px;cursor:pointer;
+  background:#0f131a;border:1px solid rgba(255,255,255,.12);color:#eef2f8;font:inherit;text-align:left;-webkit-tap-highlight-color:transparent;transition:border-color .16s}
+.vb-dd-btn[aria-expanded="true"]{border-color:#5b93f5}
+.vb-dd-btn:disabled{cursor:default}
+.vb-dd-btn .vb-ava{width:38px;height:38px}
+.vb-dd-tx{flex:1;min-width:0;display:block}
+.vb-dd-tx b{display:block;font-size:14.5px;font-weight:700;color:#eef2f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb-dd-tx b.ph{color:#98a2b3;font-weight:600}
+.vb-dd-tx > span{display:flex;align-items:center;gap:6px;margin-top:3px;font-size:12px;color:#8e98ab;white-space:nowrap;overflow:hidden}
+.vb-dd-tx .ok{color:#7ff0bd}
+.vb-dd-tx .warn{color:#fcd38d;font-weight:700}
+.vb-chev{width:18px;height:18px;flex:none;color:#8e98ab;transition:transform .18s cubic-bezier(.22,1,.36,1)}
+.vb-dd-btn[aria-expanded="true"] .vb-chev{transform:rotate(180deg)}
+.vb-dd-new{width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;background:rgba(47,108,224,.16);color:#8fb6ff;box-shadow:inset 0 0 0 1px rgba(91,147,245,.32)}
+.vb-dd-new svg{width:18px;height:18px}
+/* меню живёт в самой шторке (не в прокрутке карточки) — не обрезается */
+.vb-dd-menu{position:absolute;z-index:3;box-sizing:border-box;padding:6px;border-radius:16px;background:#1b212c;
+  border:1px solid rgba(255,255,255,.12);box-shadow:0 18px 44px rgba(0,0,0,.5);overflow-y:auto;overscroll-behavior:contain;outline:none;
+  opacity:0;transform:translateY(-4px);transition:opacity .16s ease,transform .18s cubic-bezier(.22,1,.36,1);pointer-events:none}
+.vb-dd-menu.up{transform:translateY(4px)}
+.vb-dd-menu.on{opacity:1;transform:none;pointer-events:auto}
+.vb-opt{display:flex;align-items:center;gap:11px;min-height:52px;padding:7px 10px;border-radius:11px;cursor:pointer;color:#eef2f8;-webkit-tap-highlight-color:transparent}
+.vb-opt .vb-ava{width:36px;height:36px}
+.vb-opt.act,.vb-opt:hover{background:rgba(255,255,255,.06)}
+.vb-opt[aria-selected="true"]{background:rgba(47,108,224,.14)}
+.vb-opt-tx{flex:1;min-width:0}
+.vb-opt-tx b{display:block;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb-opt-tx > span{display:flex;align-items:center;gap:6px;margin-top:2px;font-size:12px;color:#8e98ab;white-space:nowrap;overflow:hidden}
+.vb-opt-tx .warn{color:#fcd38d;font-weight:700}
+.vb-opt-ck{width:18px;height:18px;flex:none;color:#8fb6ff;opacity:0}
+.vb-opt[aria-selected="true"] .vb-opt-ck{opacity:1}
+.vb-opt-add{color:#8fb6ff;font-weight:700;font-size:14px}
+.vb-opt-add .vb-dd-new{width:36px;height:36px}
+.vb-opt + .vb-opt-add{margin-top:4px;border-top:1px solid rgba(255,255,255,.06);border-radius:0 0 11px 11px}
+.vb-add-pl{display:flex;gap:8px;padding:4px 6px 6px}
+.vb-add-pl[hidden]{display:none}
+.vb-add-pl button{flex:1;min-height:46px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#eef2f8;
+  font:inherit;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.vb-add-pl button:focus-visible{outline:2px solid #8fb6ff;outline-offset:1px}
+.vb-dd-empty{padding:12px 10px 8px;font-size:13px;line-height:1.45;color:#98a2b3}
+
+/* поле ссылки */
 .vb-fld-row{display:flex;gap:8px}
-.vb-fld-row input{flex:1;min-width:0;height:48px;box-sizing:border-box;padding:0 14px;border-radius:14px;
-  background:#0f131a;border:1px solid rgba(255,255,255,.12);color:#eef2f8;font:inherit;font-size:16px;outline:none}
+.vb-fld-row input{flex:1;min-width:0;height:50px;box-sizing:border-box;padding:0 14px;border-radius:14px;
+  background:#0f131a;border:1px solid rgba(255,255,255,.12);color:#eef2f8;font:inherit;font-size:16px;outline:none;transition:border-color .16s}
+.vb-fld-row input::placeholder{color:#6f7a8e}
 .vb-fld-row input:focus{border-color:#5b93f5}
 .vb-fld.bad .vb-fld-row input{border-color:#ef4444}
-.vb-paste{flex:none;height:48px;padding:0 14px;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#d6dbe5;font:inherit;font-size:14px;font-weight:700;cursor:pointer}
-.vb-err{min-height:0;font-size:13px;line-height:1.45;color:#fca5a5;margin-top:7px}
-.vb-err:empty{display:none}
-.vb-warn{display:flex;gap:10px;margin-top:14px;padding:12px 13px;border-radius:14px;background:rgba(245,158,11,.09);border:1px solid rgba(245,158,11,.28)}
+.vb-paste{flex:none;height:50px;padding:0 14px;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#d6dbe5;font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.vb-hint{display:flex;align-items:flex-start;gap:7px;font-size:13px;line-height:1.45;color:#fca5a5;margin-top:8px}
+.vb-hint:empty{display:none}
+.vb-hint.warn{color:#fcd38d}
+.vb-hint.info{color:#98a2b3}
+.vb-hint svg{width:15px;height:15px;flex:none;margin-top:2px}
+.vb-hint-go{display:block;margin-top:3px;background:none;border:none;padding:4px 0;font:inherit;font-weight:800;color:#8fb6ff;cursor:pointer;text-align:left;min-height:32px}
+
+/* «Видео не отправлено» */
+.vb-fail{display:flex;gap:11px;margin-top:14px;padding:13px 14px;border-radius:15px;background:rgba(239,68,68,.09);border:1px solid rgba(239,68,68,.34)}
+.vb-fail > svg{flex:none;width:21px;height:21px;color:#f87171;margin-top:1px}
+.vb-fail b{display:block;font-size:14.5px;font-weight:800;color:#fecaca}
+.vb-fail span{display:block;font-size:13.5px;line-height:1.5;color:#f3c5c5;margin-top:3px}
+.vb-fail .vb-mini{margin-top:10px}
+.vb-fail.in{animation:vbIn .2s cubic-bezier(.22,1,.36,1) backwards}
+
+.vb-warn{display:flex;gap:10px;margin-top:14px;padding:12px 13px;border-radius:14px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.26)}
 .vb-warn svg{flex:none;width:20px;height:20px;color:#fbbf24;margin-top:1px}
 .vb-warn b{display:block;font-size:13.5px;font-weight:800;color:#fde2b3;line-height:1.35}
 .vb-warn span{display:block;font-size:12.5px;line-height:1.45;color:#d9c39b;margin-top:3px}
-.vb-agree{display:flex;align-items:flex-start;gap:10px;margin-top:12px;cursor:pointer;font-size:14px;line-height:1.4;color:#d6dbe5;-webkit-tap-highlight-color:transparent}
-.vb-agree input{width:20px;height:20px;margin:0;flex:none;accent-color:#2f6ce0}
-.vb-go{margin-top:16px;width:100%;min-height:50px;border-radius:16px;border:none;cursor:pointer;
-  background:#2f6ce0;color:#fff;font:inherit;font-size:15.5px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:9px}
-.vb-go:disabled{background:rgba(47,108,224,.32);color:rgba(255,255,255,.6);cursor:default}
+.vb-agree{display:flex;align-items:flex-start;gap:11px;margin-top:12px;padding:4px 0;min-height:36px;cursor:pointer;font-size:14px;line-height:1.4;color:#d6dbe5;-webkit-tap-highlight-color:transparent}
+.vb-agree input{width:22px;height:22px;margin:0;flex:none;accent-color:#2f6ce0}
+.vb-btns{display:flex;gap:8px;margin-top:16px}
+.vb-btns .vb-go{margin-top:0;flex:1;min-width:0}
+.vb-btns .vb-go.ghost{flex:0 0 36%}
+.vb-go{margin-top:16px;width:100%;min-height:50px;border-radius:16px;border:none;cursor:pointer;padding:0 14px;box-sizing:border-box;
+  background:#2f6ce0;color:#fff;font:inherit;font-size:15.5px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:9px;
+  transition:background .16s,transform .16s cubic-bezier(.22,1,.36,1);-webkit-tap-highlight-color:transparent}
+.vb-go:active{transform:scale(.985)}
+.vb-go:disabled{background:rgba(47,108,224,.30);color:rgba(255,255,255,.55);cursor:default;transform:none}
+.vb-go.busy:disabled{background:#2f6ce0;color:#fff}
 .vb-go.ghost{background:rgba(255,255,255,.06);color:#e6eaf2;border:1px solid rgba(255,255,255,.1)}
-.vb-go.green{background:#12a88a}
-.vb-spin{width:18px;height:18px;border-radius:50%;border:2.5px solid rgba(255,255,255,.35);border-top-color:#fff;animation:vbSpin .8s linear infinite}
-@keyframes vbSpin{to{transform:rotate(360deg)}}
-.vb-how{margin-top:16px;padding:13px 14px;border-radius:15px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
-.vb-how b{display:block;font-size:13px;font-weight:800;color:#d6dbe5;margin-bottom:8px}
-.vb-how ol{margin:0;padding-left:19px;font-size:12.5px;line-height:1.55;color:#98a2b3}
-.vb-how li+li{margin-top:3px}
+.vb-go .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb-btns .vb-go{white-space:nowrap}
+.vb-mini{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:0 14px;border-radius:12px;cursor:pointer;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:#eef2f8;font:inherit;font-size:13.5px;font-weight:800}
+.vb-mini .vb-pi{width:18px;height:18px}
+.vb-mini.blue{background:#2f6ce0;border-color:#2f6ce0;color:#fff}
+.vb-linkbtn{background:none;border:none;padding:6px 2px;font:inherit;font-weight:700;color:#8fb6ff;cursor:pointer}
+.vb-alt{text-align:center;font-size:13px;color:#98a2b3;margin-top:12px}
 .vb-empty{text-align:center;padding:10px 4px 4px}
-.vb-empty .vb-tt{width:58px;height:58px;margin:4px auto 12px}
 .vb-empty b{display:block;font-size:17px;font-weight:800;color:#fff}
 .vb-empty span{display:block;font-size:13.5px;line-height:1.5;color:#98a2b3;margin-top:6px}
-.vb-done{display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:999px;
-  background:rgba(61,220,151,.14);border:1px solid rgba(61,220,151,.34);color:#7ff0bd;font-size:13.5px;font-weight:800}
-.vb-done svg{width:15px;height:15px}
-.vb-video{display:flex;gap:12px;margin-top:12px;align-items:center}
-.vb-video .vb-thumb{width:64px;height:86px;border-radius:12px}
+
+/* успех */
+.vb-okhero{display:flex;align-items:center;gap:12px;padding:2px 0 4px}
+.vb-okhero > i{width:44px;height:44px;border-radius:50%;flex:none;display:grid;place-items:center;background:rgba(47,108,224,.16);color:#8fb6ff;box-shadow:inset 0 0 0 1px rgba(91,147,245,.34)}
+.vb-okhero > i svg{width:22px;height:22px}
+.vb-okhero b{display:block;font-size:17px;font-weight:800;color:#fff;line-height:1.3}
+.vb-okhero span{display:block;font-size:13px;color:#98a2b3;margin-top:2px}
+.vb-video{display:flex;gap:12px;margin-top:14px;align-items:center;padding:11px;border-radius:15px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+.vb-video .vb-thumb{width:58px;height:78px;border-radius:11px}
 .vb-video-tx{flex:1;min-width:0}
-.vb-video-tx b{display:block;font-size:14.5px;font-weight:700;color:#eef2f8;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.vb-video-tx i{display:block;font-style:normal;font-size:12.5px;color:#98a2b3;margin-top:4px}
+.vb-video-tx b{font-size:14.5px;font-weight:700;color:#eef2f8;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.vb-video-tx .vb-vc-h{display:flex;align-items:center;gap:6px;font-size:12.5px;color:#98a2b3;margin-top:5px;white-space:nowrap;overflow:hidden}
+.vb-money{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:12px;padding:12px 14px;border-radius:14px;background:rgba(47,108,224,.08);border:1px solid rgba(91,147,245,.2)}
+.vb-money span{font-size:13px;color:#a9b8d4;line-height:1.35}
+.vb-money b{font-size:19px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap}
 .vb-note{font-size:12.5px;line-height:1.5;color:#98a2b3;margin-top:10px}
 .vb-reasons{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
-.vb-reasons button{height:34px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#d6dbe5;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.vb-reasons button{min-height:36px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#d6dbe5;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .vb-reasons button.on{background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.4);color:#fecaca}
 .vb-ta{width:100%;box-sizing:border-box;min-height:96px;margin-top:12px;padding:12px 14px;border-radius:14px;background:#0f131a;border:1px solid rgba(255,255,255,.12);color:#eef2f8;font:inherit;font-size:16px;line-height:1.45;resize:vertical;outline:none}
 .vb-ta:focus{border-color:#5b93f5}
+.vb-err{font-size:13px;line-height:1.45;color:#fca5a5;margin-top:7px}
+.vb-err:empty{display:none}
 .vb-frame{position:relative;width:100%;max-width:340px;margin:0 auto;aspect-ratio:9/16;max-height:70dvh;border-radius:16px;overflow:hidden;background:#000}
+.vb-frame.wide{max-width:none;aspect-ratio:16/9}
 .vb-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 
-/* «Ваше видео» в шторке задания */
-.vb-mine{margin:4px 0 14px;padding:13px 14px 14px;border-radius:16px;background:rgba(47,108,224,.07);border:1px solid rgba(91,147,245,.22)}
-.vb-mine-h{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.vb-mine-h b{font-size:14px;font-weight:800;color:#dce7ff}
-.vb-mine-it + .vb-mine-it{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)}
-.vb-rules{margin:0 0 14px;padding:13px 14px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
-.vb-rules b{display:block;font-size:13.5px;font-weight:800;color:#e6eaf2;margin-bottom:8px}
-.vb-rules ol{margin:0;padding-left:19px;font-size:13px;line-height:1.55;color:#a3adbf}
+/* ── шторка задания: счётчики, бюджет, вкладки ── */
+html body #bpTaskSheet .tk-sheet-foot .tk-btn-main.vb-up{flex:1.75 1 0;padding-left:10px;padding-right:10px}
+html body #bpTaskSheet .tk-sheet-foot .tk-btn-ghost{flex:1 1 0}
+/* вступившему — плавающая таблетка по центру поверх содержимого, без
+   полосы-подложки и без «Закрыть» (есть крестик), как у More Views */
+html body #bpTaskSheet.vb-fab .tk-sheet-foot{justify-content:center;pointer-events:none;padding:0!important;
+  background:none!important;background-image:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;border:none!important;box-shadow:none!important}
+html body #bpTaskSheet.vb-fab .tk-sheet-foot .tk-btn-ghost{display:none!important}
+html body #bpTaskSheet.vb-fab .tk-sheet-foot::before{content:'';position:absolute;left:-12px;right:-12px;bottom:calc(-12px - env(safe-area-inset-bottom,0px));height:calc(80px + env(safe-area-inset-bottom,0px));
+  background:linear-gradient(180deg,rgba(18,22,30,0),var(--bg2,#12161e) 72%);pointer-events:none;z-index:-1}
+html body #bpTaskSheet.vb-fab .tk-sheet-foot .tk-btn-main.vb-up{pointer-events:auto;flex:0 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  min-height:52px;max-width:100%;padding:0 24px 0 18px!important;border-radius:999px!important;border:none!important;
+  background:#2f6ce0!important;background-image:none!important;color:#fff!important;font:inherit;font-size:15px!important;font-weight:800!important;letter-spacing:-.1px;white-space:nowrap;
+  box-shadow:0 12px 28px rgba(6,16,44,.6),0 2px 6px rgba(6,16,44,.35),inset 0 1px 0 rgba(255,255,255,.18)!important;
+  transition:transform .16s cubic-bezier(.22,1,.36,1);-webkit-tap-highlight-color:transparent}
+html body #bpTaskSheet.vb-fab .tk-sheet-foot .tk-btn-main.vb-up:active{transform:scale(.97)}
+html body #bpTaskSheet.vb-fab .tk-sheet-foot .tk-btn-main.vb-up svg{width:20px;height:20px;flex:none}
+html body #bpTaskSheet.vb-fab .tk-sheet-foot .tk-btn-main.vb-up span{overflow:hidden;text-overflow:ellipsis}
+html body #bpTaskSheet.vb-tabbed .tk-sheet{height:94vh;height:94dvh}
+html body #bpTaskSheet.vb-tabbed .tk-sheet-body > .tk-sum-l,
+html body #bpTaskSheet.vb-tabbed .tk-sheet-body > .tk-sum,
+html body #bpTaskSheet.vb-tabbed .tk-sheet-body > .tk-bar,
+html body #bpTaskSheet.vb-tabbed .tk-sheet-body > .tk-hint,
+html body #bpTaskSheet.vb-tabbed .tk-sheet-body > .tk-legend{display:none!important}
+/* вкладка не «Задача»: всё содержимое задания после вкладок скрыто, видна только своя панель */
+html body #bpTaskSheet .tk-sheet-body[data-vb-tab]:not([data-vb-tab="task"]) > .vb-tabs ~ :not(.vb-pane.on){display:none!important}
+html body #bpTaskSheet .tk-sheet-body[data-vb-tab="task"] > .vb-pane{display:none!important}
+html body #bpTaskSheet .tk-sheet-body > .vb-pane:not(.on){display:none!important}
 
-/* рекламодатель: «Видео из TikTok» в карточке оффера */
+/* шапка задания, как у More Views: полоса бюджета, три плитки, плашка */
+.vb-top{margin:2px 0 14px}
+.vb-bud{margin:0 0 12px}
+.vb-bud-l{font-size:12.5px;font-weight:600;color:#98a2b3;line-height:1.3}
+.vb-bud-h{display:flex;align-items:baseline;gap:6px;margin-top:3px;min-width:0}
+.vb-bud-h b{font-size:20px;font-weight:800;color:#fff;letter-spacing:-.4px;line-height:1.2;font-variant-numeric:tabular-nums;white-space:nowrap;flex:none}
+.vb-bud-h span{font-size:13px;font-weight:600;color:#98a2b3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.vb-bud-h i{margin-left:auto;padding-left:8px;font-style:normal;font-size:15px;font-weight:800;color:#e6eaf2;font-variant-numeric:tabular-nums;flex:none}
+.vb-bar4{position:relative;height:12px;margin:10px 1px 0 0}
+.vb-bar4 > span{display:flex;height:100%;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.07)}
+.vb-bar4 > span i{display:block;height:100%;flex:none}
+/* зелёный #3ddc84 сторож deGreen не трогает (g ≥ 210) — как полоса в списке заданий */
+.vb-bar4 > span i.p{background:#3ddc84}
+.vb-bar4 > span i.r{background:rgba(255,255,255,.28)}
+.vb-bar4 > s{position:absolute;right:-1px;top:-4px;bottom:-4px;width:3px;border-radius:2px;background:#f5a524;text-decoration:none}
+.vb-lg{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:10px;font-size:12px;font-weight:600;color:#98a2b3;line-height:1.2}
+.vb-lg span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.vb-lg i{width:8px;height:8px;border-radius:50%;flex:none}
+.vb-lg i.p{background:#3ddc84}
+.vb-lg i.r{background:rgba(255,255,255,.36)}
+.vb-lg .l{padding-left:14px;border-left:1px solid rgba(255,255,255,.12)}
+.vb-lg .l i{width:3px;height:12px;border-radius:2px;background:#f5a524}
+.vb-cnt{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.vb-c{min-width:0;padding:11px 10px 10px 11px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
+.vb-c-i{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;margin-bottom:9px;background:rgba(47,108,224,.15);color:#8fb6ff;box-shadow:inset 0 0 0 1px rgba(91,147,245,.22)}
+.vb-c-i svg{width:16px;height:16px}
+.vb-c b{display:block;font-size:16.5px;font-weight:800;color:#fff;letter-spacing:-.4px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;min-height:20px}
+.vb-c i{display:block;font-style:normal;font-size:11.5px;font-weight:600;color:#8e98ab;margin-top:3px;line-height:1.3}
+.vb-heads{display:flex;gap:10px;align-items:flex-start;margin-top:12px;padding:11px 13px;border-radius:14px;
+  border:1px solid rgba(45,212,191,.55);background:rgba(45,212,191,.06);font-size:13px;font-weight:600;line-height:1.45;color:#c9efe9}
+.vb-heads svg{flex:none;width:18px;height:18px;color:#2dd4bf;margin-top:1px}
+
+/* вкладки-таблетки в ряд: счётчики в бейджах, у активной — обводка */
+.vb-tabs{position:sticky;top:0;z-index:4;margin:0 -18px 12px;padding:8px 0;background:var(--bg2,#12161e);box-shadow:0 1px 0 rgba(255,255,255,.06)}
+.vb-tabs-in{display:flex;gap:4px;padding:0 18px;overflow-x:auto;scrollbar-width:none;overscroll-behavior-x:contain}
+.vb-tabs-in::-webkit-scrollbar{display:none}
+.vb-tabs-in.mr{-webkit-mask-image:linear-gradient(90deg,#000 82%,transparent);mask-image:linear-gradient(90deg,#000 82%,transparent)}
+.vb-tabs-in.ml{-webkit-mask-image:linear-gradient(90deg,transparent,#000 18%);mask-image:linear-gradient(90deg,transparent,#000 18%)}
+.vb-tabs-in.ml.mr{-webkit-mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent);mask-image:linear-gradient(90deg,transparent,#000 14%,#000 86%,transparent)}
+.vb-tab{flex:1 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:40px;padding:0 10px;border-radius:999px;cursor:pointer;box-sizing:border-box;
+  background:rgba(255,255,255,.045);border:1.5px solid transparent;color:#a3adbf;font:inherit;font-size:13px;font-weight:700;white-space:nowrap;letter-spacing:-.1px;
+  transition:background .18s ease,color .18s ease,border-color .18s ease;-webkit-tap-highlight-color:transparent}
+.vb-tab[aria-selected="true"]{background:rgba(47,108,224,.12);border-color:rgba(143,182,255,.7);color:#fff}
+.vb-tab em{font-style:normal;min-width:19px;height:19px;padding:0 5px;box-sizing:border-box;border-radius:7px;display:inline-grid;place-items:center;
+  font-size:11px;font-weight:800;background:rgba(255,255,255,.09);color:#c4cbd8;font-variant-numeric:tabular-nums;letter-spacing:0}
+.vb-tab[aria-selected="true"] em{background:#2f6ce0;color:#fff}
+.vb-tab em[hidden]{display:none}
+/* не влезают в ряд — сначала плотнее, потом ещё плотнее; дальше — прокрутка полосы */
+.vb-tabs-in.tight{gap:3px;padding:0 12px}
+.vb-tabs-in.tight .vb-tab{padding:0 8px;font-size:12.5px}
+.vb-tabs-in.tight2{gap:2px;padding:0 10px}
+.vb-tabs-in.tight2 .vb-tab{padding:0 6px;font-size:12px;gap:4px}
+.vb-tabs-in.tight2 .vb-tab em{min-width:17px;padding:0 4px;font-size:10.5px}
+/* совсем узко (320): счётчики уходят — число участников есть над списком */
+.vb-tabs-in.tight3{gap:2px;padding:0 8px}
+.vb-tabs-in.tight3 .vb-tab{padding:0 6px;font-size:12px}
+.vb-tabs-in.tight3 .vb-tab em{display:none}
+.vb-ls-tabs{padding:0;margin:0 0 12px;overflow:visible}
+.vb-ls-tabs .vb-tab{flex:1 1 0}
+.vb-pane{outline:none}
+.vb-pane.in{animation:vbIn .18s cubic-bezier(.22,1,.36,1) backwards}
+@keyframes vbIn{from{opacity:.25;transform:translateY(5px)}}
+.vb-cap{font-size:12.5px;line-height:1.45;color:#8e98ab;margin:0 0 10px}
+
+/* «Мои видео»: Одобренные / На проверке / Отклонённые */
+.vb-seg{position:relative;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:3px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);margin-bottom:12px}
+.vb-seg-th{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px) / 3);border-radius:11px;background:#273246;
+  box-shadow:inset 0 0 0 1px rgba(91,147,245,.4);transition:transform .2s cubic-bezier(.22,1,.36,1)}
+.vb-seg button{position:relative;z-index:1;min-width:0;min-height:40px;padding:0 4px;border:none;background:none;border-radius:11px;cursor:pointer;
+  font:inherit;font-size:12.5px;font-weight:700;color:#98a2b3;display:flex;align-items:center;justify-content:center;gap:5px;transition:color .18s}
+.vb-seg button span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb-seg button em{font-style:normal;font-size:11px;font-weight:800;color:#c4cbd8;font-variant-numeric:tabular-nums}
+.vb-seg button[aria-selected="true"]{color:#fff}
+.vb-seg button[aria-selected="true"] em{color:#8fb6ff}
+.vb-vl{display:none}
+.vb-vl.on{display:block}
+.vb-vl.on.in{animation:vbIn .18s cubic-bezier(.22,1,.36,1) backwards}
+.vb-vc{padding:12px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+.vb-vc + .vb-vc{margin-top:10px}
+.vb-vc-top{display:flex;gap:11px;align-items:flex-start}
+.vb-vc-top .vb-thumb{width:50px;height:66px;border-radius:10px}
+.vb-vc-tx{flex:1;min-width:0}
+.vb-vc-tx b{display:block;font-size:14px;font-weight:700;color:#eef2f8;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.vb-vc-tx .vb-vc-h{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;color:#8e98ab;white-space:nowrap;overflow:hidden}
+.vb-vc-tx .vb-pill{margin-top:7px}
+.vb-vc .vb-stats{margin-top:10px}
+.vb-vc .vb-st{padding:7px 4px 6px}
+.vb-vc .vb-st b{font-size:14px}
+.vb-vc-pay{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
+.vb-vc-pay span{font-size:12.5px;color:#98a2b3;line-height:1.35}
+.vb-vc-pay b{font-size:16px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap}
+.vb-vc-pay b.ok{color:#7ff0bd}
+.vb-line{font-size:13px;line-height:1.5;color:#a3adbf;margin-top:10px}
+.vb-line b{color:#fff}
+.vb-line.warn{color:#fcd38d}
+.vb-line.bad{color:#fca5a5}
+.vb-nil{text-align:center;padding:26px 12px 8px}
+.vb-nil > i{width:52px;height:52px;margin:0 auto 12px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.05);color:#8e98ab;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.vb-nil > i svg{width:24px;height:24px}
+.vb-nil b{display:block;font-size:15px;font-weight:800;color:#eef2f8}
+.vb-nil span{display:block;font-size:13px;line-height:1.5;color:#98a2b3;margin-top:5px}
+.vb-nil .vb-mini{margin-top:14px}
+
+/* лидерборд и участники — таблицы, как у More Views */
+.vb-lb-bar{display:flex;align-items:center;margin:0 0 10px}
+.vb-sort{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:5px 15px 5px 12px;border-radius:14px;cursor:pointer;box-sizing:border-box;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#eef2f8;font:inherit;text-align:left;-webkit-tap-highlight-color:transparent;transition:transform .16s cubic-bezier(.22,1,.36,1)}
+.vb-sort:active{transform:scale(.97)}
+.vb-sort:focus-visible,.vb-rb:focus-visible{outline:2px solid #8fb6ff;outline-offset:2px}
+.vb-sort svg{width:18px;height:18px;color:#8fb6ff;flex:none}
+.vb-sort span{display:flex;flex-direction:column;line-height:1.2}
+.vb-sort i{font-style:normal;font-size:11px;font-weight:600;color:#8e98ab}
+.vb-sort b{font-size:13.5px;font-weight:800;color:#fff}
+.vb-tbl{margin:0 -6px;transition:opacity .18s ease}
+.vb-tbl.wait{opacity:.45}
+.vb-th,.vb-tr{display:grid;align-items:center;column-gap:8px;padding-left:8px;padding-right:8px;box-sizing:border-box}
+.vb-tbl-l .vb-th,.vb-tbl-l .vb-tr{grid-template-columns:30px minmax(0,1fr) 68px 82px 62px}
+.vb-tbl-p .vb-th,.vb-tbl-p .vb-tr{grid-template-columns:28px minmax(0,1fr) 64px 40px 40px}
+.vb-tbl-p .vb-who{gap:9px}
+.vb-tbl-p .vb-who .vb-ava{width:34px;height:34px}
+.vb-tbl-p .vb-vp{padding:0 7px}
+.vb-th{min-height:30px;padding-bottom:4px;font-size:11px;font-weight:700;color:#7f8aa0;line-height:1.2}
+.vb-th .c-r,.vb-th .c-v,.vb-th .c-b{text-align:center}
+.vb-th .c-m,.vb-th .c-e{text-align:right}
+.vb-th .c-b{white-space:nowrap;margin:0 -4px}
+.vb-th .c-e svg{display:none;width:14px;height:14px;vertical-align:-2px}
+.vb-tr{min-height:58px;padding-top:7px;padding-bottom:7px;border-radius:14px}
+.vb-tr + .vb-tr{margin-top:2px}
+.vb-tbl > .vb-tr:nth-child(even){background:rgba(255,255,255,.025)}
+.vb-tbl > .vb-tr.me{background:rgba(47,108,224,.13);box-shadow:inset 0 0 0 1px rgba(91,147,245,.42)}
+.vb-tbl > .vb-tr.pin{position:sticky;bottom:calc(74px - var(--vb-pb,100px) + env(safe-area-inset-bottom,0px));z-index:2;margin-top:10px;
+  background:#1c2638;box-shadow:inset 0 0 0 1px rgba(91,147,245,.55),0 -8px 22px rgba(0,0,0,.35)}
+.vb-td-r{display:flex;justify-content:center}
+.vb-rk{position:relative;display:grid;place-items:center;width:30px;height:30px;font-size:13px;font-weight:800;color:#aab3c2;font-variant-numeric:tabular-nums}
+.vb-rk svg{position:absolute;left:-2px;top:-2px;width:34px;height:34px}
+.vb-rk b{position:relative;font-size:12.5px;font-weight:800;line-height:1}
+.vb-rk.w1{color:#f2c14e}.vb-rk.w1 b{color:#ffe08a}
+.vb-rk.w2{color:#c3ccd9}.vb-rk.w2 b{color:#eef1f6}
+.vb-rk.w3{color:#d9915f}.vb-rk.w3 b{color:#f5c09a}
+.vb-who{display:flex;align-items:center;gap:10px;min-width:0}
+.vb-who .vb-ava{width:36px;height:36px;font-size:13.5px}
+.vb-tr .vb-ava{--vb-ring:var(--bg2,#12161e)}
+.vb-tr.me .vb-ava,.vb-tr.pin .vb-ava{--vb-ring:#1c2638}
+.vb-who-tx{flex:1;min-width:0}
+.vb-who-tx b{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700;color:#eef2f8;white-space:nowrap;overflow:hidden;line-height:1.3}
+.vb-who-tx b > span{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.vb-who-tx b small{flex:none;font-size:10.5px;font-weight:800;color:#8fb6ff;background:rgba(47,108,224,.2);padding:1px 6px;border-radius:6px}
+.vb-who-tx i{display:block;font-style:normal;font-size:12px;color:#8e98ab;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+.vb-who-tx i .vb-you{font-style:normal;font-weight:800;color:#8fb6ff}
+.vb-td-v{display:flex;justify-content:center;min-width:0}
+.vb-vp{display:inline-flex;align-items:center;justify-content:center;height:24px;max-width:100%;padding:0 9px;box-sizing:border-box;border-radius:999px;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);font-style:normal;font-size:11.5px;font-weight:700;color:#d6dbe5;white-space:nowrap;font-variant-numeric:tabular-nums}
+.vb-td-m{text-align:right;min-width:0}
+.vb-td-m b{font-size:14px;font-weight:800;color:#fff;white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:-.2px}
+.vb-td-m b.z{color:#7f8aa0;font-weight:700}
+.vb-td-e{display:flex;align-items:center;justify-content:flex-end;gap:4px;white-space:nowrap;min-width:0}
+.vb-td-e svg{width:14px;height:14px;color:#7f8aa0;flex:none}
+.vb-td-e b{font-size:13.5px;font-weight:700;color:#d6dbe5;font-variant-numeric:tabular-nums}
+.vb-td-b{display:flex;justify-content:center}
+.vb-rb{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;padding:0;cursor:pointer;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);color:#d6dbe5;-webkit-tap-highlight-color:transparent;transition:transform .16s cubic-bezier(.22,1,.36,1),background .16s}
+.vb-rb svg{width:18px;height:18px}
+.vb-rb[data-vb="chat"]{background:rgba(47,108,224,.16);border-color:rgba(91,147,245,.38);color:#a9c6ff}
+.vb-rb:active{transform:scale(.92)}
+/* «Видео» в лидерборде — колонкой, если влезает; иначе второй строкой под ником */
+.vb-tbl-l .vb-v2{display:none}
+.vb-tbl-p .vb-v2{display:none}
+@media (max-width:429px){
+  .vb-tbl-l .vb-th,.vb-tbl-l .vb-tr{grid-template-columns:28px minmax(0,1fr) 82px 64px}
+  .vb-tbl-l .vb-td-v,.vb-tbl-l .vb-th .c-v{display:none}
+  .vb-tbl-l .vb-v2{display:block}
+  .vb-tbl-l span.vb-v2{display:inline}
+}
+@media (max-width:359px){
+  .vb-tbl-p .vb-th,.vb-tbl-p .vb-tr{grid-template-columns:24px minmax(0,1fr) 42px 42px}
+  .vb-tbl-p .vb-td-v,.vb-tbl-p .vb-th .c-v{display:none}
+  .vb-tbl-p .vb-v2{display:inline}
+  .vb-tbl-l .vb-th,.vb-tbl-l .vb-tr{grid-template-columns:26px minmax(0,1fr) 76px 52px;column-gap:6px}
+  .vb-th,.vb-tr{padding-left:6px;padding-right:6px}
+  .vb-who{gap:8px}
+  .vb-who .vb-ava{width:32px;height:32px}
+  .vb-td-m b{font-size:13px}
+  .vb-td-e b{font-size:12.5px}
+  .vb-td-e svg{display:none}
+  .vb-th .c-e .c-t{display:none}
+  .vb-th .c-e svg{display:inline-block}
+  .vb-lg{gap:6px 10px;font-size:11.5px}
+  .vb-lg span{gap:5px}
+  .vb-lg .l{padding-left:10px}
+}
+.vb-showmore{width:100%;min-height:46px;margin-top:10px;border-radius:14px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#d6dbe5;
+  font:inherit;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.vb-showmore:disabled{opacity:.6;cursor:default}
+.vb-sk-row{height:56px;border-radius:14px;background:rgba(255,255,255,.04);animation:vbPulse 1.2s ease-in-out infinite}
+.vb-sk-row + .vb-sk-row{margin-top:4px}
+
+/* правила задания: как засчитывается видео */
+.vb-how{margin:14px 0 4px;padding:13px 14px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+.vb-how > b{display:block;font-size:13.5px;font-weight:800;color:#e6eaf2;margin-bottom:8px}
+.vb-how ol{margin:0;padding-left:19px;font-size:13px;line-height:1.55;color:#a3adbf}
+.vb-how li + li{margin-top:3px}
+
+/* ── рекламодатель: «Видео блогеров» в карточке оффера ── */
 .vb-adv{margin:0 0 16px}
 .vb-adv-h b{display:block;font-size:16px;font-weight:800;color:#fff}
-.vb-adv-h span{display:block;font-size:12.5px;color:#8e98ab;margin-top:2px}
+.vb-adv-h span{display:block;font-size:12.5px;line-height:1.45;color:#8e98ab;margin-top:2px}
+.vb-adv .vb-top{margin:12px 0 0;padding:12px;border-radius:16px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)}
+.vb-adv-links{display:flex;gap:8px;margin-top:10px}
+.vb-adv-links button{flex:1;min-height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.05);color:#e6eaf2;
+  font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.vb-adv-links button svg{width:16px;height:16px;color:#8fb6ff}
+.vb-adv-links button em{font-style:normal;min-width:19px;height:19px;padding:0 5px;box-sizing:border-box;border-radius:7px;display:inline-grid;place-items:center;
+  font-size:11px;font-weight:800;background:rgba(255,255,255,.09);color:#c4cbd8;font-variant-numeric:tabular-nums}
+/* профиль участника из лидерборда открывается поверх шторок задания и оффера */
+html body #pg-bl-profile.vb-over{z-index:800!important}
 .vb-adv-alert{display:flex;align-items:center;gap:9px;margin-top:10px;padding:11px 13px;border-radius:14px;background:rgba(47,108,224,.12);border:1px solid rgba(91,147,245,.3);color:#cfe0ff;font-size:13.5px;font-weight:700}
 .vb-adv-alert i{width:8px;height:8px;border-radius:50%;background:#5b93f5;box-shadow:0 0 0 4px rgba(91,147,245,.2);flex:none}
 .vb-item{margin-top:10px;padding:13px;border-radius:16px;background:var(--card,#171b23);border:1px solid rgba(255,255,255,.08)}
 .vb-item-top{display:flex;gap:11px;align-items:flex-start}
 .vb-item-top .vb-thumb{width:52px;height:70px;border-radius:11px}
 .vb-item-tx{flex:1;min-width:0}
+.vb-item-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
 .vb-item-tx b{display:block;font-size:14.5px;font-weight:800;color:#eef2f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vb-item-tx i{display:block;font-style:normal;font-size:12.5px;color:#a3adbf;margin-top:2px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .vb-item-tx u{display:block;text-decoration:none;font-size:11.5px;color:#7f8aa0;margin-top:3px}
-.vb-line{font-size:13px;line-height:1.5;color:#a3adbf;margin-top:10px}
-.vb-line b{color:#fff}
-.vb-line.warn{color:#fcd38d}
 .vb-acts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:12px}
-.vb-acts button{min-height:44px;border-radius:13px;font:inherit;font-size:13.5px;font-weight:800;cursor:pointer;border:none}
+.vb-acts button{min-height:46px;border-radius:13px;font:inherit;font-size:13.5px;font-weight:800;cursor:pointer;border:none;padding:0 8px}
 /* зелёные плашки приложение перекрашивает (сторож deGreen, палитра синяя) —
    главная кнопка, как везде, синяя */
 html body #cdvBody .vb-acts button.ok,html body .vb-acts button.ok{background:#2f6ce0!important;color:#fff!important;border:none!important;box-shadow:none!important}
 html body #cdvBody .vb-acts button.bad,html body .vb-acts button.bad{background:rgba(239,68,68,.12)!important;color:#fecaca!important;border:1px solid rgba(239,68,68,.32)!important;box-shadow:none!important}
-.vb-item-tx .vb-pill{margin-bottom:5px}
-.vb-links{display:flex;gap:14px;margin-top:10px}
-.vb-linkbtn{background:none;border:none;padding:0;font:inherit;font-weight:700;color:#8fb6ff;cursor:pointer}
-.vb-links button,.vb-links a{background:none;border:none;padding:0;font:inherit;font-size:13px;font-weight:700;color:#8fb6ff;cursor:pointer;text-decoration:none}
-@media (prefers-reduced-motion:reduce){ .vb-sheet,.vb-card{transition:none} .vb-spin{animation-duration:2s} }
+.vb-acts-cap{font-size:12px;line-height:1.45;color:#8e98ab;margin-top:8px}
+.vb-links{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:8px}
+.vb-links button,.vb-links a{display:inline-flex;align-items:center;min-height:36px;background:none;border:none;padding:0;font:inherit;font-size:13px;font-weight:700;color:#8fb6ff;cursor:pointer;text-decoration:none}
+.vb-lsheet .vb-seg{grid-template-columns:repeat(2,minmax(0,1fr))}
+.vb-lsheet .vb-seg-th{width:calc((100% - 6px) / 2)}
+
+@media (max-width:360px){
+  .vb-seg button{flex-direction:column;gap:0;min-height:46px;line-height:1.15;font-size:12px}
+  .vb-seg button span{max-width:100%}
+  .vb-st{padding:7px 2px 6px}
+  .vb-st b{font-size:13.5px}
+  .vb-st b small{font-size:9.5px;margin-left:1px}
+  .vb-st i{font-size:10.5px}
+  html body #bpTaskSheet .tk-sheet-foot .tk-btn-main.vb-up{flex:2 1 0;font-size:14px;white-space:nowrap;letter-spacing:-.1px}
+  .vb-card{padding-left:14px;padding-right:14px}
+  .vb-cnt{gap:6px}
+  .vb-c{padding:9px 7px 8px 8px}
+  .vb-c-i{width:26px;height:26px;margin-bottom:7px}
+  .vb-c b{font-size:14px;letter-spacing:-.5px}
+  .vb-c i{font-size:10.5px}
+  .vb-bud-h b{font-size:18px}
+  .vb-tab{padding:0 9px;font-size:12.5px}
+  .vb-seg button{font-size:12px;gap:3px}
+  .vb-btns .vb-go{font-size:14.5px;padding:0 10px}
+  .vb-btns .vb-go.ghost{flex-basis:38%}
+}
+@media (prefers-reduced-motion:reduce){
+  .vb-sheet,.vb-card,.vb-dd-menu,.vb-seg-th,.vb-chev,.vb-tab,.vb-go,.vb-p-go,.vb-sort,.vb-rb,.vb-tbl,html body #bpTaskSheet.vb-fab .tk-sheet-foot .tk-btn-main.vb-up{transition:none!important}
+  .vb-pane.in,.vb-vl.on.in,.vb-fail.in{animation:none!important}
+  .vb-spin{animation-duration:2s}
+  .vb-sk,.vb-sk-row{animation:none}
+}
+/* разбор ревью: окно открыто — тосты и всплывашки над ним и сверху, а не
+   под карточкой окна (z-index окна 720, обёртке инлайном ставится 540) */
+html.vb-sheet-open body #bpToastWrap{
+  z-index:760!important;
+  bottom:auto!important;
+  top:calc(env(safe-area-inset-top,0px) + 14px)!important;
+  flex-direction:column!important;
+}
+/* идёт проверка — «Закрыть» уходит (закрыть можно крестиком), кнопка
+   «Проверяем…» на весь ряд; полная подпись — строкой под полем */
+.vb-btns.busy .vb-go.ghost{display:none}
+.vb-btns.busy .vb-go{flex:1 1 auto}
+/* цели нажатия не меньше 40 px */
+.vb-hint-go{min-height:40px;padding:8px 0}
+.vb-linkbtn{min-height:40px;padding:8px 6px;display:inline-flex;align-items:center}
+.vb-reasons button{min-height:40px}
+.vb-links button,.vb-links a{min-height:40px}
 </style>
 <script id="bp-vbind">
 (function(){
 'use strict';
-if(window.__bpVbind) return; window.__bpVbind = 1;
+if(window.__bpVbind) return; window.__bpVbind = 2;
 function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'vbind'); }catch(_){} }
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function num(v){ var n = Number(v); return isFinite(n) ? n : 0; }
 function fmt(n){ return Math.round(num(n)).toLocaleString('ru'); }
 function rub(n){ return fmt(n) + ' ₽'; }
+function plural(n, a, b, c){ n = Math.abs(Math.round(num(n))); var t = n % 100, o = n % 10; if(t > 10 && t < 20) return c; if(o > 1 && o < 5) return b; if(o === 1) return a; return c; }
 function short(n){
   n = num(n);
-  if(n >= 1e6) return (Math.round(n / 1e5) / 10).toString().replace('.', ',') + ' млн';
+  /* с 999 500 округление дало бы «1000 тыс.» — это уже миллион */
+  if(n >= 999500) return (Math.round(n / 1e5) / 10).toString().replace('.', ',') + ' млн';
   if(n >= 1e5) return Math.round(n / 1e3) + ' тыс.';
   if(n >= 1e4) return (Math.round(n / 1e2) / 10).toString().replace('.', ',') + ' тыс.';
   return fmt(n);
 }
+function tileNum(n){ var t = short(n), m = /^(.*?)\s(тыс\.|млн)$/.exec(t); return m ? m[1] + '<small>' + m[2].replace('.', '') + '</small>' : t; }
+/* «1 234 просмотра», «21 просмотр», а для «тыс.»/«млн» — «просмотров» */
+function viewsTxt(n){ n = num(n); return n < 1e4 ? fmt(n) + ' ' + plural(n, 'просмотр', 'просмотра', 'просмотров') : short(n) + ' просмотров'; }
+function rubTile(n){ n = num(n); if(n >= 1e6) return (Math.round(n / 1e5) / 10).toString().replace('.', ',') + '<small>млн ₽</small>'; return fmt(n) + '<small>₽</small>'; }
+/* просмотры коротко, как у More Views: 8.3M, 412K, 954 */
+function kmb(n){
+  n = Math.max(0, num(n));
+  function f(x){ return x >= 100 ? String(Math.round(x)) : String(Math.round(x * 10) / 10); }
+  if(n >= 9995e5) return f(n / 1e9) + 'B';
+  if(n >= 9995e2) return f(n / 1e6) + 'M';
+  if(n >= 1e3) return f(n / 1e3) + 'K';
+  return String(Math.round(n));
+}
+function cntTxt(n){ n = num(n); return n >= 1e4 ? kmb(n) : fmt(n); }
 function dmy(t){ try{ return t ? new Date(t).toLocaleDateString('ru', { day:'numeric', month:'long' }) : ''; }catch(e){ return ''; } }
+function dsh(t){ try{ return t ? new Date(t).toLocaleDateString('ru', { day:'numeric', month:'short' }) : ''; }catch(e){ return ''; } }
 function dur(s){ s = Math.round(num(s)); if(!s) return ''; return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function toast(m, k){ try{ if(typeof showAuthToast === 'function') showAuthToast(m, k || 'ok'); }catch(e){} }
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k, v){ try{ localStorage.setItem(k, v); }catch(e){} }
 function me(){ try{ return (typeof currentUser !== 'undefined' && currentUser) ? currentUser : null; }catch(e){ return null; } }
 function mySrv(){
   var u = me(); if(!u) return null;
@@ -93198,59 +93607,155 @@ function srvOk(){ var s = srv(); try{ return !!(s && s.configured && s.configure
 function api(m, p, b){ return srv().raw(m, p, b); }
 function camps(){ try{ return (typeof _loadCamps === 'function' ? _loadCamps() : JSON.parse(localStorage.getItem('bp_campaigns') || '[]')) || []; }catch(e){ return []; } }
 function camp(id){ return camps().filter(function(c){ return c && String(c.id) === String(id); })[0] || null; }
+function nameOf(c){ return (c && (c.name || c.title)) || 'Задание'; }
 function joined(id){ try{ return !!(window.bpTaskJoined && window.bpTaskJoined(id)); }catch(e){ return false; } }
+function joinSt(id){ try{ var j = window.bpJoinOf ? window.bpJoinOf(id) : null; return j ? String(j.status || 'joined') : ''; }catch(e){ return ''; } }
 function isOwner(c){ var u = me(); return !!(c && u && String(c.ownerId) === String(u.id)); }
+/* картинки — только https (и встроенные): адреса приходят с площадок */
+function safeImg(u){ u = String(u || '').trim(); return (/^https:\/\//i.test(u) || /^data:image\/(png|jpe?g|webp|gif|svg\+xml);/i.test(u)) ? u : ''; }
+function safeLink(u){ u = String(u || '').trim(); return /^https:\/\//i.test(u) ? u : ''; }
 
-var TT = '<span class="vb-tt" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16.6 2h-3v13.1a2.6 2.6 0 1 1-2.6-2.6c.3 0 .5 0 .8.1V9.5a5.9 5.9 0 1 0 4.9 5.8V8.7c1 .8 2.3 1.3 3.7 1.4V6.9a4 4 0 0 1-3.8-4.9z"/></svg></span>';
-var OKI = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>';
-var WARN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>';
+/* ── значки ── */
+var GL = {
+  tiktok:'M16.6 2h-3v13.1a2.6 2.6 0 1 1-2.6-2.6c.3 0 .5 0 .8.1V9.5a5.9 5.9 0 1 0 4.9 5.8V8.7c1 .8 2.3 1.3 3.7 1.4V6.9a4 4 0 0 1-3.8-4.9z',
+  youtube:'M21.6 7.2c-.2-.9-.9-1.6-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4c-.9.2-1.6.9-1.8 1.8C2 8.8 2 12 2 12s0 3.2.4 4.8c.2.9.9 1.6 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.6.4-4.8.4-4.8s0-3.2-.4-4.8zM10 15V9l5.2 3-5.2 3z'
+};
+var SV = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+var OKI = '<svg ' + SV + ' stroke-width="2.8"><polyline points="20 6 9 17 4 12"/></svg>';
+var WARN = '<svg ' + SV + ' stroke-width="2.2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>';
+var ERRI = '<svg ' + SV + ' stroke-width="2.2"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.5h.01"/></svg>';
+var INFO = '<svg ' + SV + ' stroke-width="2.2"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v5.5M12 7.5h.01"/></svg>';
+var UP = '<svg ' + SV + ' stroke-width="2.3"><path d="M12 15.5V4M7 8.5 12 3.5l5 5"/><path d="M4 15v3.5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5V15"/></svg>';
+var CHEV = '<svg class="vb-chev" ' + SV + ' stroke-width="2.4"><polyline points="6 9 12 15 18 9"/></svg>';
+var PLUS = '<svg ' + SV + ' stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>';
+var CK = '<svg class="vb-opt-ck" ' + SV + ' stroke-width="2.8"><polyline points="20 6 9 17 4 12"/></svg>';
+var TROPHY = '<svg ' + SV + ' stroke-width="2"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 6H4.5a2.5 2.5 0 0 0 2.6 4M17 6h2.5a2.5 2.5 0 0 1-2.6 4"/></svg>';
+var USERS = '<svg ' + SV + ' stroke-width="2"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 14.8c1.9.8 3 2.6 3 5.2"/></svg>';
+var CLOCK = '<svg ' + SV + ' stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>';
+var FILM = '<svg ' + SV + ' stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="m10 8.5 5 3.5-5 3.5z"/></svg>';
+var EYE = '<svg class="vb-eye" ' + SV + ' stroke-width="2.2"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>';
+var NOPE = '<svg ' + SV + ' stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>';
+var EYE0 = '<svg ' + SV + ' stroke-width="2"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/></svg>';
+var BAG = '<svg ' + SV + ' stroke-width="1.9"><path d="M9.2 3.5h5.6l-1.5 3.3h-2.6z"/><path d="M10.6 6.8C6.9 8.7 4.6 12.2 4.6 15.4c0 3.4 3 5.6 7.4 5.6s7.4-2.2 7.4-5.6c0-3.2-2.3-6.7-6-8.6"/><path d="M10.8 18v-6.2h1.9a1.7 1.7 0 0 1 0 3.4h-1.9M9.6 16.5h3.4"/></svg>';
+var SORTI = '<svg ' + SV + ' stroke-width="2.1"><path d="M7.5 19.5v-15M4 8l3.5-3.5L11 8M16.5 4.5v15M13 16l3.5 3.5L20 16"/></svg>';
+var PERSON = '<svg ' + SV + ' stroke-width="2"><circle cx="12" cy="8.2" r="3.7"/><path d="M4.8 20c.6-3.6 3.6-5.8 7.2-5.8s6.6 2.2 7.2 5.8"/></svg>';
+var CHAT = '<svg ' + SV + ' stroke-width="2"><path d="M20.5 11.4c0 4.2-3.8 7.4-8.5 7.4-1.1 0-2.2-.2-3.2-.5L4 19.8l1.5-3.6c-1.2-1.3-2-3-2-4.8C3.5 7.2 7.3 4 12 4s8.5 3.2 8.5 7.4z"/></svg>';
+var PLUSC = '<svg ' + SV + ' stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>';
+var REDO = '<svg ' + SV + ' stroke-width="2.2"><path d="M20 11.5a8 8 0 1 1-2.4-5.7"/><path d="M20 4v5h-5"/></svg>';
+/* лавровый венок для 1–3 места (как у More Views): веточки по дуге */
+var LAUREL = (function(){
+  var cx = 12, cy = 12.4, r = 8.6, a0 = 104, a1 = 236, n = 5, g = '';
+  function pt(a, rr){ var t = a * Math.PI / 180; return [cx + rr * Math.cos(t), cy + rr * Math.sin(t)]; }
+  var s = pt(a0, r), e = pt(a1, r);
+  g += '<path d="M' + s[0].toFixed(2) + ' ' + s[1].toFixed(2) + 'A' + r + ' ' + r + ' 0 0 1 ' + e[0].toFixed(2) + ' ' + e[1].toFixed(2) + '" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>';
+  for(var i = 0; i < n; i++){
+    var a = a0 + 10 + i * (a1 - a0 - 4) / n, p = pt(a, r + 1.25), k = 1 - i * 0.07;
+    g += '<ellipse cx="' + p[0].toFixed(2) + '" cy="' + p[1].toFixed(2) + '" rx="' + (1.2 * k).toFixed(2) + '" ry="' + (2.75 * k).toFixed(2) + '" transform="rotate(' + (a - 22).toFixed(1) + ' ' + p[0].toFixed(2) + ' ' + p[1].toFixed(2) + ')"/>';
+    var q = pt(a + 9, r - 1.3);
+    if(i < n - 1) g += '<ellipse cx="' + q[0].toFixed(2) + '" cy="' + q[1].toFixed(2) + '" rx="' + (1.05 * k).toFixed(2) + '" ry="' + (2.3 * k).toFixed(2) + '" transform="rotate(' + (a + 9 + 24).toFixed(1) + ' ' + q[0].toFixed(2) + ' ' + q[1].toFixed(2) + ')"/>';
+  }
+  return '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><g>' + g + '</g><g transform="translate(24 0) scale(-1 1)">' + g + '</g></svg>';
+})();
 
-/* ── какое задание идёт по новому пути ──
-   Видео в TikTok: у оффера TikTok в площадках (или площадки не заданы),
-   формат не «Баннеры» и не «UGC» (их сдают по-старому). */
+/* ── площадки ── */
+var PN = { tiktok:'TikTok', youtube:'YouTube', telegram:'Telegram', instagram:'Instagram', twitch:'Twitch', vk:'VK', dzen:'Дзен', rutube:'RuTube' };
+var PA = { tt:'tiktok', yt:'youtube', tg:'telegram', ig:'instagram', inst:'instagram', tw:'twitch' };
+var VIDP = ['tiktok', 'youtube'];
+function pk(x){ x = String(x == null ? '' : x).trim().toLowerCase(); return PA[x] || x; }
+function pi(p, cls){
+  p = pk(p);
+  var k = p === 'youtube' ? 'yt' : p === 'tiktok' ? 'tt' : 'vid';
+  return '<span class="vb-pi ' + k + (cls ? ' ' + cls : '') + '" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="' + (GL[p] || 'M8 5.5v13l10-6.5z') + '"/></svg></span>';
+}
+function badge(p){ p = pk(p); return '<span class="vb-badge">' + pi(p) + esc(PN[p] || 'Видео') + '</span>'; }
+/* площадки оффера: строка мастера 'tt,yt,tg', массив platformsList,
+   объект {tt:true}, поле platform; синонимы tt/yt/tg/ig/inst */
 function platIds(c){
-  var v = c && (c.platformsList && c.platformsList.length ? c.platformsList : c.platforms), a = [];
-  if(Array.isArray(v)) a = v; else if(typeof v === 'string') a = v.split(/[,;]/);
+  if(!c) return [];
+  var v = (c.platformsList && c.platformsList.length) ? c.platformsList : c.platforms, a = [];
+  if(Array.isArray(v)) a = v;
+  else if(typeof v === 'string') a = v.split(/[,;\s]+/);
   else if(v && typeof v === 'object') a = Object.keys(v).filter(function(k){ return v[k]; });
-  return a.map(function(x){ return String(x || '').trim().toLowerCase(); }).filter(Boolean);
+  if(!a.length && c.platform) a = [c.platform];
+  var out = [];
+  a.forEach(function(x){ var k = pk(x); if(k && out.indexOf(k) < 0) out.push(k); });
+  return out;
 }
-function hasTT(c){ var p = platIds(c); return p.indexOf('tt') >= 0 || p.indexOf('tiktok') >= 0; }
-function isVidTask(c){
-  if(!c) return false;
-  var t = String(c.taskType || c.format || '').toLowerCase();
-  if(t === 'banners' || t === 'ugc') return false;
-  /* новый путь — только когда TikTok назван в площадках; без площадок и
-     для остальных — прежняя сдача по ссылке */
-  return hasTT(c);
-}
-/* в оффере кроме TikTok есть и другие площадки — даём оба пути */
-function isMixed(c){ var p = platIds(c).filter(function(x){ return x !== 'tt' && x !== 'tiktok'; }); return isVidTask(c) && p.length > 0; }
+/* какие площадки видео принимает оффер: не заданы — TikTok и YouTube */
+function allowed(c){ var p = platIds(c); return p.length ? VIDP.filter(function(x){ return p.indexOf(x) >= 0; }) : VIDP.slice(); }
+/* новый путь — во всех форматах (клипы, баннеры, UGC, другое), кроме
+   офферов, где площадки заданы и среди них нет ни TikTok, ни YouTube */
+function isVidTask(c){ return !!c && allowed(c).length > 0; }
+function fmtOf(c){ return String((c && (c.taskType || c.format)) || '').toLowerCase(); }
+function isMixed(c){ return isVidTask(c) && (platIds(c).some(function(x){ return VIDP.indexOf(x) < 0; }) || fmtOf(c) === 'other'); }
+function namesOf(list, sep){ return list.map(function(p){ return PN[p] || p; }).join(sep || ' и '); }
+window.bpVbIsVidTask = function(id){ return isVidTask(camp(id)); };
+
 function oldSubmit(campId){
   var o = window.__bpVbOrigSubmit; if(typeof o !== 'function') return;
   closeSheet($('bpVbSheet'));
   window.__bpVbBypass = 1;
   try{ o(campId); } catch(e){ E(e); } finally { window.__bpVbBypass = 0; }
 }
-window.bpVbIsVidTask = function(id){ return isVidTask(camp(id)); };
 
-/* ── данные: мои ролики (как блогер) и ролики моих офферов ── */
+/* ── ссылка: площадку определяет она ── */
+function linkInfo(text){
+  var s = String(text || '').trim();
+  if(!s) return null;
+  var m = /https?:\/\/[^\s<>"']+/i.exec(s), url = m ? m[0] : '';
+  if(!url){
+    var m2 = /(?:^|\s)((?:www\.|m\.|vm\.|vt\.)?(?:tiktok\.com|youtube\.com|youtu\.be)\/[^\s<>"']*)/i.exec(s);
+    if(m2) url = 'https://' + m2[1];
+  }
+  if(!url) return { text:s, url:'', plat:'' };
+  url = url.replace(/[)\].,!?»"'…]+$/, '').replace(/^http:\/\//i, 'https://');
+  var host = '';
+  try{ host = new URL(url).hostname.toLowerCase(); }catch(e){ return { text:s, url:url, plat:'' }; }
+  var plat = /(^|\.)tiktok\.com$/.test(host) ? 'tiktok'
+    : (/^(www\.|m\.)?youtube\.com$/.test(host) || host === 'youtu.be') ? 'youtube' : '';
+  var h = '';
+  if(plat === 'tiktok'){ var mh = /\/@([\w.-]{1,40})/.exec(url); if(mh) h = mh[1].toLowerCase(); }
+  return { text:s, url:url, plat:plat, handle:h };
+}
+function hnorm(h){ return String(h || '').replace(/^@/, '').toLowerCase(); }
+
+/* ═══ ДАННЫЕ ═══ */
+/* ролики: мои как блогера и ролики моих офферов */
 var V = { list:[], at:0, p:null, byCamp:{} };
 function load(force){
   if(!srvOk()) return Promise.resolve(V.list);
   if(V.p) return V.p;
   if(!force && Date.now() - V.at < 15000) return Promise.resolve(V.list);
   V.p = api('GET', '/api/tasks/videos').then(function(j){
+    var was = sigOf(V.list);
     V.list = (j && j.videos) || []; V.at = Date.now(); V.p = null;
-    /* в общем списке есть и ролики моих офферов — открытая карточка
-       оффера получает их сразу, не дожидаясь своего запроса */
+    var now = sigOf(V.list);
+    staleBoards(was, now); moneyMoved(was, now);
     Object.keys(V.byCamp).forEach(function(cid){
       V.byCamp[cid] = { at:Date.now(), list:V.list.filter(function(v){ return String(v.campId) === cid; }) };
     });
     notifyDiff(); repaint(); syncLedger(V.list);
     try{ if(typeof _cdActiveCampId !== 'undefined' && _cdActiveCampId != null) mountAdv(true); }catch(e){}
     return V.list;
-  }, function(e){ V.p = null; return V.list; });
+  }, function(){ V.p = null; return V.list; });
   return V.p;
+}
+function sigOf(list){ var m = {}; (list || []).forEach(function(v){ if(v) m[v.id] = String(v.campId) + '|' + v.status + '|' + num(v.paid) + '|' + num(v.views); }); return m; }
+function staleBoards(a, b){
+  var camps = {};
+  Object.keys(b).forEach(function(k){ if(a[k] !== b[k]) camps[b[k].split('|')[0]] = 1; });
+  Object.keys(a).forEach(function(k){ if(!(k in b)) camps[a[k].split('|')[0]] = 1; });
+  Object.keys(camps).forEach(function(cid){
+    dropBoard(cid);
+    if(sheetBody(cid)) loadBoard(cid, true).then(function(){ augment(cid); });
+  });
+}
+/* знакомый ролик стал «оплачен» — деньги сдвинулись на сервере: баланс в
+   шапке берём сразу, а не при следующей сверке (уведомление уже говорит
+   «N ₽ на балансе») */
+function moneyMoved(a, b){
+  var hit = Object.keys(b).some(function(k){ return (k in a) && b[k].split('|')[1] === 'paid' && a[k].split('|')[1] !== 'paid'; });
+  if(hit){ try{ if(window.bpMoney && typeof window.bpMoney.sync === 'function') window.bpMoney.sync(); }catch(e){ E(e); } }
 }
 function paidLocal(campId){
   var n = 0;
@@ -93273,298 +93778,1257 @@ function loadCamp(campId){
     return V.byCamp[String(campId)].list;
   }, function(){ return (V.byCamp[String(campId)] || {}).list || []; });
 }
-function mine(campId){
+function mineOf(campId){
   var sid = mySrv();
   return V.list.filter(function(v){ return String(v.campId) === String(campId) && (sid == null || Number(v.bloggerId) === sid); })
-    .sort(function(a, b){ return num(b.createdAt || b.postedAt) - num(a.createdAt || a.postedAt); });
+    .sort(function(a, b){ return num(b.createdAt || b.postedAt) - num(a.createdAt || a.postedAt) || num(b.id) - num(a.id); });
 }
 function upsert(v){
   if(!v) return;
-  var i = -1; V.list.forEach(function(x, k){ if(x.id === v.id) i = k; });
+  var i = -1; V.list.forEach(function(x, k){ if(String(x.id) === String(v.id)) i = k; });
   if(i >= 0) V.list[i] = v; else V.list.unshift(v);
   var bc = V.byCamp[String(v.campId)];
-  if(bc){ var k2 = -1; bc.list.forEach(function(x, k){ if(x.id === v.id) k2 = k; }); if(k2 >= 0) bc.list[k2] = v; else bc.list.unshift(v); }
+  if(bc){ var k2 = -1; bc.list.forEach(function(x, k){ if(String(x.id) === String(v.id)) k2 = k; }); if(k2 >= 0) bc.list[k2] = v; else bc.list.unshift(v); }
+}
+function findVid(id){
+  var all = V.list.slice(); Object.keys(V.byCamp).forEach(function(k){ all = all.concat(V.byCamp[k].list); });
+  return all.filter(function(v){ return String(v.id) === String(id); })[0] || null;
 }
 
-/* ── как ролик выглядит для блогера ── */
+/* подключённые аккаунты (TikTok и YouTube) */
+var AC = { list:null, at:0, p:null };
+function accKey(a){ return a ? a.platform + ':' + a.id : ''; }
+function accName(a){ return a ? (a.handle || a.title || PN[a.platform] || 'Аккаунт') : ''; }
+function normAcc(a){
+  if(!a) return null;
+  var p = pk(a.platform); if(VIDP.indexOf(p) < 0) return null;
+  var h = String(a.handle || a.username || '').trim();
+  if(!h && p === 'tiktok'){ var m = /tiktok\.com\/@([^/?#]+)/i.exec(String(a.url || '')); if(m) h = m[1]; }
+  if(h && h.charAt(0) !== '@' && /^[\w.-]+$/.test(h)) h = '@' + h;
+  var id = a.id != null && a.id !== '' && a.external_id == null ? a.id : (a.external_id != null ? a.external_id : a.id);
+  return { platform:p, id:String(id == null ? '' : id), handle:h, title:String(a.title || '').trim(), avatar:safeImg(a.avatar), ready:a.ready !== false, why:String(a.why || '') };
+}
+/* кэш — того, кто сейчас вошёл: сменился человек без перезагрузки —
+   чужие аккаунты не показываем ни секунды */
+function accMine(){ var w = mySrv(); if(AC.who !== w){ AC.list = null; AC.at = 0; AC.p = null; AC.who = w; } }
+function loadAcc(force){
+  if(!srvOk()) return Promise.resolve([]);
+  accMine();
+  if(AC.p) return AC.p;
+  if(!force && AC.list && Date.now() - AC.at < 30000) return Promise.resolve(AC.list);
+  var who = AC.who;
+  AC.p = api('GET', '/api/tasks/video/accounts').then(function(j){
+    return ((j && j.accounts) || []).map(normAcc).filter(Boolean);
+  }, function(e){
+    /* старый сервер без /accounts — берём подтверждённые каналы из профиля */
+    if(e && e.status === 404) return api('GET', '/api/verify/list').then(function(j){
+      return ((j && j.rows) || []).map(function(r){ return normAcc({ platform:r.platform, external_id:r.external_id, username:r.username, url:r.url, title:r.title, avatar:r.avatar }); }).filter(Boolean);
+    });
+    throw e;
+  }).then(function(list){ if(AC.who === who){ AC.list = list; AC.at = Date.now(); AC.p = null; } return list; }, function(e){ if(AC.who === who) AC.p = null; throw e; });
+  return AC.p;
+}
+
+/* лидерборд и участники задания */
+/* сортировка лидерборда: «по просмотрам» (views, по умолчанию — контракт
+   v2) или «по сумме выплаты» (earned, как переключатель у More Views) —
+   сервер отдаёт свой порядок и своё место человека; у каждой сортировки
+   свой кэш на 60 с */
+var BD = {}, PAGE = 50, SORT = {}, WHO = {};
+function boardOf(cid){ return BD[String(cid)] || null; }
+function sortOf(cid){ return SORT[String(cid)] === 'views' ? 'views' : 'earned'; }
+function dropBoard(cid){ var b = BD[String(cid)]; if(!b) return; b.at = 0; Object.keys(b.lead || {}).forEach(function(k){ b.lead[k].at = 0; }); }
+/* кого открывать по «Профиль» и «Чат»: номера аккаунтов сервер всем не
+   отдаёт — у строки есть card (открытая карточка каталога), а номер (uid)
+   приходит только автору задания; me — своя строка */
+function whoKey(x){ return x.uid != null ? 'u' + x.uid : x.card ? 'c' + x.card : ''; }
+function normPerson(x, i){
+  x = x || {};
+  var p = pk(x.platform); if(VIDP.indexOf(p) < 0) p = '';
+  var h = String(x.handle || '').trim(), uid = x.uid != null && x.uid !== '' && isFinite(Number(x.uid)) ? Number(x.uid) : null;
+  var card = /^[A-Za-z0-9_.:-]{3,64}$/.test(String(x.card || '')) ? String(x.card) : '';
+  if(h && h.charAt(0) !== '@' && /^[\w.-]+$/.test(h)) h = '@' + h;
+  var o = { rank:num(x.rank) || 0, uid:uid, card:card, me:x.me === true, name:String(x.name || '').slice(0, 40), handle:h, platform:p, avatar:safeImg(x.avatar),
+    videos:num(x.videos), views:num(x.views), earned:num(x.earned), joinedAt:x.joinedAt || null };
+  var k = whoKey(o); if(k) WHO[k] = o;
+  return o;
+}
+function normBoard(j){
+  j = j || {};
+  var m = j.me || null;
+  return {
+    members:num(j.members), videos:num(j.videos), views:num(j.views), paid:num(j.paid), reserved:num(j.reserved),
+    budget:num(j.budget), left:Math.max(0, num(j.left)), sort:j.sort === 'views' || j.sort === 'earned' ? j.sort : '',
+    leaders:(Array.isArray(j.leaders) ? j.leaders : []).map(normPerson),
+    participants:(Array.isArray(j.participants) ? j.participants : []).map(normPerson),
+    more:typeof j.more === 'boolean' ? j.more : null,
+    me:m ? { rank:m.rank == null ? null : num(m.rank), videos:num(m.videos), views:num(m.views), earned:num(m.earned), joined:typeof m.joined === 'boolean' ? m.joined : null } : null
+  };
+}
+function uniqP(list){ var seen = {}; return list.filter(function(x){ var k = whoKey(x) || (x.me ? 'me' : ''); if(!k) return true; if(seen[k]) return false; seen[k] = 1; return true; }); }
+/* сервер отдал другой порядок (старый, без sort) — наводим нужный сами */
+function leadOf(d, sort){
+  var L = { at:Date.now(), leaders:d.leaders, me:d.me };
+  if(d.sort !== sort){
+    var mr = d.me && d.me.rank;
+    L.leaders = d.leaders.slice().sort(sort === 'views'
+      ? function(a, b){ return b.views - a.views || b.earned - a.earned || a.rank - b.rank; }
+      : function(a, b){ return b.earned - a.earned || b.views - a.views || a.rank - b.rank; })
+      .map(function(x, i){ return Object.assign({}, x, { rank:i + 1, was:x.rank }); });
+    var mine = mr ? L.leaders.filter(function(x){ return x.was === mr; })[0] : null;
+    L.me = d.me ? Object.assign({}, d.me, { rank:mine ? mine.rank : null }) : null;
+  }
+  return L;
+}
+function loadBoard(cid, force, sort){
+  cid = String(cid); sort = sort || sortOf(cid);
+  var b = BD[cid] || (BD[cid] = { at:0, data:null, p:null, ps:'', off:false, err:false, more:false, lead:{} });
+  if(!srvOk()) return Promise.resolve(b);
+  if(b.p && b.ps === sort) return b.p;
+  var L = b.lead[sort];
+  if(!force && b.at && Date.now() - b.at < 60000 && L && L.at && Date.now() - L.at < 60000) return Promise.resolve(b);
+  var p = api('GET', '/api/tasks/board?campId=' + encodeURIComponent(cid) + '&limit=' + PAGE + '&sort=' + sort).then(function(j){
+    var d = normBoard(j);
+    /* «Показать ещё» уже догрузил участников — обновление раз в минуту не
+       обрезает список обратно до первой страницы (иначе прыжок прокрутки) */
+    if(b.data && b.data.participants.length > d.participants.length && b.data.members === d.members){
+      d.participants = uniqP(d.participants.concat(b.data.participants.slice(d.participants.length))); d.more = b.data.more;
+    }
+    b.data = d; b.at = Date.now(); b.off = false; b.err = false;
+    b.lead[sort] = leadOf(d, sort);
+    if(b.p === p){ b.p = null; b.ps = ''; }
+    return b;
+  }, function(e){
+    if(b.p === p){ b.p = null; b.ps = ''; }
+    b.at = Date.now();
+    if(e && e.status === 404) b.off = true; else b.err = true;
+    return b;
+  });
+  b.p = p; b.ps = sort;
+  return p;
+}
+function moreMembers(cid){
+  var b = boardOf(cid); if(!b || !b.data || b.more) return Promise.resolve(b);
+  b.more = true;
+  return api('GET', '/api/tasks/board?campId=' + encodeURIComponent(cid) + '&offset=' + b.data.participants.length + '&limit=' + PAGE + '&sort=' + sortOf(cid)).then(function(j){
+    b.more = false;
+    var add = (Array.isArray(j && j.participants) ? j.participants : []).map(normPerson);
+    b.data.participants = uniqP(b.data.participants.concat(add));
+    b.data.more = typeof (j && j.more) === 'boolean' ? j.more : null;
+    if(!add.length){ b.data.more = false; b.data.members = Math.max(b.data.members, b.data.participants.length); }
+    return b;
+  }, function(e){ b.more = false; toast((e && e.message) || 'Не получилось загрузить участников', 'err'); return b; });
+}
+
+/* ═══ КАК РОЛИК ВЫГЛЯДИТ ═══ */
+function vplat(v){ var p = pk(v && v.platform); return VIDP.indexOf(p) >= 0 ? p : 'tiktok'; }
+function handleTxt(v){ var h = String((v && v.handle) || '').replace(/^@/, '').trim(); return h ? (/^[\w.-]+$/.test(h) ? '@' + h : h) : ''; }
+/* g — раздел «Мои видео»: ok — одобренные, wait — на проверке, bad — отклонённые */
 function stOf(v){
-  if(v.disputeHeld && v.status === 'active') return { t:'Выплата ждёт решения спора', c:'warn' };
-  if(v.riskHold && (v.status === 'active' || v.status === 'review')) return { t:'Проверяем просмотры', c:'warn' };
-  if(v.payHold && (v.status === 'active' || v.status === 'review')) return { t:'Выплата задерживается', c:'warn' };
   switch(v.status){
-    case 'review':   return { t:'На проверке у рекламодателя', c:'wait' };
-    case 'active':   return { t:'Засчитано', c:'ok' };
-    case 'rejected': return { t:'Решает BloggerPay', c:'warn' };
-    case 'declined': return { t:'Не засчитано', c:'bad' };
-    case 'paid':     return { t:'Выплачено', c:'ok' };
-    case 'removed':  return { t:'Удалено из TikTok', c:'bad' };
-    case 'revoked':  return { t:'Нет доступа к TikTok', c:'bad' };
+    case 'paid':     return { t:'Выплачено', c:'ok', g:'ok' };
+    case 'declined': return { t:'Не засчитано', c:'bad', g:'bad' };
+    case 'removed':  return { t:'Удалено с площадки', c:'bad', g:'bad' };
+    case 'revoked':  return { t:'Нет доступа к аккаунту', c:'bad', g:'bad' };
   }
-  return { t:v.status || '—', c:'wait' };
+  if(v.disputeHeld) return { t:'Ждёт решения спора', c:'warn', g:'wait' };
+  if(v.riskHold) return { t:'Проверяем просмотры', c:'warn', g:'wait' };
+  if(v.payHold) return { t:'Выплата задерживается', c:'warn', g:'wait' };
+  if(v.status === 'rejected') return { t:'Решает BloggerPay', c:'warn', g:'wait' };
+  if(v.status === 'active') return { t:'Засчитано', c:'ok', g:'wait' };
+  return { t:'На проверке', c:'wait', g:'wait' };
 }
-function daysLeft(v){ var e = num(v.windowEndsAt); if(!e) return null; return Math.max(0, Math.ceil((e - Date.now()) / 864e5)); }
-function belowMin(v, c){ var m = c ? num(c.minViews) : 0; return m > 0 && num(v.views) < m ? m : 0; }
-function estimate(v, c){
+function terms(c){
+  return { fixed:c && c.payMode === 'fixed' ? num(c.fixedPrice) : 0, rate:num(c && c.rate), cap:num(c && c.maxPayout) || num(c && c.payMax), min:num(c && c.minViews) || num(c && c.viewsMin) };
+}
+function calc(views, c){
+  if(!c) return 0;
+  var t = terms(c); if(t.min && views < t.min) return 0;
+  if(t.fixed) return t.fixed;
+  var e = Math.floor(views * t.rate / 1000);
+  return t.cap ? Math.min(t.cap, e) : e;
+}
+/* сумма сейчас: оплачено — сколько пришло; иначе резерв с сервера, а без
+   него — по условиям задания (сервер всё равно считает сам) */
+function nowAmt(v, c){
   if(v.status === 'paid') return num(v.paid);
-  /* засчитанное считает сервер (по условиям на момент привязки) */
-  if(v.status !== 'review' || !c) return num(v.earned);
-  var views = num(v.views);
-  if(c.payMode === 'fixed') return belowMin(v, c) ? 0 : num(c.fixedPrice);
-  if(belowMin(v, c)) return 0;
-  var e = Math.floor(views * num(c.rate) / 1000), cap = num(c.maxPayout) || num(c.payMax);
-  return cap ? Math.min(cap, e) : e;
+  if(v.reserved != null) return num(v.reserved);
+  return c ? calc(num(v.views), c) : num(v.earned);
 }
-function capOf(c){ return c ? (num(c.maxPayout) || num(c.payMax) || (c.payMode === 'fixed' ? num(c.fixedPrice) : 0)) : 0; }
-function thumb(v){ return '<span class="vb-thumb">' + (v.cover ? '<img src="' + esc(v.cover) + '" alt="" referrerpolicy="no-referrer" onerror="this.remove()">' : '') + TT + (v.duration ? '<i>' + dur(v.duration) + '</i>' : '') + '</span>'; }
-function tileNum(n){
-  var t = short(n), m = /^(.*?)\s(тыс\.|млн)$/.exec(t);
-  return m ? m[1] + '<small>' + m[2].replace('.', '') + '</small>' : t;
+function thumb(v){
+  var p = vplat(v), cv = safeImg(v.cover);
+  return '<span class="vb-thumb' + (p === 'youtube' ? ' yt' : '') + '">' + pi(p)
+    + (cv ? '<img src="' + esc(cv) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : '')
+    + (v.duration ? '<i>' + dur(v.duration) + '</i>' : '') + '</span>';
 }
+/* цифры ролика — тем же коротким счётом, что и шапка и лидерборд: 12.4K, 1.2M */
+function st1(n, l){ return '<div class="vb-st"><b>' + kmb(n) + '</b><i>' + l + '</i></div>'; }
 function stats(v){
-  return '<div class="vb-stats">'
-    + '<div class="vb-st"><b>' + tileNum(v.views) + '</b><i>просмотры</i></div>'
-    + '<div class="vb-st"><b>' + tileNum(v.likes) + '</b><i>лайки</i></div>'
-    + '<div class="vb-st"><b>' + tileNum(v.comments) + '</b><i>комменты</i></div>'
-    + '<div class="vb-st"><b>' + tileNum(v.shares) + '</b><i>репосты</i></div></div>';
+  var yt = vplat(v) === 'youtube';
+  return '<div class="vb-stats' + (yt ? ' three' : '') + '">' + st1(v.views, 'просмотры') + st1(v.likes, 'лайки') + st1(v.comments, 'комменты') + (yt ? '' : st1(v.shares, 'репосты')) + '</div>';
 }
-function moneyLine(v, c){
-  var s = stOf(v), est = estimate(v, c), cap = capOf(c);
-  if(v.status === 'paid') return '<div class="vb-p-money"><span>Выплачено на баланс</span><b>' + rub(v.paid) + '</b></div>';
-  if(v.status === 'active' && num(v.paid) > 0){
-    /* часть уже на балансе, остальное задержано (не хватило бюджета и т. п.) */
-    return '<div class="vb-p-money"><span>Начислено ' + rub(v.paid) + ' · остальное задержано</span><b>' + rub(v.earned) + '</b></div>';
-  }
-  if(v.status === 'active'){
-    var dl = daysLeft(v);
-    var held = v.riskHold || v.payHold || v.disputeHeld;
-    return '<div class="vb-p-money"><span>' + (held ? 'Выплата ждёт решения' : 'К выплате сейчас') + (dl != null && !held ? ' · ещё ' + dl + ' дн.' : '') + '</span><b>≈ ' + rub(est) + '</b></div>'
-      + (cap ? '<div class="vb-bar"><i style="width:' + Math.min(100, Math.round(est / cap * 100)) + '%"></i></div>' : '');
-  }
-  if(v.status === 'review') return '<div class="vb-p-money"><span>Сейчас по просмотрам</span><b>≈ ' + rub(est) + '</b></div>';
-  return '';
+function letterOf(s){ s = String(s || '').replace(/^@/, '').trim(); var ch = (Array.from ? Array.from(s)[0] : s.charAt(0)) || '•'; return esc(ch.toUpperCase()); }
+function accAva(a){
+  if(!a) return '<span class="vb-ava"></span>';
+  if(a.avatar) return '<span class="vb-ava">' + letterOf(accName(a)) + '<img src="' + esc(a.avatar) + '" alt="" referrerpolicy="no-referrer" onerror="this.remove()">' + pi(a.platform, 'vb-pi-dot') + '</span>';
+  return '<span class="vb-ava">' + pi(a.platform) + '</span>';
 }
-function minNote(v, c){ var m = belowMin(v, c); return m && (v.status === 'review' || v.status === 'active') ? '<div class="vb-more">Ниже минимума: нужно ' + fmt(m) + ' просмотров, сейчас ' + fmt(v.views) + '</div>' : ''; }
+function personAva(x){
+  return '<span class="vb-ava">' + letterOf(x.handle || x.name) + (x.avatar ? '<img src="' + esc(x.avatar) + '" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">' : '')
+    + (x.platform ? pi(x.platform, 'vb-pi-dot') : '') + '</span>';
+}
+/* ник, как у More Views: @ник подтверждённого аккаунта, без него — имя */
+function nickOf(x){ return (x && (x.handle || x.name)) || 'Участник'; }
 
-/* ═══ ШТОРКА «ПРИВЯЗАТЬ ВИДЕО» ═══ */
+/* ═══ ШТОРКИ ═══ */
+var STACK = [];
 function sheet(id){
   var s = $(id); if(s) return s;
   s = document.createElement('div'); s.id = id; s.className = 'vb-sheet';
   s.setAttribute('role', 'dialog'); s.setAttribute('aria-modal', 'true');
-  s.innerHTML = '<div class="vb-card"></div>';
-  s.addEventListener('click', function(e){ if(e.target === s){ if(s.id === 'bpVbPlayer') window.closeBpVbPlayer(); else closeSheet(s); } });
+  s.innerHTML = '<div class="vb-card" tabindex="-1"></div>';
+  s.addEventListener('click', function(e){ if(e.target === s){ if(s.__eat && Date.now() - s.__eat < 700){ s.__eat = 0; return; } if(s.id === 'bpVbPlayer') window.closeBpVbPlayer(); else closeSheet(s); } });
+  s.querySelector('.vb-card').addEventListener('scroll', function(){ if(B && B.menu) placeMenu(); }, { passive:true });
+  /* меню открыли, пока окно ещё выезжало, — когда доехало, ставим меню к кнопке */
+  s.querySelector('.vb-card').addEventListener('transitionend', function(e){ if(e.target === this && B && B.menu) placeMenu(); });
   document.body.appendChild(s);
   return s;
 }
 function openSheet(s, html, label){
   s.setAttribute('aria-label', label || 'Окно');
-  s.querySelector('.vb-card').innerHTML = '<div class="vb-grab"></div>' + html;
-  s.querySelector('.vb-card').scrollTop = 0;
+  var card = s.querySelector('.vb-card');
+  card.innerHTML = '<div class="vb-grab"></div>' + html;
+  card.scrollTop = 0;
   /* системная «Назад» (bp-nav) в крайнем случае ставит display:none */
   s.style.removeProperty('display');
-  requestAnimationFrame(function(){ s.classList.add('on'); });
+  if(!s.classList.contains('on')){
+    s.__ret = document.activeElement;
+    requestAnimationFrame(function(){ s.classList.add('on'); try{ card.focus({ preventScroll:true }); }catch(e){} });
+  }
+  STACK = STACK.filter(function(x){ return x !== s.id; }); STACK.push(s.id);
+  sheetFlag();
 }
-function closeSheet(s){ if(!s) return; s.classList.remove('on'); try{ var a = document.activeElement; if(a && s.contains(a)) a.blur(); }catch(e){} }
+/* окно открыто — тосты и всплывашки поднимаются над ним (z-index окна 720
+   выше обёртки #bpToastWrap), иначе «нет доступа к буферу» и прочее
+   рисовалось бы под карточкой окна */
+function sheetFlag(){
+  var on = STACK.length > 0, h = document.documentElement;
+  if(h.classList.contains('vb-sheet-open') !== on) h.classList.toggle('vb-sheet-open', on);
+}
+function closeSheet(s){
+  if(!s) return;
+  if(s.id === 'bpVbSheet') closeMenu(true);
+  if(s.classList.contains('on')) s.classList.remove('on');
+  STACK = STACK.filter(function(x){ return x !== s.id; });
+  sheetFlag();
+  try{ var a = document.activeElement; if(a && s.contains(a)) a.blur(); }catch(e){}
+  try{ var r = s.__ret; s.__ret = null; if(r && r.focus && document.contains(r)) r.focus({ preventScroll:true }); }catch(e){}
+}
 window.closeBpVbSheet = function(){ closeSheet($('bpVbSheet')); };
+window.closeBpVbList = function(){ closeSheet($('bpVbList')); };
 window.closeBpVbPlayer = function(){ var s = $('bpVbPlayer'); if(s){ var f = s.querySelector('iframe'); if(f) f.src = 'about:blank'; } closeSheet(s); };
-
-var B = { campId:null, acc:null, busy:false };
 function hd(t){ return '<div class="vb-hd"><b>' + t + '</b><button type="button" class="vb-x" data-vb="close" aria-label="Закрыть">×</button></div>'; }
-function myTikTok(){
-  return api('GET', '/api/verify/list').then(function(j){
-    var rows = ((j && j.rows) || []).filter(function(r){ return String(r.platform || '').toLowerCase() === 'tiktok'; });
-    return rows[0] || null;
-  });
-}
-function accHandle(a){
-  if(!a) return '';
-  if(a.username) return '@' + String(a.username).replace(/^@/, '');
-  var m = /tiktok\.com\/@([^/?#]+)/i.exec(String(a.url || ''));
-  return m ? '@' + m[1] : (a.title || 'TikTok');
+
+/* ═══ ОКНО «ЗАГРУЗКА ВИДЕО» ═══ */
+var B = null;
+function accs(){ var c = B && camp(B.campId), al = allowed(c); return ((B && B.all) || []).filter(function(a){ return al.indexOf(a.platform) >= 0; }); }
+function selAcc(){ if(!B || !B.sel) return null; return accs().filter(function(a){ return accKey(a) === B.sel; })[0] || null; }
+function pickInitial(prefer){
+  var list = accs(); if(!list.length){ B.sel = ''; return; }
+  if(B.sel && list.some(function(a){ return accKey(a) === B.sel; })) return;
+  if(prefer && prefer.p){
+    var same = list.filter(function(a){ return a.platform === prefer.p; });
+    var fresh = same.filter(function(a){ return (prefer.prev || []).indexOf(accKey(a)) < 0; });
+    if(fresh.length){ B.sel = accKey(fresh[0]); return; }
+    if(same.length === 1){ B.sel = accKey(same[0]); return; }
+  }
+  if(list.length === 1){ B.sel = accKey(list[0]); return; }
+  var last = lsGet('bpvb_lastacc:' + (mySrv() || ''));
+  if(last && list.some(function(a){ return accKey(a) === last; })){ B.sel = last; return; }
+  B.sel = '';
 }
 
-window.bpVbOpen = function(campId){
+window.bpVbOpen = function(campId, opts){
   var c = camp(campId); if(!c) return;
-  B.campId = String(campId);
+  opts = opts || {};
+  closeMenu(true);
+  /* закрытое меню прошлого окна (возможно, другого человека) — пустым */
+  var om = $('vbMenu'); if(om && om.innerHTML) om.innerHTML = '';
+  accMine();
+  B = { campId:String(campId), all:AC.list, sel:'', busy:false, loading:!AC.list, menu:false, addOpen:false, touched:!!opts.url, accErr:false };
   var s = sheet('bpVbSheet');
-  if(!srvOk()){
-    openSheet(s, hd('Привязать видео') + '<div class="vb-empty">' + TT + '<b>Нет связи с сервером</b><span>Войдите в аккаунт и проверьте интернет — привязка идёт через сервер BloggerPay.</span></div>', 'Привязать видео');
+  if(!srvOk() || !me()){
+    openSheet(s, hd('Загрузка видео') + '<div class="vb-empty"><b>Нет связи с сервером</b><span>Войдите в аккаунт и проверьте интернет — видео проверяет сервер BloggerPay.</span></div>'
+      + '<button type="button" class="vb-go ghost" data-vb="close">Закрыть</button>', 'Загрузка видео');
     return;
   }
-  openSheet(s, hd('Привязать видео') + '<div class="vb-empty"><span class="vb-spin" style="margin:18px auto"></span><span>Проверяем ваш TikTok…</span></div>', 'Привязать видео');
-  myTikTok().then(function(acc){
-    B.acc = acc;
-    if(!acc){ paintNoChannel(); return; }
-    paintForm();
-  }, function(){ paintForm(); });
+  openSheet(s, formHtml(c, opts.url || ''), 'Загрузка видео');
+  if(opts.agree){ var ag = $('vbAgree'); if(ag) ag.checked = true; }
+  if(B.all) pickInitial(opts.prefer);
+  paintAcc(); validate();
+  fetchAcc(opts.prefer);
 };
-function paintNoChannel(){
-  var s = sheet('bpVbSheet');
-  s.querySelector('.vb-card').innerHTML = '<div class="vb-grab"></div>' + hd('Привязать видео')
-    + '<div class="vb-empty">' + TT + '<b>Подтвердите свой TikTok</b>'
-    + '<span>Видео берём только с подтверждённого аккаунта — так рекламодатель уверен, что ролик ваш, а просмотры настоящие.</span></div>'
-    + '<button type="button" class="vb-go" data-vb="verify">' + TT + 'Подтвердить TikTok</button>';
-}
-function paintForm(err){
-  var c = camp(B.campId), a = B.acc, s = sheet('bpVbSheet');
-  var accHtml = a
-    ? '<div class="vb-acc"><span class="vb-acc-ava">' + (a.avatar && /^https:\/\//.test(a.avatar) ? '<img src="' + esc(a.avatar) + '" alt="" referrerpolicy="no-referrer">' : TT) + '</span>'
-      + '<span class="vb-acc-tx"><b>' + esc(accHandle(a)) + '</b><i>TikTok · подтверждён</i></span></div>'
-    : '';
-  s.querySelector('.vb-card').innerHTML = '<div class="vb-grab"></div>' + hd('Привязать видео')
-    + '<div class="vb-sub">Вставьте ссылку на ролик из вашего TikTok — просмотры, лайки и комментарии подтянутся сами.</div>'
-    + accHtml
-    + '<label class="vb-fld' + (err ? ' bad' : '') + '" id="vbFld"><span class="vb-fld-k">Ссылка на видео</span><span class="vb-fld-row">'
-    + '<input id="vbUrl" type="url" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="go" placeholder="https://www.tiktok.com/@…/video/…" aria-label="Ссылка на видео TikTok">'
-    + '<button type="button" class="vb-paste" data-vb="paste">Вставить</button></span></label>'
-    + '<div class="vb-err" id="vbErr" role="alert">' + (err ? esc(err) : '') + '</div>'
-    + '<div class="vb-warn">' + WARN + '<div><b>Видео должно быть с рекламной интеграцией этого задания</b>'
-    + '<span>«' + esc((c && (c.name || c.title)) || 'Задание') + '». Рекламодатель проверит ролик перед зачётом: реклама, маркировка erid и условия задания.</span></div></div>'
-    + '<label class="vb-agree"><input type="checkbox" id="vbAgree"><span>В видео есть реклама из этого задания</span></label>'
-    + '<button type="button" class="vb-go" id="vbGo" data-vb="bind" disabled>Привязать видео</button>'
-    + (isMixed(c) ? '<div class="vb-note" style="text-align:center">Публикация не в TikTok? <button type="button" class="vb-linkbtn" data-vb="old">Сдать по ссылке</button></div>' : '')
-    + '<div class="vb-how"><b>Как засчитывается видео</b><ol>'
-    + '<li>Берём ролик прямо из вашего подтверждённого TikTok.</li>'
-    + '<li>Рекламодатель проверяет интеграцию и засчитывает видео.</li>'
-    + '<li>7 дней считаем просмотры — данные обновляются каждый день.</li>'
-    + '<li>Потом выплата сама приходит на баланс. Накрутку проверяем.</li></ol></div>';
-  var inp = $('vbUrl'), ag = $('vbAgree');
-  function upd(){ $('vbGo').disabled = B.busy || !inp.value.trim() || !ag.checked; }
-  inp.addEventListener('input', function(){ $('vbFld').classList.remove('bad'); $('vbErr').textContent = ''; upd(); });
-  inp.addEventListener('keydown', function(e){ if(e.key === 'Enter'){ e.preventDefault(); if(!$('vbGo').disabled) bind(); } });
-  ag.addEventListener('change', upd);
-}
-var ERR_RECONNECT = { no_channel:1, token:1, scope:1 };
-function bind(){
-  if(B.busy) return;
-  var inp = $('vbUrl'), go = $('vbGo'); if(!inp || !go) return;
-  B.busy = true; go.disabled = true;
-  go.innerHTML = '<span class="vb-spin"></span>Ищем видео в вашем TikTok…';
-  api('POST', '/api/tasks/video/bind', { campId:B.campId, url:inp.value.trim(), agree:true }).then(function(j){
-    B.busy = false;
-    var v = j && j.video; if(!v) throw new Error('Сервер не вернул видео');
-    upsert(v); repaint();
-    paintDone(v);
-    try{ if(typeof window.bpNotify === 'function') window.bpNotify('task', 'Видео привязано', 'Ждём проверки рекламодателя', {}); }catch(e){}
-  }).catch(function(e){
-    B.busy = false;
-    var code = e && e.code, msg = (e && e.message) || 'Не получилось привязать видео';
-    if(code && ERR_RECONNECT[code]){
-      paintForm(msg);
-      var box = $('vbErr');
-      if(box) box.insertAdjacentHTML('beforeend', '<button type="button" class="vb-go ghost" data-vb="verify" style="margin-top:10px">' + TT + 'Переподключить TikTok</button>');
-      if(code === 'no_channel'){ paintNoChannel(); }
-    } else {
-      var keep = inp.value; paintForm(msg);
-      var i2 = $('vbUrl'); if(i2) i2.value = keep;
-      if(code === 'camp_closed' || code === 'not_tiktok'){
-        var eb = $('vbErr');
-        if(eb) eb.insertAdjacentHTML('beforeend', '<button type="button" class="vb-go ghost" data-vb="old" style="margin-top:10px">Сдать работу по ссылке</button>');
-      }
-    }
+/* аккаунты для окна; сбой без кэша — честно «не загрузились · Повторить»,
+   а не «аккаунтов пока нет» (человек пошёл бы подключать их заново) */
+function fetchAcc(prefer){
+  var cur = B; if(!cur) return;
+  loadAcc(true).then(function(list){
+    if(B !== cur) return;
+    B.all = list; B.loading = false; B.accErr = false;
+    /* только что подключили аккаунт — выбираем его, а не прежний из кэша */
+    if(prefer && !B.picked) B.sel = '';
+    pickInitial(prefer);
+    paintAcc(); validate();
+    if(B.menu){ var m = $('vbMenu'); if(m){ m.innerHTML = menuHtml(); placeMenu(); } }
+  }, function(e){
+    if(B !== cur) return;
+    B.loading = false; if(!B.all) B.all = [];
+    B.accErr = !B.all.length;
+    paintAcc(); validate();
+    if(B.menu){ var m = $('vbMenu'); if(m){ m.innerHTML = menuHtml(); placeMenu(); } }
   });
 }
-function paintDone(v){
-  var s = sheet('bpVbSheet'), c = camp(v.campId);
-  s.querySelector('.vb-card').innerHTML = '<div class="vb-grab"></div>' + hd('Видео привязано')
-    + '<span class="vb-done">' + OKI + 'Подключено</span>'
-    + '<div class="vb-video">' + thumb(v) + '<div class="vb-video-tx"><b>' + esc(v.title || 'Видео TikTok') + '</b>'
-    + '<i>' + esc(v.handle ? '@' + String(v.handle).replace(/^@/, '') : 'TikTok') + (v.postedAt ? ' · ' + esc(dmy(v.postedAt)) : '') + '</i></div></div>'
+function retryAcc(){
+  if(!B || B.busy) return;
+  closeMenu(true);
+  B.accErr = false; B.loading = true; B.all = null;
+  paintAcc(); validate();
+  fetchAcc(null);
+}
+
+function formHtml(c, url){
+  var minV = terms(c).min;
+  return hd('Загрузка видео')
+    + '<div class="vb-info">' + INFO + '<div><p>Отправляйте видео, когда готовы зафиксировать просмотры: выплата считается по просмотрам в момент проверки и приходит на баланс сразу после неё. Просмотры после выплаты в зачёт не идут.</p>'
+    + (minV ? '<p>Минимум для выплаты — <b>' + fmt(minV) + ' ' + plural(minV, 'просмотр', 'просмотра', 'просмотров') + '</b></p>' : '') + '</div></div>'
+    + '<div class="vb-fld"><span class="vb-fld-k" id="vbAccK">Аккаунт</span>'
+    + '<button type="button" class="vb-dd-btn" id="vbDd" data-vb="menu" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="vbAccK vbDd"></button></div>'
+    + '<label class="vb-fld" id="vbFld"><span class="vb-fld-k">Ссылка на видео</span><span class="vb-fld-row">'
+    + '<input id="vbUrl" type="url" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="send" value="' + esc(url) + '">'
+    + '<button type="button" class="vb-paste" data-vb="paste">Вставить</button></span></label>'
+    + '<div class="vb-hint" id="vbHint" role="status" aria-live="polite"></div>'
+    + '<div id="vbFail"></div>'
+    + '<div class="vb-warn">' + WARN + '<div><b>Видео должно быть с рекламной интеграцией этого задания</b>'
+    + '<span>«' + esc(nameOf(c)) + '». Рекламодатель проверит ролик: реклама, маркировка erid и условия задания.</span></div></div>'
+    + '<label class="vb-agree"><input type="checkbox" id="vbAgree"><span>В видео есть реклама из этого задания</span></label>'
+    + '<div class="vb-btns"><button type="button" class="vb-go ghost" data-vb="close">Закрыть</button>'
+    + '<button type="button" class="vb-go" id="vbGo" data-vb="send" disabled><span class="lbl">Отправить</span></button></div>'
+    + (isMixed(c) && typeof window.__bpVbOrigSubmit === 'function' ? '<div class="vb-alt">Публикация не в TikTok и не в YouTube? <button type="button" class="vb-linkbtn" data-vb="old">Сдать по ссылке</button></div>' : '');
+}
+function paintAcc(){
+  var b = $('vbDd'); if(!b || !B) return;
+  var a = selAcc(), list = accs(), c = camp(B.campId), html;
+  if(B.loading && !B.all){
+    html = '<span class="vb-ava"><span class="vb-sk" style="width:100%;height:100%;border-radius:50%"></span></span><span class="vb-dd-tx"><b class="ph">Загружаем аккаунты…</b></span>';
+  } else if(a){
+    html = accAva(a) + '<span class="vb-dd-tx"><b>' + esc(accName(a)) + '</b><span>' + badge(a.platform)
+      + (a.ready ? '<span class="ok">подключён</span>' : '<span class="warn">переподключите</span>') + '</span></span>' + CHEV;
+  } else if(B.accErr){
+    html = '<span class="vb-dd-new">' + WARN + '</span><span class="vb-dd-tx"><b class="ph">Аккаунты не загрузились</b><span>Нажмите, чтобы повторить</span></span>' + CHEV;
+  } else {
+    html = '<span class="vb-dd-new">' + PLUS + '</span><span class="vb-dd-tx"><b class="ph">Выберите аккаунт</b><span>'
+      + (list.length ? 'Подключено: ' + list.length : 'Подключите ' + esc(namesOf(allowed(c), ' или '))) + '</span></span>' + CHEV;
+  }
+  var dis = !!(B.busy || (B.loading && !B.all));
+  if(b.disabled !== dis) b.disabled = dis;
+  if(b.__h !== html){ b.innerHTML = html; b.__h = html; }
+}
+function hintBox(text, kind, act, lbl){
+  var h = $('vbHint'); if(!h) return;
+  var html = text ? ((kind === 'info' ? INFO : kind === 'warn' ? WARN : ERRI) + '<div>' + esc(text)
+    + (act ? '<button type="button" class="vb-hint-go" data-vb="act" data-act="' + esc(act) + '">' + esc(lbl) + '</button>' : '') + '</div>') : '';
+  var cls = 'vb-hint' + (kind && kind !== 'bad' ? ' ' + kind : '');
+  if(h.className !== cls) h.className = cls;
+  if(h.__h !== html){ h.innerHTML = html; h.__h = html; }
+}
+function validate(){
+  if(!B) return;
+  var c = camp(B.campId), inp = $('vbUrl'), go = $('vbGo'), ag = $('vbAgree'), fld = $('vbFld'); if(!inp || !go) return;
+  /* идёт проверка — подпись полная здесь, в кнопке только «Проверяем…» */
+  if(B.busy){ var ba = selAcc(); hintBox('Проверяем видео на аккаунте' + (ba ? ' ' + accName(ba) : '') + '…', 'info', '', ''); return; }
+  var al = allowed(c), li = linkInfo(inp.value), a = selAcc(), list = accs();
+  var hint = '', kind = '', act = '', lbl = '';
+  if(li && li.url){
+    if(!li.plat){ hint = 'Это не ссылка на видео TikTok или YouTube'; kind = 'bad'; }
+    else if(al.indexOf(li.plat) < 0){
+      hint = 'В этом задании принимаются видео только из ' + namesOf(al, ' и '); kind = 'bad';
+      if(isMixed(c) && typeof window.__bpVbOrigSubmit === 'function'){ act = 'old'; lbl = 'Сдать работу по ссылке'; }
+    } else if(!B.loading || B.all){
+      var same = list.filter(function(x){ return x.platform === li.plat; });
+      /* аккаунт подбираем сами, только когда ссылка новая (вставили или
+         поправили) или человек ещё не выбирал: ручной выбор не перебиваем —
+         вместо этого ниже объясняем, что ссылка с другой площадки */
+      var fresh = B.urlSeen !== li.url; B.urlSeen = li.url;
+      if(fresh || !B.picked){
+        /* ссылка другой площадки, а аккаунт этой площадки один — переключаемся сами */
+        if((!a || a.platform !== li.plat) && same.length === 1){ B.sel = accKey(same[0]); a = same[0]; paintAcc(); }
+        else if(li.handle && a && a.platform === 'tiktok'){
+          var hm = same.filter(function(x){ return hnorm(x.handle) === li.handle; })[0];
+          if(hm && accKey(hm) !== B.sel){ B.sel = accKey(hm); a = hm; paintAcc(); }
+        }
+      }
+      if(a && a.platform !== li.plat){
+        hint = 'Ссылка с ' + PN[li.plat] + ', а выбран ' + PN[a.platform] + '-аккаунт — '
+          + (same.length ? 'выберите ' + PN[li.plat] + '-аккаунт' : 'подключите ' + PN[li.plat] + ' или вставьте ссылку из ' + PN[a.platform]);
+        kind = 'bad';
+        if(same.length){ act = 'menu'; lbl = 'Выбрать аккаунт'; } else { act = 'conn:' + li.plat; lbl = 'Подключить ' + PN[li.plat]; }
+      } else if(!a && !same.length){
+        hint = 'Подключите свой ' + PN[li.plat] + ' — видео берём только с подтверждённого аккаунта'; kind = 'warn';
+        act = 'conn:' + li.plat; lbl = 'Подключить ' + PN[li.plat];
+      } else if(!a){ hint = 'Выберите аккаунт, на котором опубликовано видео'; kind = 'warn'; act = 'menu'; lbl = 'Выбрать аккаунт'; }
+    }
+  } else if(li && !li.url && B.touched){ hint = 'Вставьте ссылку на видео — её можно скопировать в приложении ' + namesOf(al, ' или '); kind = 'info'; }
+  if(!hint && B.accErr){ hint = 'Не получилось загрузить аккаунты — проверьте интернет'; kind = 'warn'; act = 'retry-acc'; lbl = 'Повторить'; }
+  if(!hint && a && !a.ready){
+    hint = 'Доступ к ' + accName(a) + ' истёк — переподключите аккаунт, иначе мы не увидим видео'; kind = 'bad';
+    act = 'conn:' + a.platform; lbl = 'Переподключить ' + PN[a.platform];
+  }
+  hintBox(hint, kind, act, lbl);
+  if(fld){ var bad = kind === 'bad' && !!(li && li.url); if(fld.classList.contains('bad') !== bad) fld.classList.toggle('bad', bad); }
+  var ph = a ? (a.platform === 'youtube' ? 'youtube.com/shorts/…' : 'tiktok.com/@ник/video/…') : 'Вставьте ссылку';
+  if(inp.placeholder !== ph) inp.placeholder = ph;
+  if(!B.busy){
+    var dis = !!((B.loading && !B.all) || !li || !li.url || kind === 'bad' || !a || !a.ready || !(ag && ag.checked));
+    if(go.disabled !== dis) go.disabled = dis;
+  }
+}
+function clearFail(){ var f = $('vbFail'); if(f && f.innerHTML) f.innerHTML = ''; }
+
+/* выпадающий список аккаунтов: role=listbox, клавиатура, Esc и клик мимо */
+function optEls(){ var m = $('vbMenu'); return m ? [].slice.call(m.querySelectorAll('[role="option"]')) : []; }
+function menuHtml(){
+  var list = accs(), al = allowed(camp(B.campId));
+  var h = list.map(function(a, i){
+    var sub = esc(PN[a.platform]) + (a.title && a.handle && hnorm(a.title) !== hnorm(a.handle) ? ' · ' + esc(a.title) : '');
+    return '<div class="vb-opt" role="option" id="vbOpt' + i + '" data-vb="opt" data-key="' + esc(accKey(a)) + '" aria-selected="' + (accKey(a) === B.sel) + '">'
+      + accAva(a) + '<span class="vb-opt-tx"><b>' + esc(accName(a)) + '</b><span>' + sub
+      + (a.ready ? '' : ' · <span class="warn">переподключите</span>') + '</span></span>' + CK + '</div>';
+  }).join('');
+  if(!list.length && B.accErr) h += '<div class="vb-dd-empty">Не получилось загрузить аккаунты — проверьте интернет.</div>'
+    + '<div class="vb-opt" role="option" id="vbOptRetry" data-vb="retry-acc" aria-selected="false"><span class="vb-dd-new">' + REDO + '</span><span class="vb-opt-tx"><b>Повторить</b></span></div>';
+  else if(!list.length) h += '<div class="vb-dd-empty">Подключённых аккаунтов ' + esc(namesOf(al, ' и ')) + ' пока нет. Видео берём только с аккаунта, который вы подтвердили входом.</div>';
+  h += '<div class="vb-opt vb-opt-add" role="option" id="vbOptAdd" data-vb="add" aria-selected="false"><span class="vb-dd-new">' + PLUS + '</span><span class="vb-opt-tx"><b>Подключить аккаунт</b></span></div>';
+  if(al.length > 1) h += '<div class="vb-add-pl" id="vbAddPl"' + (B.addOpen ? '' : ' hidden') + '>'
+    + al.map(function(p){ return '<button type="button" data-vb="conn" data-p="' + p + '">' + pi(p) + PN[p] + '</button>'; }).join('') + '</div>';
+  return h;
+}
+function setAct(i){
+  var o = optEls(); if(!o.length) return;
+  i = (i + o.length) % o.length;
+  o.forEach(function(x, k){ var on = k === i; if(x.classList.contains('act') !== on) x.classList.toggle('act', on); });
+  var m = $('vbMenu'); if(m){ m.setAttribute('aria-activedescendant', o[i].id); }
+  try{ o[i].scrollIntoView({ block:'nearest' }); }catch(e){}
+  B.act = i;
+}
+function openMenu(){
+  if(!B || B.busy) return;
+  var btn = $('vbDd'), s = $('bpVbSheet'); if(!btn || !s || btn.disabled) return;
+  var m = $('vbMenu');
+  if(!m || m.parentNode !== s){
+    if(m) m.remove();
+    m = document.createElement('div'); m.id = 'vbMenu'; m.className = 'vb-dd-menu';
+    m.setAttribute('role', 'listbox'); m.setAttribute('tabindex', '-1'); m.setAttribute('aria-label', 'Аккаунты');
+    m.addEventListener('keydown', menuKey);
+    s.appendChild(m);
+  }
+  B.menu = true; B.addOpen = false;
+  m.innerHTML = menuHtml();
+  btn.setAttribute('aria-expanded', 'true'); btn.setAttribute('aria-controls', 'vbMenu');
+  placeMenu();
+  var o = optEls(), i = 0; o.forEach(function(x, k){ if(x.getAttribute('aria-selected') === 'true') i = k; });
+  setAct(i);
+  requestAnimationFrame(function(){ if(B && B.menu && !m.classList.contains('on')) m.classList.add('on'); });
+  try{ m.focus({ preventScroll:true }); }catch(e){}
+}
+function closeMenu(noFocus){
+  var m = $('vbMenu'), btn = $('vbDd');
+  var was = !!(B && B.menu);
+  if(B){ B.menu = false; B.addOpen = false; }
+  if(m && m.classList.contains('on')) m.classList.remove('on');
+  if(btn && btn.getAttribute('aria-expanded') !== 'false') btn.setAttribute('aria-expanded', 'false');
+  if(was && !noFocus && btn){ try{ btn.focus({ preventScroll:true }); }catch(e){} }
+}
+function placeMenu(){
+  var m = $('vbMenu'), btn = $('vbDd'); if(!m || !btn) return;
+  var r = btn.getBoundingClientRect(), vh = window.innerHeight, vw = window.innerWidth;
+  /* кнопку унесло прокруткой — меню закрываем, а не держим в воздухе */
+  if(r.bottom < 0 || r.top > vh){ closeMenu(true); return; }
+  m.style.left = Math.max(8, Math.round(r.left)) + 'px';
+  m.style.width = Math.round(Math.min(r.width, vw - 16)) + 'px';
+  m.style.maxHeight = 'none';
+  var h = m.scrollHeight, below = vh - r.bottom - 14, above = r.top - 14;
+  var up = h > below && above > below;
+  var mh = Math.max(140, Math.min(h, up ? above : below));
+  m.style.maxHeight = mh + 'px';
+  if(m.classList.contains('up') !== up) m.classList.toggle('up', up);
+  m.style.top = Math.round(up ? (r.top - 6 - Math.min(h, mh)) : (r.bottom + 6)) + 'px';
+}
+function activate(el, viaKey){
+  if(!el || !B) return;
+  var a = el.getAttribute('data-vb');
+  if(a === 'opt'){ selectAcc(el.getAttribute('data-key')); closeMenu(); return; }
+  if(a === 'retry-acc'){ retryAcc(); return; }
+  if(a === 'add'){
+    var al = allowed(camp(B.campId));
+    if(al.length === 1){ connect(al[0]); return; }
+    B.addOpen = !B.addOpen;
+    var pl = $('vbAddPl'); if(pl){ if(B.addOpen) pl.removeAttribute('hidden'); else pl.setAttribute('hidden', ''); }
+    placeMenu();
+    if(viaKey && B.addOpen && pl){ var f = pl.querySelector('button'); if(f) try{ f.focus({ preventScroll:true }); }catch(e){} }
+  }
+}
+function menuKey(e){
+  if(!B || !B.menu) return;
+  var k = e.key, o = optEls(), i = B.act == null ? 0 : B.act;
+  if(k === 'ArrowDown' || k === 'ArrowUp'){ e.preventDefault(); setAct(i + (k === 'ArrowDown' ? 1 : -1)); var m = $('vbMenu'); if(m && document.activeElement !== m) try{ m.focus({ preventScroll:true }); }catch(_){} return; }
+  if(k === 'Home' || k === 'End'){ e.preventDefault(); setAct(k === 'Home' ? 0 : o.length - 1); return; }
+  if((k === 'Enter' || k === ' ') && e.target === $('vbMenu')){ e.preventDefault(); activate(o[i], true); return; }
+  if(k === 'Escape'){ e.preventDefault(); e.stopPropagation(); closeMenu(); return; }
+  /* Tab из меню — как Esc: фокус возвращается на кнопку аккаунта, и Tab
+     ведёт дальше по окну, а не на страницу под ним */
+  if(k === 'Tab'){ closeMenu(); }
+}
+function selectAcc(key){
+  if(!B) return;
+  B.picked = true;
+  if(B.sel !== key){ B.sel = key; clearFail(); }
+  paintAcc(); validate();
+}
+/* подключить аккаунт: окно площадки открывается в этом же нажатии,
+   иначе браузер его заблокирует; после подтверждения окно загрузки
+   вернётся само (bpAbcAfterVerify) */
+function connect(p, cid){
+  var inp = $('vbUrl'), ag = $('vbAgree');
+  var rs = { c:cid || (B && B.campId), u:inp ? inp.value : '', p:p, at:Date.now(), prev:((B && B.all) || []).map(accKey), ag:!!(ag && ag.checked) };
+  if(rs.c){ try{ sessionStorage.setItem('bpvbResume', JSON.stringify(rs)); }catch(e){} }
+  closeMenu(true); closeSheet($('bpVbSheet'));
+  try{ if(typeof window.bpVerifyOwn === 'function') window.bpVerifyOwn(p); else if(typeof goTo === 'function') goTo('profile'); }catch(err){ E(err); }
+}
+(function(){
+  var o = window.bpAbcAfterVerify;
+  window.bpAbcAfterVerify = function(pid){
+    var r; try{ if(typeof o === 'function') r = o.apply(this, arguments); }catch(e){ E(e); }
+    AC.at = 0;
+    try{
+      var rs = JSON.parse(sessionStorage.getItem('bpvbResume') || 'null');
+      if(rs && rs.c && Date.now() - num(rs.at) < 15 * 60000 && VIDP.indexOf(pk(pid)) >= 0){
+        sessionStorage.removeItem('bpvbResume');
+        setTimeout(function(){ window.bpVbOpen(rs.c, { url:rs.u, agree:rs.ag, prefer:{ p:pk(pid), prev:rs.prev || [] } }); }, 450);
+      }
+    }catch(e){ E(e); }
+    return r;
+  };
+})();
+
+function send(){
+  if(!B || B.busy) return;
+  validate();
+  var go = $('vbGo'); if(!go || go.disabled) return;
+  var a = selAcc(), li = linkInfo($('vbUrl').value), c = camp(B.campId), cur = B;
+  if(!a || !li || !li.url) return;
+  B.busy = true; clearFail(); closeMenu(true);
+  go.classList.add('busy'); go.disabled = true;
+  /* полная подпись «Проверяем видео на аккаунте @ник…» — строкой под полем
+     (validate), в кнопке коротко: на 320–390 px длинная обрезалась */
+  go.innerHTML = '<span class="vb-spin"></span><span class="lbl">Проверяем…</span>';
+  var bt = go.parentNode; if(bt && bt.classList && !bt.classList.contains('busy')) bt.classList.add('busy');
+  paintAcc(); validate(); $('vbUrl').readOnly = true;
+  api('POST', '/api/tasks/video/bind', { campId:B.campId, url:li.url, agree:true, platform:a.platform, account:a.id }).then(function(j){
+    var v = j && j.video; if(!v) throw new Error('Сервер не ответил — попробуйте ещё раз');
+    lsSet('bpvb_lastacc:' + (mySrv() || ''), accKey(a));
+    markJoin(String(v.campId || cur.campId));
+    upsert(v); dropBoard(v.campId || cur.campId); repaint();
+    if(B !== cur) return;
+    B.busy = false;
+    paintDone(v, a);
+    afterUpload(String(v.campId || cur.campId));
+    try{ if(typeof window.bpNotify === 'function') window.bpNotify('task', 'Видео отправлено на проверку', '«' + nameOf(c) + '»: рекламодатель проверит интеграцию', {}); }catch(e){}
+  }).catch(function(e){
+    if(B !== cur) return;
+    B.busy = false;
+    go.classList.remove('busy'); go.innerHTML = '<span class="lbl">Отправить</span>';
+    if(bt && bt.classList && bt.classList.contains('busy')) bt.classList.remove('busy');
+    var u = $('vbUrl'); if(u) u.readOnly = false;
+    paintAcc(); showFail(e, a, li, c); validate();
+    /* окно закрыли, пока шла проверка, — причину в закрытое окно не прячем */
+    var sh = $('bpVbSheet');
+    if(!sh || !sh.classList.contains('on')) toast('Видео не отправлено: ' + failMsg(e), 'err');
+  });
+}
+function mini(act, label, blue){ return '<button type="button" class="vb-mini' + (blue ? ' blue' : '') + '" data-vb="act" data-act="' + esc(act) + '">' + label + '</button>'; }
+function failMsg(e){
+  var code = String((e && e.code) || ''), msg = String((e && e.message) || '');
+  if(e && !e.status && !code) msg = 'Нет связи с сервером — проверьте интернет и попробуйте ещё раз';
+  if(!msg || /^HTTP \d+$/.test(msg) || /failed to fetch|networkerror|load failed/i.test(msg)) msg = 'Не получилось отправить видео — попробуйте ещё раз';
+  return msg;
+}
+function showFail(e, a, li, c){
+  var code = String((e && e.code) || ''), msg = failMsg(e);
+  var p = (code === 'no_channel' && li && li.plat) || (a && a.platform) || (li && li.plat) || 'tiktok';
+  var btn = '';
+  if(code === 'no_channel') btn = mini('conn:' + p, pi(p) + 'Подключить ' + PN[p], true);
+  else if(code === 'no_account') btn = mini('conn:' + p, pi(p) + 'Подключить заново', true);
+  else if(code === 'token' || code === 'scope') btn = mini('conn:' + p, pi(p) + 'Переподключить ' + PN[p], true);
+  else if(code === 'not_yours'){
+    /* другой аккаунт этой площадки есть — выбрать его; нет — подключить */
+    var others = accs().filter(function(x){ return x.platform === p && accKey(x) !== accKey(a); });
+    btn = others.length ? mini('menu', 'Выбрать другой аккаунт') : mini('conn:' + p, pi(p) + 'Подключить другой ' + PN[p], true);
+  }
+  else if(code === 'wrong_link'){
+    var lp = (li && li.plat) || p, has = accs().some(function(x){ return x.platform === lp; });
+    btn = has ? mini('menu', 'Выбрать ' + PN[lp] + '-аккаунт') : mini('conn:' + lp, pi(lp) + 'Подключить ' + PN[lp], true);
+  }
+  else if((code === 'wrong_platform' || code === 'not_tiktok' || code === 'camp_closed') && isMixed(c) && typeof window.__bpVbOrigSubmit === 'function') btn = mini('old', 'Сдать работу по ссылке');
+  var f = $('vbFail'); if(!f) return;
+  f.innerHTML = '<div class="vb-fail in" role="alert">' + ERRI + '<div><b>Видео не отправлено</b><span>' + esc(msg) + '</span>' + btn + '</div></div>';
+  try{ f.scrollIntoView({ block:'nearest', behavior:'smooth' }); }catch(_){}
+}
+function paintDone(v, a){
+  var s = sheet('bpVbSheet'), c = camp(v.campId), p = vplat(v);
+  var h = handleTxt(v) || (a && accName(a)) || PN[p];
+  s.querySelector('.vb-card').innerHTML = '<div class="vb-grab"></div>' + hd('Загрузка видео')
+    + '<div class="vb-okhero"><i>' + OKI + '</i><div><b>Видео отправлено на проверку</b><span>«' + esc(nameOf(c)) + '»</span></div></div>'
+    + '<div class="vb-video">' + thumb(v) + '<div class="vb-video-tx"><b>' + esc(v.title || 'Видео ' + PN[p]) + '</b>'
+    + '<span class="vb-vc-h">' + pi(p, 'sm') + esc(h) + ' · ' + PN[p] + (v.postedAt ? ' · ' + esc(dsh(v.postedAt)) : '') + '</span></div></div>'
     + stats(v)
-    + '<div class="vb-note"><b style="color:#dce7ff">Дальше:</b> рекламодатель проверит интеграцию. Данные видео обновляются каждый день — следите в задании.</div>'
-    + moneyLine(v, c)
-    + '<button type="button" class="vb-go" data-vb="close">Готово</button>';
+    + '<div class="vb-money"><span>Сейчас по просмотрам<br>сумма в резерве задания</span><b>≈ ' + rub(nowAmt(v, c)) + '</b></div>'
+    + (num(v.budgetCap) > 0 ? '<div class="vb-line warn">Бюджет задания почти закончился: за это видео заплатят не больше ' + rub(v.budgetCap) + ' — столько в нём оставалось.</div>' : '')
+    + '<div class="vb-note">Рекламодатель проверит интеграцию до 72 ч. Выплата — по просмотрам в момент проверки, сразу на баланс.</div>'
+    + '<div class="vb-btns"><button type="button" class="vb-go ghost" data-vb="again">Ещё видео</button><button type="button" class="vb-go" data-vb="close">Готово</button></div>';
+  s.querySelector('.vb-card').scrollTop = 0;
+}
+/* под окном могла остаться шторка задания — показываем там «На проверке» */
+function afterUpload(cid){
+  var body = sheetBody(cid); if(!body) return;
+  loadBoard(cid, true).then(function(){ augment(cid); });
+  TS.sub = 'wait'; TS.subFor = cid; TS.subAuto = false;
+  augment(cid);
+  if(body.querySelector(':scope > .vb-tabs [data-tab="mine"]')) setTab(cid, 'mine');
+}
+
+/* ═══ ОБЩИЙ ОБРАБОТЧИК НАЖАТИЙ ═══ */
+function doAct(act){
+  if(!act) return;
+  if(act === 'menu'){ if(B && !B.menu) openMenu(); return; }
+  if(act === 'retry-acc'){ retryAcc(); return; }
+  if(act === 'old'){ if(B) oldSubmit(B.campId); return; }
+  var m = /^conn:(tiktok|youtube)$/.exec(act); if(m){ connect(m[1]); return; }
+  var m2 = /^reconn:(tiktok|youtube):(.+)$/.exec(act); if(m2){ connect(m2[1], m2[2]); return; }
 }
 document.addEventListener('click', function(e){
   var t = e.target.closest && e.target.closest('[data-vb]'); if(!t) return;
   var a = t.getAttribute('data-vb');
-  if(a === 'close'){ var cs0 = t.closest('.vb-sheet'); if(cs0 && cs0.id === 'bpVbPlayer') window.closeBpVbPlayer(); else closeSheet(cs0); return; }
-  if(a === 'bind'){ bind(); return; }
-  if(a === 'old'){ oldSubmit(B.campId); return; }
-  if(a === 'paste'){
-    try{ navigator.clipboard.readText().then(function(x){ var i = $('vbUrl'); if(i && x){ i.value = String(x).trim(); i.dispatchEvent(new Event('input')); } }, function(){ toast('Вставьте ссылку вручную — нет доступа к буферу', 'err'); }); }
-    catch(_){ toast('Вставьте ссылку вручную', 'err'); }
-    return;
+  switch(a){
+    case 'close': { var cs0 = t.closest('.vb-sheet'); if(cs0 && cs0.id === 'bpVbPlayer') window.closeBpVbPlayer(); else closeSheet(cs0); return; }
+    case 'menu': if(B && B.menu) closeMenu(); else openMenu(); return;
+    case 'opt': case 'add': case 'retry-acc': activate(t); return;
+    case 'conn': connect(t.getAttribute('data-p')); return;
+    case 'act': doAct(t.getAttribute('data-act')); return;
+    case 'send': send(); return;
+    case 'old': if(B) oldSubmit(B.campId); return;
+    case 'again': if(B) window.bpVbOpen(B.campId); return;
+    case 'paste': {
+      /* без доступа к буферу (WebView Телеграма на Android) — подсказка прямо
+         в окне, у поля: тост ушёл бы под карточку окна */
+      var noClip = function(){ var i0 = $('vbUrl'); hintBox('Нет доступа к буферу — нажмите в поле и вставьте ссылку вручную', 'warn', '', ''); if(i0) try{ i0.focus(); }catch(_){} };
+      try{ navigator.clipboard.readText().then(function(x){ var i = $('vbUrl'); if(i && x){ i.value = String(x).trim(); i.dispatchEvent(new Event('input', { bubbles:true })); } else if(!x) noClip(); }, noClip); }
+      catch(_){ noClip(); }
+      return;
+    }
+    case 'tab': setTab(t.closest('#bpTaskSheet') ? String($('bpTaskSheet').getAttribute('data-vb-camp')) : '', t.getAttribute('data-tab')); return;
+    case 'sub': setSub(t); return;
+    case 'upload': window.bpVbOpen(t.getAttribute('data-camp')); return;
+    case 'more-people': morePeople(t); return;
+    case 'retry-board': { var cid = t.getAttribute('data-camp'); loadBoard(cid, true).then(function(){ augment(cid); paintLists(); }); return; }
+    case 'ls': openLists(t.getAttribute('data-camp'), t.getAttribute('data-tab')); return;
+    case 'ls-tab': setListTab(t.getAttribute('data-tab')); return;
+    case 'sort': toggleSort(t.getAttribute('data-camp')); return;
+    case 'prof': whoProfile(t.getAttribute('data-who')); return;
+    case 'chat': whoChat(t.getAttribute('data-who')); return;
+    case 'ok': case 'bad': case 'watch': case 'send-bad': advAction(a, t); return;
   }
-  if(a === 'verify'){
-    /* окно площадки открывается в этом же нажатии — иначе браузер заблокирует */
-    closeSheet($('bpVbSheet'));
-    try{ if(typeof window.bpVerifyOwn === 'function') window.bpVerifyOwn('tiktok'); else if(typeof goTo === 'function') goTo('profile'); }catch(err){ E(err); }
-    return;
-  }
-  if(a === 'ok' || a === 'bad' || a === 'watch' || a === 'send-bad'){ advAction(a, t); return; }
 }, false);
+/* поле ссылки и отметка: делегирование, чтобы пережить перерисовку */
+document.addEventListener('input', function(e){
+  if(!B || !e.target) return;
+  if(e.target.id === 'vbUrl'){ B.touched = true; clearFail(); validate(); }
+}, false);
+document.addEventListener('change', function(e){ if(B && e.target && e.target.id === 'vbAgree') validate(); }, false);
+/* окно aria-modal: Tab ходит по кругу внутри карточки и не уводит фокус
+   на страницу под окном (меню аккаунтов закрывает себя само — menuKey) */
+function trapTab(e){
+  var top = STACK.length ? $(STACK[STACK.length - 1]) : null;
+  if(!top || !top.classList.contains('on')) return;
+  var card = top.querySelector('.vb-card'); if(!card) return;
+  var f = [].filter.call(card.querySelectorAll('button,a[href],input,textarea,select,iframe,[tabindex]:not([tabindex="-1"])'), function(x){
+    return !x.disabled && !x.closest('[hidden]') && x.getClientRects().length > 0;
+  });
+  var a = document.activeElement, m = $('vbMenu');
+  if(m && m.contains(a)) return;
+  if(!f.length){ e.preventDefault(); try{ card.focus({ preventScroll:true }); }catch(_){} return; }
+  var first = f[0], last = f[f.length - 1];
+  if(!top.contains(a) || (e.shiftKey && (a === first || a === card)) || (!e.shiftKey && a === last)){
+    e.preventDefault();
+    try{ (e.shiftKey ? last : first).focus(); }catch(_){}
+  }
+}
+document.addEventListener('keydown', function(e){
+  var t = e.target;
+  if(e.key === 'Tab' && !e.altKey && !e.ctrlKey && !e.metaKey) trapTab(e);
+  if(t && t.id === 'vbUrl' && e.key === 'Enter'){ e.preventDefault(); var g = $('vbGo'); if(g && !g.disabled) send(); return; }
+  if(t && t.id === 'vbDd' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')){ e.preventDefault(); if(B && !B.menu) openMenu(); return; }
+  if(t && t.getAttribute && t.getAttribute('role') === 'tab' && t.closest('.vb-tabs,.vb-seg,.vb-ls-tabs') && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')){
+    e.preventDefault();
+    var all = [].slice.call(t.parentNode.querySelectorAll('[role="tab"]')), i = all.indexOf(t);
+    var n = all[(i + (e.key === 'ArrowRight' ? 1 : -1) + all.length) % all.length];
+    if(n){ n.click(); try{ n.focus(); }catch(_){} }
+    return;
+  }
+  if(e.key === 'Escape'){
+    if(B && B.menu){ e.preventDefault(); e.stopPropagation(); closeMenu(); return; }
+    var top = STACK.length ? $(STACK[STACK.length - 1]) : null;
+    if(top && top.classList.contains('on')){ e.preventDefault(); e.stopPropagation(); if(top.id === 'bpVbPlayer') window.closeBpVbPlayer(); else closeSheet(top); }
+  }
+}, true);
+/* клик мимо меню закрывает его */
+document.addEventListener('pointerdown', function(e){
+  if(!B || !B.menu) return;
+  var m = $('vbMenu'), b = $('vbDd'), t = e.target;
+  if((m && m.contains(t)) || (b && b.contains(t))) return;
+  var sh = $('bpVbSheet'); if(sh && t === sh) sh.__eat = Date.now();
+  closeMenu(true);
+}, true);
+window.addEventListener('resize', function(){ if(B && B.menu) placeMenu(); });
 
-/* ═══ ЗАДАНИЕ БЛОГЕРА: шторка, карточка, «Мои задания» ═══ */
-/* старый путь «Сдать работу» для видео в TikTok ведёт в привязку */
+/* ═══ ЗАДАНИЕ БЛОГЕРА: шторка как страница задания ═══ */
+/* «Сдать работу» для видеозаданий ведёт в загрузку видео */
 (function(){
   var o = window.bpOpenSubmit;
   if(typeof o !== 'function') return;
   window.__bpVbOrigSubmit = o;
   window.bpOpenSubmit = function(campId){
-    if(!window.__bpVbBypass && isVidTask(camp(campId))){ try{ var ts = $('bpTaskSheet'); if(ts) ts.remove(); }catch(e){} window.bpVbOpen(campId); return; }
+    if(!window.__bpVbBypass && isVidTask(camp(campId))){ window.bpVbOpen(campId); return; }
     return o.apply(this, arguments);
   };
 })();
 
-function sheetMine(id){
-  var c = camp(id), sh = $('bpTaskSheet'); if(!c || !sh || !isVidTask(c) || !joined(id)) return;
-  /* отложенный вызов от прошлой шторки не рисует в новую */
-  if(sh.getAttribute('data-vb-camp') !== String(id)) return;
-  var body = sh.querySelector('.tk-sheet-body'), foot = sh.querySelector('.tk-sheet-foot'); if(!body) return;
-  /* правила: вместо «скриншот, второй замер, 72 часа» — как работает привязка */
-  var tm = $('bpTmTaskInfo'); if(tm){ var r = tm.querySelector('.bptm-rules'); if(r) r.style.display = 'none'; }
-  var list = mine(id);
-  var box = body.querySelector('.vb-mine');
-  var html = '<div class="vb-mine-h"><b>Ваше видео</b>' + (list.length ? '' : '<span class="vb-pill is-wait">Не привязано</span>') + '</div>';
-  if(!list.length){
-    html += '<div class="vb-note" style="margin-top:6px">Опубликуйте ролик с рекламой из этого задания в своём TikTok и привяжите его — данные подтянутся сами.</div>';
-  } else {
-    html += list.map(function(v){
-      var s = stOf(v);
-      return '<div class="vb-mine-it"><div class="vb-p-row">' + thumb(v)
-        + '<div class="vb-p-mid"><b>' + esc(v.title || 'Видео TikTok') + '</b><i>' + (v.postedAt ? esc(dmy(v.postedAt)) + ' · ' : '') + 'обновлено ' + esc(v.statsAt ? dmy(v.statsAt) : 'сейчас') + '</i></div>'
-        + '<span class="vb-pill is-' + s.c + '">' + s.t + '</span></div>'
-        + stats(v)
-        + (v.status === 'rejected' ? '<div class="vb-line warn">Рекламодатель указал проблему: «' + esc(v.reviewNote || '') + '». Решение примет BloggerPay — придёт уведомление.</div>' : '')
-        + (v.status === 'declined' ? '<div class="vb-line warn">Видео не засчитано' + (v.decisionNote ? ': ' + esc(v.decisionNote) : '') + '.</div>' : '')
-        + (v.status === 'removed' ? '<div class="vb-line warn">Ролик не находится в вашем TikTok — его удалили или скрыли.</div>' : '')
-        + moneyLine(v, c) + minNote(v, c) + '</div>';
-    }).join('');
-  }
-  if(!box){ box = document.createElement('div'); box.className = 'vb-mine'; var pay = body.querySelector('.tks-pay'); if(pay && pay.nextSibling) body.insertBefore(box, pay.nextSibling); else body.insertBefore(box, body.firstChild); }
-  box.innerHTML = html;
-  if(!body.querySelector('.vb-rules')){
-    var rl = document.createElement('div'); rl.className = 'vb-rules';
-    rl.innerHTML = '<b>Как засчитывается видео</b><ol><li>Привяжите ролик из подтверждённого TikTok — данные подтянутся сами.</li>'
-      + '<li>Рекламодатель проверит интеграцию и засчитает видео.</li><li>7 дней считаем просмотры, данные обновляются каждый день.</li>'
-      + '<li>Выплата сама приходит на баланс. Накрутку проверяет BloggerPay.</li></ol>';
-    box.parentNode.insertBefore(rl, box.nextSibling);
-  }
-  /* кнопка внизу */
-  /* «На проверке» и «Задание завершено» (старая сдача) остаются как были */
-  var js = ''; try{ var jj = window.bpJoinOf ? window.bpJoinOf(id) : null; js = jj ? String(jj.status || 'joined') : 'joined'; }catch(e){}
-  if(foot && (js === 'joined' || js === 'rejected' || js === 'accepted')){
-    var main = foot.querySelector('.tk-btn-main');
-    var label = list.length ? 'Привязать ещё видео' : 'Привязать видео';
-    if(main && !main.__vb){
-      var nb = document.createElement('button'); nb.type = 'button'; nb.className = 'tk-btn-main'; nb.__vb = 1;
-      nb.innerHTML = label;
-      nb.addEventListener('click', function(){ try{ sh.remove(); }catch(e){} window.bpVbOpen(id); });
-      main.parentNode.replaceChild(nb, main);
-    } else if(main && main.__vb){ main.textContent = label; }
-  }
+var TS = { id:'', tab:'task', sub:'', subFor:'' };
+var TABS = { task:'Задача', mine:'Мои видео', lead:'Лидерборд', people:'Участники' };
+function sheetBody(id){
+  var sh = $('bpTaskSheet'); if(!sh || !id || sh.getAttribute('data-vb-camp') !== String(id)) return null;
+  return sh.querySelector('.tk-sheet-body');
 }
+function budgetLocal(c){
+  if(!c) return 0;
+  if(num(c.budgetExact) > 0) return num(c.budgetExact);
+  if(typeof c.budget === 'number') return c.budget;
+  var n = Number(String(c.budget == null ? '' : c.budget).replace(/[^\d]/g, ''));
+  return isFinite(n) ? n : 0;
+}
+/* шапка задания, как у More Views: «Выплачено блогерам N ₽ из M ₽ · %»,
+   толстая полоса (выплачено / в резерве / риска лимита), легенда точками
+   и три плитки с иконками: видео, просмотры, сколько осталось */
+function pctTxt(p){ return p > 0 && p < 1 ? '<1%' : Math.round(p) + '%'; }
+function topInner(c, b, mode){
+  var d = b && b.data, dead = !!(b && (b.off || b.err) && !d);
+  var sk = dead ? '—' : '<span class="vb-sk"></span>';
+  var budget = d ? d.budget : budgetLocal(c);
+  var paid = d ? d.paid : num(c && c.stats && c.stats.totalSpent);
+  var res = d ? d.reserved : num(c && c.stats && c.stats.totalHold);
+  var left = d ? d.left : Math.max(0, budget - paid - res);
+  var h = '';
+  if(budget > 0){
+    var pp = Math.min(100, paid / budget * 100), rp = Math.min(100 - pp, res / budget * 100);
+    h += '<div class="vb-bud"><div class="vb-bud-l">Выплачено блогерам</div>'
+      + '<div class="vb-bud-h"><b>' + rub(paid) + '</b><span>из ' + rub(budget) + '</span><i>' + pctTxt(pp) + '</i></div>'
+      + '<div class="vb-bar4" role="img" aria-label="Выплачено ' + rub(paid) + ' из ' + rub(budget) + ', в резерве ' + rub(res) + ', осталось ' + rub(left) + '"><span>'
+      + (pp > 0 ? '<i class="p" style="width:' + pp.toFixed(2) + '%"></i>' : '') + (rp > 0 ? '<i class="r" style="width:' + rp.toFixed(2) + '%"></i>' : '') + '</span><s></s></div>'
+      + '<div class="vb-lg"><span><i class="p"></i>Выплачено</span><span><i class="r"></i>В резерве</span><span class="l"><i></i>Лимит выплат</span></div></div>';
+  }
+  var cnt = [
+    [FILM, d ? fmt(d.videos) : sk, 'Видео уже создано'],
+    [EYE0, d ? kmb(d.views) : sk, 'Всего просмотров'],
+    [BAG, (d || budget) ? rub(left) : sk, budget > 0 ? 'Осталось из ' + rub(budget) : 'Осталось из бюджета']
+  ];
+  h += '<div class="vb-cnt">' + cnt.map(function(x){ return '<div class="vb-c"><span class="vb-c-i">' + x[0] + '</span><b>' + x[1] + '</b><i>' + x[2] + '</i></div>'; }).join('') + '</div>';
+  if(mode !== 'adv') h += '<div class="vb-heads">' + INFO + '<span>Внимательно ознакомьтесь с деталями задания, прежде чем приступать к работе</span></div>';
+  return h;
+}
+function howBlock(body, c){
+  if(body.querySelector(':scope > .vb-how')) return;
+  var al = allowed(c), el = document.createElement('div'); el.className = 'vb-how';
+  el.innerHTML = '<b>Как засчитывается видео</b><ol>'
+    + '<li>Опубликуйте ролик с рекламой на своём ' + esc(namesOf(al, ' или ')) + ', подключённом к BloggerPay.</li>'
+    + '<li>Когда ролик наберёт просмотры, нажмите «Загрузить видео» и выберите аккаунт.</li>'
+    + '<li>Рекламодатель проверит интеграцию — до 72 часов.</li>'
+    + '<li>Засчитали — деньги сразу на балансе, по просмотрам в момент проверки. Просмотры после выплаты в зачёт не идут.</li></ol>';
+  var rules = body.querySelector(':scope > .tk-rules');
+  if(rules && rules.nextSibling) body.insertBefore(el, rules.nextSibling);
+  else if(rules) body.appendChild(el);
+  else { var sec = body.querySelector(':scope > .tk-sec'); if(sec) body.insertBefore(el, sec); else body.appendChild(el); }
+}
+var RI = { pl:'M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18V6A1.5 1.5 0 0 1 5 4.5z M10 9v6l5-3z', one:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M9 12.5l2 2 4-4.5' };
+function rulesRows(body, c){
+  var rules = body.querySelector(':scope > .tk-rules'); if(!rules) return;
+  [].forEach.call(rules.querySelectorAll('.tk-rule-k'), function(k){ if(/^Максимальная выплата$/.test(k.textContent)) k.textContent = 'Макс. выплата за видео'; });
+  function add(id, ico, k, v){
+    if(rules.querySelector('[data-vb-rule="' + id + '"]')) return;
+    var r = document.createElement('div'); r.className = 'tk-rule'; r.setAttribute('data-vb-rule', id);
+    r.innerHTML = '<svg class="tk-rule-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="' + RI[ico] + '"/></svg>'
+      + '<span class="tk-rule-k">' + k + '</span><span class="tk-rule-v">' + esc(v) + '</span>';
+    rules.appendChild(r);
+  }
+  add('pl', 'pl', 'Площадки для видео', namesOf(allowed(c), ', '));
+  add('one', 'one', 'Оплата', 'один раз за видео');
+}
+/* вступившему — плавающая синяя таблетка «⊕ Загрузить видео» по центру
+   поверх шторки (как у More Views); «Закрыть» не нужен — есть крестик */
+function footBtn(foot, id){
+  if(!foot) return;
+  var sh = foot.closest('#bpTaskSheet'), js = joinSt(id);
+  var fab = canUpload(id);
+  if(sh && sh.classList.contains('vb-fab') !== fab) sh.classList.toggle('vb-fab', fab);
+  if(!fab) return;
+  var main = foot.querySelector('.tk-btn-main'); if(!main) return;
+  var label = mineOf(id).length ? 'Загрузить ещё видео' : 'Загрузить видео';
+  if(!main.__vb){
+    var nb = document.createElement('button'); nb.type = 'button'; nb.className = 'tk-btn-main vb-up'; nb.__vb = 1;
+    nb.innerHTML = PLUSC + '<span>' + label + '</span>';
+    nb.addEventListener('click', function(){ window.bpVbOpen(id); });
+    main.parentNode.replaceChild(nb, main);
+  } else if(main.textContent !== label){ main.innerHTML = PLUSC + '<span>' + label + '</span>'; }
+}
+function augment(id){
+  try{
+    var c = camp(id), sh = $('bpTaskSheet'); if(!c || !sh || !isVidTask(c)) return;
+    if(sh.getAttribute('data-vb-camp') !== String(id)) return;
+    var body = sh.querySelector('.tk-sheet-body'), foot = sh.querySelector('.tk-sheet-foot'); if(!body) return;
+    var j = joined(id), js = joinSt(id);
+    /* прежние правила сдачи (скриншот, второй замер) к видео не относятся */
+    var tm = $('bpTmTaskInfo'); if(tm){ var r = tm.querySelector('.bptm-rules'); if(r && r.style.display !== 'none') r.style.display = 'none'; }
+    rulesRows(body, c); howBlock(body, c); footBtn(foot, id);
+    if(!srvOk()) return;
+    var b = boardOf(id), off = !!(b && b.off);
+    var tabs = ['task']; if(j) tabs.push('mine'); if(!off) tabs.push('lead', 'people');
+    if(tabs.length < 2){
+      /* сервер не знает задание (404) или старый — вкладки, нарисованные до
+         ответа, убираем, а плитки показываем с «—», а не вечным скелетом */
+      var ob = body.querySelector(':scope > .vb-tabs'); if(ob) ob.remove();
+      [].forEach.call(body.querySelectorAll(':scope > .vb-pane'), function(p){ p.remove(); });
+      if(sh.classList.contains('vb-tabbed')) sh.classList.remove('vb-tabbed');
+      if(body.hasAttribute('data-vb-tab')) body.removeAttribute('data-vb-tab');
+      if(TS.id === String(id)) TS.tab = 'task';
+      var t0 = body.querySelector(':scope > .vb-top');
+      if(t0){ var h0 = topInner(c, b, 'blogger'); if(t0.__h !== h0){ t0.innerHTML = h0; t0.__h = h0; } }
+      return;
+    }
+    if(TS.id !== String(id)) TS = { id:String(id), tab:'task', sub:'', subFor:'' };
+    if(tabs.indexOf(TS.tab) < 0) TS.tab = 'task';
+    if(!sh.classList.contains('vb-tabbed')) sh.classList.add('vb-tabbed');
+    if(body.getAttribute('data-vb-tab') !== TS.tab) body.setAttribute('data-vb-tab', TS.tab);
+    var top = body.querySelector(':scope > .vb-top');
+    if(!top){
+      top = document.createElement('div'); top.className = 'vb-top';
+      var nm = body.querySelector(':scope > .tk-sheet-name');
+      if(nm && nm.nextSibling) body.insertBefore(top, nm.nextSibling); else body.insertBefore(top, body.firstChild);
+    }
+    var th = topInner(c, b, 'blogger'); if(top.__h !== th){ top.innerHTML = th; top.__h = th; }
+    tabBar(body, id, tabs, top);
+    tabs.forEach(function(t){
+      if(t === 'task') return;
+      var p = body.querySelector(':scope > .vb-pane[data-pane="' + t + '"]');
+      if(!p){
+        p = document.createElement('div'); p.className = 'vb-pane'; p.setAttribute('data-pane', t);
+        p.id = 'vbP-' + t; p.setAttribute('role', 'tabpanel'); p.setAttribute('aria-labelledby', 'vbT-' + t);
+        body.appendChild(p);
+      }
+      var on = TS.tab === t; if(p.classList.contains('on') !== on) p.classList.toggle('on', on);
+      paintPane(p, id);
+    });
+    if(j && js !== 'finished') ensureJoin(String(id));
+  }catch(e){ E(e); }
+}
+function tabBar(body, id, tabs, top){
+  var bar = body.querySelector(':scope > .vb-tabs'), key = tabs.join(',');
+  if(!bar || bar.__k !== key){
+    if(!bar){ bar = document.createElement('div'); bar.className = 'vb-tabs'; }
+    if(bar.previousSibling !== top) body.insertBefore(bar, top.nextSibling);
+    bar.__k = key;
+    bar.innerHTML = '<div class="vb-tabs-in" role="tablist" aria-label="Разделы задания">' + tabs.map(function(t){
+      return '<button type="button" class="vb-tab" role="tab" id="vbT-' + t + '" data-vb="tab" data-tab="' + t + '"' + (t !== 'task' ? ' aria-controls="vbP-' + t + '"' : '') + '>' + TABS[t] + '<em hidden></em></button>';
+    }).join('') + '</div>';
+    var inr = bar.firstChild; inr.addEventListener('scroll', function(){ tabsFade(inr); }, { passive:true });
+  }
+  /* прилипают к самому краю: у прилипания отступ считается от края содержимого */
+  var cs = getComputedStyle(body), pt = -(parseFloat(cs.paddingTop) || 0) + 'px', pb = (parseFloat(cs.paddingBottom) || 0) + 'px';
+  if(bar.style.top !== pt) bar.style.top = pt;
+  if(body.style.getPropertyValue('--vb-pb') !== pb) body.style.setProperty('--vb-pb', pb);
+  /* счётчики в бейджах, как у More Views: «Мои видео [0]», «Участники [933]» */
+  var b = boardOf(id), d = b && b.data;
+  var cnt = { mine:(V.at || V.list.length) ? mineOf(id).length : null, people:d ? d.members : null };
+  [].forEach.call(bar.querySelectorAll('.vb-tab'), function(x){
+    var t = x.getAttribute('data-tab'), on = t === TS.tab;
+    if(x.getAttribute('aria-selected') !== String(on)) x.setAttribute('aria-selected', String(on));
+    var ti = on ? '0' : '-1'; if(x.getAttribute('tabindex') !== ti) x.setAttribute('tabindex', ti);
+    var em = x.querySelector('em'), n = cnt[t];
+    if(em){ var show = n != null; if(em.hidden === show) em.hidden = !show; var s = show ? cntTxt(n) : ''; if(em.textContent !== s) em.textContent = s; }
+  });
+  var inr2 = bar.querySelector('.vb-tabs-in'); if(inr2){ fitTabs(inr2); tabsFade(inr2); }
+}
+/* четыре вкладки в ряд, как у More Views: не влезают — плотнее (две
+   ступени), и только потом полоса прокручивается вбок */
+function fitTabs(inr){
+  var w = inr.clientWidth, key = inr.textContent + '|' + w; if(!w || inr.__fit === key) return;
+  var lv = ['', 'tight', 'tight2', 'tight3'];
+  for(var i = 0; i < lv.length; i++){
+    lv.forEach(function(c, k){ if(c && inr.classList.contains(c) !== (k === i)) inr.classList.toggle(c, k === i); });
+    if(inr.scrollWidth <= inr.clientWidth + 1) break;
+  }
+  inr.__fit = key;
+}
+function tabsFade(inr){
+  var sl = inr.scrollLeft, r = sl + inr.clientWidth < inr.scrollWidth - 2, l = sl > 2;
+  if(inr.classList.contains('mr') !== r) inr.classList.toggle('mr', r);
+  if(inr.classList.contains('ml') !== l) inr.classList.toggle('ml', l);
+}
+/* активная вкладка целиком в полосе (без вертикальной прокрутки шторки) */
+function tabIntoView(bar, t){
+  var inr = bar && bar.querySelector('.vb-tabs-in'), b = inr && inr.querySelector('[data-tab="' + t + '"]'); if(!b) return;
+  var l = b.offsetLeft - 18, r = b.offsetLeft + b.offsetWidth + 18 - inr.clientWidth;
+  if(inr.scrollLeft > l) inr.scrollTo({ left:Math.max(0, l), behavior:'smooth' });
+  else if(inr.scrollLeft < r) inr.scrollTo({ left:r, behavior:'smooth' });
+}
+function setTab(id, t){
+  var body = sheetBody(id); if(!body || !TABS[t]) return;
+  var bar = body.querySelector(':scope > .vb-tabs'), top = body.querySelector(':scope > .vb-top'); if(!bar || !top) return;
+  if(!bar.querySelector('[data-tab="' + t + '"]')) return;
+  if(TS.tab === t) return;
+  /* вкладки прилипают к верху: если пролистали ниже них — остаёмся на
+     том же месте, а не прыгаем вверх и не теряем вкладки */
+  var br = body.getBoundingClientRect();
+  var nat = top.getBoundingClientRect().bottom - br.top + body.scrollTop + (parseFloat(getComputedStyle(top).marginBottom) || 0);
+  var st = body.scrollTop;
+  TS.tab = t;
+  body.setAttribute('data-vb-tab', t);
+  var pane = null;
+  [].forEach.call(body.querySelectorAll(':scope > .vb-pane'), function(p){
+    var on = p.getAttribute('data-pane') === t; if(p.classList.contains('on') !== on) p.classList.toggle('on', on);
+    if(on) pane = p;
+  });
+  tabBar(body, id, (bar.__k || '').split(','), top);
+  tabIntoView(bar, t);
+  if(pane){
+    pane.style.minHeight = Math.max(0, body.clientHeight - bar.offsetHeight - 100) + 'px';
+    paintPane(pane, id);
+    pane.classList.remove('in'); void pane.offsetWidth; pane.classList.add('in');
+    clearTimeout(pane.__t); pane.__t = setTimeout(function(){ pane.classList.remove('in'); }, 260);
+  }
+  body.scrollTop = Math.min(st, Math.max(0, Math.floor(nat)));
+  if(t === 'lead' || t === 'people') loadBoard(id).then(function(){ augment(id); });
+  if(t === 'mine') load(false).then(function(){ augment(id); });
+}
+function paintPane(p, id){
+  var t = p.getAttribute('data-pane'), html = t === 'mine' ? mineHtml(id) : t === 'lead' ? leadHtml(id, true) : peopleHtml(id);
+  if(p.__h !== html){ p.innerHTML = html; p.__h = html; }
+}
+function nil(ico, t, s, extra){ return '<div class="vb-nil"><i>' + ico + '</i><b>' + t + '</b><span>' + s + '</span>' + (extra || '') + '</div>'; }
+function upBtn(id, label){ return '<button type="button" class="vb-mini blue" data-vb="upload" data-camp="' + esc(id) + '">' + UP.replace('<svg ', '<svg width="18" height="18" ') + (label || 'Загрузить видео') + '</button>'; }
+/* загружать можно и после «Сдать по ссылке» в смешанном задании (submitted):
+   ручная работа на проверке не мешает загрузить ролик TikTok/YouTube */
+function canUpload(id){ var js = joinSt(id); return js === 'joined' || js === 'rejected' || js === 'accepted' || js === 'submitted'; }
+
+/* «Мои видео» */
+var SUBS = [['ok', 'Одобренные'], ['wait', 'На проверке'], ['bad', 'Отклонённые']];
+function mineHtml(id){
+  var c = camp(id), list = mineOf(id), g = { ok:[], wait:[], bad:[] };
+  list.forEach(function(v){ g[stOf(v).g].push(v); });
+  /* раздел по умолчанию выбран по старому списку (шторку открыли раньше,
+     чем пришли свежие статусы) — пустой раздел сменяем на непустой; выбор
+     самого человека не трогаем */
+  if(!TS.sub || TS.subFor !== String(id) || (TS.subAuto && !g[TS.sub].length)){ TS.sub = g.wait.length ? 'wait' : g.ok.length ? 'ok' : g.bad.length ? 'bad' : 'wait'; TS.subFor = String(id); TS.subAuto = true; }
+  var idx = { ok:0, wait:1, bad:2 }[TS.sub] || 0;
+  return '<div class="vb-seg" role="tablist" aria-label="Мои видео по статусу"><span class="vb-seg-th" style="transform:translateX(' + (idx * 100) + '%)"></span>'
+    + SUBS.map(function(s){ return '<button type="button" role="tab" data-vb="sub" data-sub="' + s[0] + '" aria-selected="' + (TS.sub === s[0]) + '" tabindex="' + (TS.sub === s[0] ? 0 : -1) + '"><span>' + s[1] + '</span><em>' + g[s[0]].length + '</em></button>'; }).join('')
+    + '</div>'
+    + SUBS.map(function(s){
+      var items = g[s[0]];
+      return '<div class="vb-vl' + (TS.sub === s[0] ? ' on' : '') + '" data-sub="' + s[0] + '" role="tabpanel" aria-label="' + s[1] + '">'
+        + (items.length ? items.map(function(v){ return vcard(v, c); }).join('') : subNil(s[0], id)) + '</div>';
+    }).join('');
+}
+function subNil(s, id){
+  if(s === 'wait') return nil(CLOCK, 'Нет видео на проверке', 'Опубликуйте ролик с рекламой и загрузите его, когда наберёт просмотры.', canUpload(id) ? upBtn(id, mineOf(id).length ? 'Загрузить ещё видео' : '') : '');
+  if(s === 'ok') return nil(OKI, 'Пока нет одобренных видео', 'Засчитанные видео и выплаты по ним появятся здесь.');
+  return nil(NOPE, 'Отклонённых видео нет', 'Здесь будут ролики, которые не засчитали, с причиной.');
+}
+function vcard(v, c){
+  var s = stOf(v), p = vplat(v), pay = '';
+  if(v.status === 'paid'){
+    var pv = num(v.paidViews) || num(v.views);
+    pay = '<div class="vb-vc-pay"><span>Выплачено за ' + fmt(pv) + ' ' + plural(pv, 'просмотр', 'просмотра', 'просмотров') + '</span><b class="ok">' + rub(v.paid) + '</b></div>';
+  } else if(s.g === 'wait'){
+    pay = '<div class="vb-vc-pay"><span>В резерве сейчас' + (num(v.budgetCap) > 0 ? ' · не больше остатка бюджета' : '') + '</span><b>≈ ' + rub(nowAmt(v, c)) + '</b></div>';
+  }
+  var line = '';
+  if(v.status === 'rejected') line = '<div class="vb-line warn">Рекламодатель указал проблему' + (v.reviewNote ? ': «' + esc(v.reviewNote) + '»' : '') + '. Решение примет BloggerPay — придёт уведомление.</div>';
+  else if(v.disputeHeld) line = '<div class="vb-line warn">По заданию открыт спор — выплата ждёт решения арбитра.</div>';
+  else if(v.riskHold) line = '<div class="vb-line warn">Просмотры растут необычно — BloggerPay проверяет их. Выплата придёт после проверки.</div>';
+  else if(v.payHold) line = '<div class="vb-line warn">Выплата задерживается — деньги в резерве, BloggerPay разбирается.</div>';
+  else if(v.status === 'active') line = '<div class="vb-line">Видео засчитано — выплата придёт при ближайшей сверке.</div>';
+  else if(v.status === 'declined') line = '<div class="vb-line bad">Видео не засчитано' + (v.decisionNote ? ': ' + esc(v.decisionNote) : '') + '.</div>';
+  else if(v.status === 'removed') line = '<div class="vb-line bad">При проверке ролик не нашёлся на ' + PN[p] + ' — его удалили или скрыли. Такие видео не оплачиваются.</div>';
+  else if(v.status === 'revoked') line = '<div class="vb-line bad">Нет доступа к аккаунту — переподключите ' + PN[p] + ', чтобы видео снова считалось.</div>'
+    + '<button type="button" class="vb-mini" style="margin-top:10px" data-vb="act" data-act="reconn:' + p + ':' + esc(v.campId) + '">' + pi(p) + 'Переподключить ' + PN[p] + '</button>';
+  return '<div class="vb-vc"><div class="vb-vc-top">' + thumb(v) + '<div class="vb-vc-tx"><b>' + esc(v.title || 'Видео ' + PN[p]) + '</b>'
+    + '<span class="vb-vc-h">' + pi(p, 'sm') + esc(handleTxt(v) || PN[p]) + (v.postedAt ? ' · ' + esc(dsh(v.postedAt)) : '') + '</span>'
+    + '<span class="vb-pill is-' + s.c + '">' + s.t + '</span></div></div>'
+    + stats(v) + pay + line + '</div>';
+}
+function setSub(btn){
+  var pane = btn.closest('.vb-pane,.vb-card'); if(!pane) return;
+  var s = btn.getAttribute('data-sub'), idx = { ok:0, wait:1, bad:2 }[s]; if(idx == null) return;
+  TS.sub = s; TS.subAuto = false;
+  var seg = btn.closest('.vb-seg'), th = seg && seg.querySelector('.vb-seg-th');
+  if(th) th.style.transform = 'translateX(' + (idx * 100) + '%)';
+  [].forEach.call(seg.querySelectorAll('button'), function(b){ var on = b === btn; b.setAttribute('aria-selected', String(on)); b.setAttribute('tabindex', on ? '0' : '-1'); });
+  [].forEach.call(pane.querySelectorAll('.vb-vl'), function(l){
+    var on = l.getAttribute('data-sub') === s;
+    if(l.classList.contains('on') !== on) l.classList.toggle('on', on);
+    if(on){ l.classList.remove('in'); void l.offsetWidth; l.classList.add('in'); }
+  });
+  if(pane.classList.contains('vb-pane') && pane.getAttribute('data-pane') === 'mine' && TS.id) pane.__h = mineHtml(TS.id);
+}
+
+/* лидерборд и участники — общая отрисовка для блогера и рекламодателя */
+function skel(n){ var s = ''; for(var i = 0; i < n; i++) s += '<div class="vb-sk-row"></div>'; return s; }
+function boardFail(id, what){ return nil(WARN, 'Не получилось загрузить ' + what, 'Проверьте интернет и попробуйте ещё раз.', '<button type="button" class="vb-mini" data-vb="retry-board" data-camp="' + esc(id) + '">Повторить</button>'); }
+/* место: 1–3 — лавровый венок (золото, серебро, бронза), дальше цифра */
+function rankCell(r){
+  r = num(r);
+  if(r >= 1 && r <= 3) return '<span class="vb-rk w' + r + '" aria-label="' + r + ' место">' + LAUREL + '<b>' + r + '</b></span>';
+  return '<span class="vb-rk">' + (r ? r : '—') + '</span>';
+}
+function vidsTxt(n){ return fmt(n) + ' видео'; }
+function isMeUid(uid){ var s = mySrv(); return uid != null && s != null && Number(uid) === s; }
+/* своя строка: сервер отмечает me (номеров аккаунтов всем не отдаёт) */
+function isMe(x){ return !!x && (x.me === true || isMeUid(x.uid)); }
+/* таблица «Лидерборд»: # · Блогеры · Видео · Сумма выплаты · Просмотры;
+   на узком экране «Видео» уходит второй строкой под ник */
+function lrow(l, isMe, pin){
+  var nick = pin ? 'Вы' : nickOf(l);
+  return '<div class="vb-tr vb-tr-l' + (isMe ? ' me' : '') + (pin ? ' pin' : '') + '" role="row"' + (pin ? ' aria-label="Вы · место ' + num(l.rank) + '"' : '') + '>'
+    + '<span class="vb-td-r" role="cell">' + rankCell(l.rank) + '</span>'
+    + '<span class="vb-who" role="cell">' + personAva(l) + '<span class="vb-who-tx"><b' + (l.name && !pin ? ' title="' + esc(l.name) + '"' : '') + '><span>' + esc(nick) + '</span></b>'
+    /* «вы» — во второй строке, чтобы не съедать ник */
+    + (isMe && !pin ? '<i><em class="vb-you">вы</em><span class="vb-v2"> · ' + vidsTxt(l.videos) + '</span></i>' : '<i class="vb-v2">' + vidsTxt(l.videos) + '</i>') + '</span></span>'
+    + '<span class="vb-td-v" role="cell"><em class="vb-vp">' + vidsTxt(l.videos) + '</em></span>'
+    + '<span class="vb-td-m" role="cell"><b' + (l.earned ? '' : ' class="z"') + '>' + rub(l.earned) + '</b></span>'
+    + '<span class="vb-td-e" role="cell">' + EYE0 + '<b>' + kmb(l.views) + '</b></span></div>';
+}
+function sortBtn(id){
+  var s = sortOf(id);
+  return '<div class="vb-lb-bar"><button type="button" class="vb-sort" data-vb="sort" data-camp="' + esc(id) + '" aria-label="Сортировка: ' + (s === 'views' ? 'по просмотрам' : 'по сумме выплаты') + '. Нажмите, чтобы сменить">'
+    + SORTI + '<span><i>Сортировка</i><b>' + (s === 'views' ? 'По просмотрам' : 'По сумме выплаты') + '</b></span></button></div>';
+}
+function thead(cols){ return '<div class="vb-th" role="row">' + cols.map(function(c){ return '<span role="columnheader" class="' + c[0] + '"' + (c[2] ? ' aria-label="' + c[2] + '"' : '') + '>' + c[1] + '</span>'; }).join('') + '</div>'; }
+function leadHtml(id, mine){
+  var b = boardOf(id), d = b && b.data, s = sortOf(id), L = b && b.lead && b.lead[s];
+  /* сортировку переключили, а данных для неё ещё нет — показываем прежний
+     порядок приглушённым, без мигания пустотой */
+  var wait = false;
+  if(!L && b && b.lead){ var o = b.lead[s === 'views' ? 'earned' : 'views']; if(o && b.p){ L = o; wait = true; } }
+  if(!L) L = d && !b.p ? leadOf(d, s) : null;
+  if(!d && b && b.off) return nil(WARN, 'Лидерборд недоступен', 'Сервер пока не знает это задание — загляните позже.');
+  if(!d || !L) return sortBtn(id) + (b && b.err && !b.p ? boardFail(id, 'лидерборд') : '<div class="vb-tbl">' + skel(6) + '</div>');
+  if(!L.leaders.length){
+    /* текст — по адресату: рекламодателю не «вступите», вступившему без
+       права загрузки (задание завершено) — тоже */
+    var up = mine && canUpload(id);
+    var sub = !mine ? 'Ролики блогеров появятся здесь, когда их загрузят.'
+      : up ? 'Станьте первым — загрузите видео с рекламой из этого задания.'
+      : joined(id) ? 'Видео участников появятся здесь.'
+      : 'Станьте первым — вступите в задание и загрузите видео.';
+    return nil(TROPHY, 'Пока никто не загрузил видео', sub, up ? upBtn(id) : '');
+  }
+  var my = mine && L.me && L.me.rank ? L.me.rank : 0;
+  var h = sortBtn(id) + '<div class="vb-tbl vb-tbl-l' + (wait ? ' wait' : '') + '" role="table" aria-label="Лидерборд задания"' + (wait ? ' aria-busy="true"' : '') + '>'
+    + thead([['c-r', '#'], ['c-w', 'Блогеры'], ['c-v', 'Видео'], ['c-m', 'Сумма выплаты'], ['c-e', '<span class="c-t">Просмотры</span>' + EYE0, 'Просмотры']])
+    + L.leaders.map(function(l){ return lrow(l, (my && l.rank === my) || isMe(l)); }).join('');
+  if(my && !L.leaders.some(function(l){ return l.rank === my; })){
+    var a = (AC.list || [])[0] || null;
+    h += lrow({ rank:my, name:'', handle:a ? a.handle || a.title : '', platform:a ? a.platform : '', avatar:a ? a.avatar : '', videos:L.me.videos, views:L.me.views, earned:L.me.earned }, true, true);
+  }
+  return h + '</div>';
+}
+/* таблица «Участники»: # · Участник · Видео · Профиль · Чат */
+function prow(x, i){
+  var self = isMe(x), key = whoKey(x), can = !!key;
+  return '<div class="vb-tr vb-tr-p' + (self ? ' me' : '') + '" role="row">'
+    + '<span class="vb-td-r" role="cell"><span class="vb-rk">' + (num(x.rank) || i + 1) + '</span></span>'
+    + '<span class="vb-who" role="cell">' + personAva(x) + '<span class="vb-who-tx"><b' + (x.name ? ' title="' + esc(x.name) + '"' : '') + '><span>' + esc(nickOf(x)) + '</span>' + '</b>'
+    + '<i><span class="vb-v2">' + vidsTxt(x.videos) + (x.joinedAt ? ' · ' : '') + '</span>' + (self ? '<em class="vb-you">вы' + (x.joinedAt ? ' · ' : '') + '</em>' : '') + (x.joinedAt ? 'с ' + esc(dsh(x.joinedAt)) : '') + '</i></span></span>'
+    + '<span class="vb-td-v" role="cell"><em class="vb-vp">' + vidsTxt(x.videos) + '</em></span>'
+    + '<span class="vb-td-b" role="cell">' + (can || self ? '<button type="button" class="vb-rb" data-vb="prof" data-who="' + esc(self && !can ? 'me' : key) + '" aria-label="Профиль ' + esc(nickOf(x)) + '">' + PERSON + '</button>' : '') + '</span>'
+    + '<span class="vb-td-b" role="cell">' + (can && !self ? '<button type="button" class="vb-rb" data-vb="chat" data-who="' + esc(key) + '" aria-label="Написать ' + esc(nickOf(x)) + '">' + CHAT + '</button>' : '') + '</span></div>';
+}
+function peopleHtml(id){
+  var b = boardOf(id), d = b && b.data;
+  if(!d && b && b.off) return nil(WARN, 'Список участников недоступен', 'Сервер пока не знает это задание — загляните позже.');
+  if(!d) return b && b.err ? boardFail(id, 'участников') : '<div class="vb-tbl">' + skel(6) + '</div>';
+  if(!d.participants.length) return nil(USERS, 'Пока никто не вступил', 'Участники задания появятся здесь.');
+  var h = '<div class="vb-cap">В задании ' + fmt(d.members) + ' ' + plural(d.members, 'участник', 'участника', 'участников') + ' · больше видео — выше</div>'
+    + '<div class="vb-tbl vb-tbl-p" role="table" aria-label="Участники задания">'
+    + thead([['c-r', '#'], ['c-w', 'Участник'], ['c-v', 'Видео'], ['c-b', 'Профиль'], ['c-b', 'Чат']])
+    + d.participants.map(prow).join('') + '</div>';
+  if(d.more != null ? d.more : d.participants.length < d.members) h += '<button type="button" class="vb-showmore" data-vb="more-people" data-camp="' + esc(id) + '"' + (b.more ? ' disabled' : '') + '>'
+    + (b.more ? '<span class="vb-spin"></span>' : '') + 'Показать ещё</button>';
+  return h;
+}
+/* «⇅ Сортировка»: по сумме выплаты ⇄ по просмотрам */
+function toggleSort(cid){
+  if(!cid) return;
+  SORT[String(cid)] = sortOf(cid) === 'views' ? 'earned' : 'views';
+  var s = sortOf(cid);
+  var go = function(){ augment(cid); paintLists(); };
+  var b = boardOf(cid), L = b && b.lead && b.lead[s];
+  if(L && L.at && Date.now() - L.at < 60000){ go(); return; }
+  var p = loadBoard(cid, true, s); go();
+  p.then(go);
+}
+/* «Профиль» и «Чат» участника. Номеров аккаунтов сервер всем не отдаёт:
+   key — 'c<id>' (открытая карточка каталога, /api/cards: в ней и профиль,
+   и номер для чата) или 'u<номер>' (приходит только автору задания —
+   написать участнику без карточки). Переписка — тем же путём, что
+   «Написать» на карточке */
+function myCards(){ try{ return JSON.parse(localStorage.getItem('bp_my_cards') || '[]') || []; }catch(e){ return []; } }
+function cardOfSrv(uid){ return myCards().filter(function(c){ return c && !c.hidden && c.srvId != null && Number(c.srvId) === Number(uid); })[0] || null; }
+function cardById(id){ return myCards().filter(function(c){ return c && !c.hidden && String(c.id) === String(id); })[0] || null; }
+function whoOf(key){
+  key = String(key || '');
+  var x = WHO[key] || {}, uid = /^u\d+$/.test(key) ? Number(key.slice(1)) : null, c = null;
+  if(uid != null) c = cardOfSrv(uid);
+  else if(key.charAt(0) === 'c'){ c = cardById(key.slice(1)); if(c && c.srvId != null) uid = Number(c.srvId); }
+  return { key:key, x:x, uid:uid, c:c, me:key === 'me' || x.me === true || isMeUid(uid) };
+}
+function closeOurs(){
+  closeSheet($('bpVbList')); closeSheet($('bpVbSheet'));
+  var t = $('bpTaskSheet'); if(t) t.remove();
+  try{ var ov = $('campDetailOverlay'); if(ov && ov.classList.contains('open') && typeof closeCampDetail === 'function') closeCampDetail(); }catch(e){ E(e); }
+}
+function whoBp(w){
+  var x = w.x || {}, c = w.c, nm = (c && c.name) || x.name || (x.handle || '').replace(/^@/, '') || 'Участник';
+  var ini = (c && c.initials) || String(nm).trim().charAt(0).toUpperCase() || 'Б';
+  return { name:nm, handle:x.handle || '', about:(c && c.msg) || '', subs:(c && c.subsVal) || '—', er:(c && c.erVal) || '—', rating:'—', deals:'—',
+    color:'linear-gradient(135deg,' + ((c && c.col) || '#2f6ce0,#1b49a8') + ')', initials:ini, img:(c && c.avatar) || null, platform:x.platform ? PN[x.platform] : null };
+}
+/* карточка есть на сервере, но каталог на устройстве ещё не подтянулся */
+function cardsLater(w){
+  try{ if(typeof window.bpCardsPull === 'function') window.bpCardsPull(); }catch(e){}
+  toast(w.key.charAt(0) === 'c' ? 'Карточка блогера загружается — нажмите ещё раз через пару секунд' : 'У блогера пока нет карточки', 'info');
+}
+var PROF = { on:false };
+function whoProfile(key){
+  if(!key) return;
+  var w = whoOf(key);
+  if(w.me){ closeOurs(); try{ if(typeof goTo === 'function') goTo('profile'); }catch(e){ E(e); } return; }
+  if(!w.c){ cardsLater(w); return; }
+  if(typeof window.bpOpenBloggerProfile !== 'function') return;
+  try{
+    window.bpOpenBloggerProfile(whoBp(w), w.c.userId != null ? w.c.userId : 'srv:' + w.uid);
+    var pg = $('pg-bl-profile'); if(pg && !pg.classList.contains('vb-over')) pg.classList.add('vb-over');
+    PROF.on = true;
+  }catch(e){ E(e); }
+}
+function whoChat(key){
+  if(!key) return;
+  var w = whoOf(key); if(w.me) return;
+  if(w.uid == null && !(w.c && w.c.userId != null)){ cardsLater(w); return; }
+  if(typeof openOrCreateChatWithBlogger !== 'function'){ toast('Чат сейчас недоступен', 'err'); return; }
+  closeOurs();
+  try{ openOrCreateChatWithBlogger(whoBp(w), w.c && w.c.userId != null ? w.c.userId : 'srv:' + w.uid); }catch(e){ E(e); }
+}
+/* профиль открыт поверх шторки задания: «Назад» возвращает в задание, а
+   «Написать» / «Предложить сделку» сначала убирают наши шторки */
+(function(){
+  function off(){ PROF.on = false; var pg = $('pg-bl-profile'); if(pg && pg.classList.contains('vb-over')) pg.classList.remove('vb-over'); }
+  var oc = window.bpCloseBloggerProfile;
+  if(typeof oc === 'function') window.bpCloseBloggerProfile = function(){ var r = oc.apply(this, arguments); off(); return r; };
+  ['bpProfileWrite', 'bpProfileOffer', 'bpGoToDealWith'].forEach(function(n){
+    var o = window[n]; if(typeof o !== 'function') return;
+    window[n] = function(){ if(PROF.on){ off(); closeOurs(); } return o.apply(this, arguments); };
+  });
+})();
+function morePeople(btn){
+  var cid = btn.getAttribute('data-camp'); if(!cid || btn.disabled) return;
+  btn.disabled = true; btn.innerHTML = '<span class="vb-spin"></span>Показать ещё';
+  moreMembers(cid).then(function(){ augment(cid); paintLists(); });
+}
+
+/* вступление знает и сервер: участники и лидерборд задания */
+var JK = 'bpvb_join';
+function joinMap(){ try{ return JSON.parse(lsGet(JK + ':' + (mySrv() || '')) || '{}') || {}; }catch(e){ return {}; } }
+function markJoin(cid, on){ var m = joinMap(); if(on === false) delete m[cid]; else m[cid] = Date.now(); lsSet(JK + ':' + (mySrv() || ''), JSON.stringify(m)); }
+var joinBusy = {}, joinTried = {};
+function sendJoin(cid){
+  cid = String(cid);
+  if(!srvOk() || joinBusy[cid]) return;
+  joinBusy[cid] = 1;
+  api('POST', '/api/tasks/join', { campId:cid }).then(function(){
+    joinBusy[cid] = 0; markJoin(cid);
+    if(sheetBody(cid)){ loadBoard(cid, true).then(function(){ augment(cid); }); } else dropBoard(cid);
+  }, function(e){
+    joinBusy[cid] = 0;
+    /* старый сервер без /join: участником станет при загрузке видео */
+    if(e && e.status === 404 && !e.code) markJoin(cid);
+    E(e);
+  });
+}
+function ensureJoin(cid){
+  if(joinTried[cid]) return;
+  var b = boardOf(cid), d = b && b.data;
+  var known = d && d.me && typeof d.me.joined === 'boolean' ? d.me.joined : null;
+  if(known === true) return;
+  if(known === false || !joinMap()[cid]){ joinTried[cid] = 1; sendJoin(cid); }
+}
+(function(){
+  var o = window.bpTaskJoin; if(typeof o !== 'function') return;
+  window.bpTaskJoin = function(id){
+    var was = joined(id), r = o.apply(this, arguments);
+    try{ if(!was && joined(id)) sendJoin(id); }catch(e){ E(e); }
+    return r;
+  };
+})();
+(function(){
+  var o = window.bpTaskFinishGo; if(typeof o !== 'function') return;
+  window.bpTaskFinishGo = function(id){
+    var r = o.apply(this, arguments);
+    try{
+      if(joinSt(id) === 'finished' && srvOk()){
+        api('POST', '/api/tasks/leave', { campId:String(id) }).then(function(){ markJoin(String(id), false); dropBoard(id); }, E);
+      }
+    }catch(e){ E(e); }
+    return r;
+  };
+})();
+
 (function(){
   var o = window.bpTaskOpen;
   if(typeof o !== 'function') return;
   window.bpTaskOpen = function(id){
     var r = o.apply(this, arguments);
-    try{ var sh0 = $('bpTaskSheet'); if(sh0) sh0.setAttribute('data-vb-camp', String(id)); }catch(e){}
-    var c = camp(id);
-    if(c && isVidTask(c) && joined(id)){
-      sheetMine(id); setTimeout(function(){ sheetMine(id); }, 90); setTimeout(function(){ sheetMine(id); }, 340);
-      load(true).then(function(){ sheetMine(id); });
-    }
+    try{
+      var sh0 = $('bpTaskSheet'); if(sh0) sh0.setAttribute('data-vb-camp', String(id));
+      var c = camp(id);
+      if(c && isVidTask(c)){
+        TS = { id:String(id), tab:'task', sub:'', subFor:'' };
+        augment(id); setTimeout(function(){ augment(id); }, 90); setTimeout(function(){ augment(id); }, 340);
+        if(srvOk()){
+          load(true).then(function(){ augment(id); });
+          loadBoard(id).then(function(){ augment(id); });
+          if(joined(id)) loadAcc(false).then(function(){ augment(id); }, function(){});
+        }
+      }
+    }catch(e){ E(e); }
     return r;
   };
 })();
@@ -93572,25 +95036,29 @@ function sheetMine(id){
 /* панель участия на карточке в списке «Заданий» */
 var RX = /bpTaskOpen\('((?:[^'\\]|\\.)*)'\)/;
 function panelHtml(c){
-  var list = mine(c.id), v = list[0];
+  var list = mineOf(c.id), v = list[0];
+  var go = function(t){ return '<button type="button" class="vb-p-go" data-vb-open="' + esc(c.id) + '">' + UP + t + '</button>'; };
   if(!v){
-    return '<div class="vb-p-k">Ваш шаг</div><div class="vb-p-t">Привяжите видео из TikTok</div>'
-      + '<div class="vb-p-s">Просмотры подтянутся сами — без скриншотов и ручного ввода</div>'
-      + '<button type="button" class="vb-p-go" data-vb-open="' + esc(c.id) + '">' + TT + 'Привязать видео</button>';
+    return '<div class="vb-p-k">Ваш шаг</div><div class="vb-p-t">Загрузите видео</div>'
+      + '<div class="vb-p-s">Опубликуйте ролик с рекламой на ' + esc(namesOf(allowed(c), ' или ')) + ' и загрузите его, когда наберёт просмотры</div>'
+      + go('Загрузить видео');
   }
-  var s = stOf(v);
-  return '<div class="vb-p-k">Ваше видео</div>'
-    + '<div class="vb-p-row">' + thumb(v) + '<div class="vb-p-mid"><b>' + esc(v.title || 'Видео TikTok') + '</b>'
-    + '<i>' + short(v.views) + ' просмотров · ' + short(v.likes) + ' лайков</i></div><span class="vb-pill is-' + s.c + '">' + s.t + '</span></div>'
-    + moneyLine(v, c) + minNote(v, c)
-    + (list.length > 1 ? '<div class="vb-more">И ещё ' + (list.length - 1) + ' видео в этом задании</div>' : '');
+  var g = { ok:0, wait:0, bad:0 }, paid = 0;
+  list.forEach(function(x){ g[stOf(x).g]++; if(x.status === 'paid') paid += num(x.paid); });
+  var s = stOf(v), p = vplat(v);
+  return '<div class="vb-p-k">Ваши видео</div>'
+    + '<div class="vb-p-row">' + thumb(v) + '<div class="vb-p-mid"><b>' + esc(v.title || 'Видео ' + PN[p]) + '</b>'
+    + '<i>' + viewsTxt(v.views) + ' · ' + esc(handleTxt(v) || PN[p]) + '</i></div><span class="vb-pill is-' + s.c + '">' + s.t + '</span></div>'
+    + '<div class="vb-p-cnt"><span>На проверке <b>' + g.wait + '</b></span><span>Одобрено <b>' + g.ok + '</b></span>'
+    + (paid ? '<span>Выплачено <b>' + rub(paid) + '</b></span>' : '') + '</div>'
+    + go('Загрузить ещё видео');
 }
 function paintCards(){
   var pg = $('pg-tasks'); if(!pg) return;
   [].forEach.call(pg.querySelectorAll('.tk-list > .tk-card.hx'), function(card){
     try{
       var m = RX.exec(card.getAttribute('onclick') || ''); if(!m) return;
-      var c = camp(m[1]); if(!c || !isVidTask(c) || !joined(c.id)) return;
+      var c = camp(m[1]); if(!c || !isVidTask(c) || !joined(c.id) || !canUpload(c.id)) return;
       var bank = card.querySelector('.hx-bank');
       var p = card.querySelector('.vb-panel');
       if(!p){ p = document.createElement('div'); p.className = 'vb-panel'; if(bank){ bank.style.display = 'none'; bank.parentNode.insertBefore(p, bank.nextSibling); } else card.appendChild(p); }
@@ -93610,41 +95078,51 @@ function paintMyTasks(){
   [].forEach.call(pg.querySelectorAll('[onclick*="bpOpenSubmit("]'), function(b){
     var m = /bpOpenSubmit\('((?:[^'\\]|\\.)*)'\)/.exec(b.getAttribute('onclick') || ''); if(!m) return;
     if(!isVidTask(camp(m[1]))) return;
-    var lab = mine(m[1]).length ? 'Привязать ещё видео' : 'Привязать видео';
+    var lab = mineOf(m[1]).length ? 'Загрузить ещё видео' : 'Загрузить видео';
     if(b.textContent !== lab) b.textContent = lab;
   });
 }
 
-/* ═══ РЕКЛАМОДАТЕЛЬ: «Видео из TikTok» в карточке оффера ═══ */
+/* ═══ РЕКЛАМОДАТЕЛЬ: «Видео блогеров» в карточке оффера ═══ */
 function advItem(v, c){
-  var s = stOf(v), dl = daysLeft(v), est = estimate(v, c);
-  var stTxt = v.status === 'review' ? 'Ждёт проверки' : s.t;
+  var s = stOf(v), p = vplat(v);
+  var tag = v.status === 'review' && !v.riskHold && !v.payHold ? { t:'Ждёт проверки', c:'wait' } : s;
   var risk = v.riskLevel && (v.riskLevel === 'risk' || v.riskLevel === 'bad');
+  var link = safeLink(v.url);
   return '<div class="vb-item" data-id="' + esc(v.id) + '"><div class="vb-item-top">' + thumb(v)
-    + '<div class="vb-item-tx"><span class="vb-pill is-' + (v.status === 'review' ? 'wait' : s.c) + '">' + stTxt + '</span>'
-    + '<b>' + esc(v.handle ? '@' + String(v.handle).replace(/^@/, '') : 'Блогер') + '</b>'
-    + '<i>' + esc(v.title || 'Видео TikTok') + '</i><u>' + (v.postedAt ? 'вышло ' + esc(dmy(v.postedAt)) + ' · ' : '') + 'данные на ' + esc(v.statsAt ? dmy(v.statsAt) : 'сегодня') + '</u></div></div>'
+    + '<div class="vb-item-tx"><div class="vb-item-tags">' + badge(p) + '<span class="vb-pill is-' + tag.c + '">' + tag.t + '</span></div>'
+    + '<b>' + esc(handleTxt(v) || 'Блогер') + '</b>'
+    + '<i>' + esc(v.title || 'Видео ' + PN[p]) + '</i><u>' + (v.postedAt ? 'вышло ' + esc(dmy(v.postedAt)) + ' · ' : '') + 'данные на ' + esc(v.statsAt ? dmy(v.statsAt) : 'сегодня') + '</u></div></div>'
     + stats(v)
     + ((v.riskHold || v.payHold) ? '<div class="vb-line warn">BloggerPay проверяет ' + (v.holdReason ? esc(v.holdReason).replace(/^./, function(x){ return x.toLowerCase(); }) : 'просмотры этого ролика') + ' — выплата подождёт решения.</div>'
         : risk ? '<div class="vb-line">Просмотры этого ролика под наблюдением BloggerPay.</div>' : '')
     + (v.disputeHeld ? '<div class="vb-line warn">По заданию открыт спор — выплата за видео ждёт решения арбитра.</div>' : '')
-    + (v.status === 'review' ? '<div class="vb-line">Проверьте, что в ролике есть ваша реклама, маркировка erid и выполнены условия. Засчитанное видео 7 дней считает просмотры, затем выплата уходит автоматически.</div>'
-        + '<div class="vb-acts"><button type="button" class="ok" data-vb="ok" data-id="' + esc(v.id) + '">Всё верно — засчитать</button><button type="button" class="bad" data-vb="bad" data-id="' + esc(v.id) + '">Есть проблема</button></div>' : '')
-    + (v.status === 'active' ? '<div class="vb-line">Засчитано' + (dl != null ? ' · считаем просмотры ещё <b>' + dl + ' дн.</b>' : '') + ' · к выплате сейчас <b>≈ ' + rub(est) + '</b></div>' : '')
+    + (v.status === 'review' ? '<div class="vb-line">Проверьте, что в ролике есть ваша реклама, маркировка erid и выполнены условия. Сейчас по просмотрам <b>≈ ' + rub(nowAmt(v, c)) + '</b> — сумма в резерве.</div>'
+        + (R.busy[v.id]
+          /* зачёт идёт (сервер делает свежий замер): перерисовка не должна вернуть активную кнопку */
+          ? '<div class="vb-acts"><button type="button" class="ok" disabled>Засчитываем…</button><button type="button" class="bad" disabled>Есть проблема</button></div>'
+          : '<div class="vb-acts"><button type="button" class="ok" data-vb="ok" data-id="' + esc(v.id) + '">Всё верно — засчитать</button><button type="button" class="bad" data-vb="bad" data-id="' + esc(v.id) + '">Есть проблема</button></div>')
+        + '<div class="vb-acts-cap">Засчитанное видео оплачивается сразу — по просмотрам в момент зачёта. Не ответите за 72 часа — засчитается само.</div>' : '')
+    + (v.status === 'active' ? '<div class="vb-line">Засчитано — выплата уйдёт блогеру при ближайшей сверке.</div>' : '')
     + (v.status === 'rejected' ? '<div class="vb-line warn">Вы указали проблему: «' + esc(v.reviewNote || '') + '». Разбирается BloggerPay — решение придёт уведомлением.</div>' : '')
     + (v.status === 'declined' ? '<div class="vb-line">BloggerPay не засчитал видео' + (v.decisionNote ? ': ' + esc(v.decisionNote) : '') + '. Деньги остаются в бюджете.</div>' : '')
-    + (v.status === 'paid' ? '<div class="vb-line">Выплачено блогеру <b>' + rub(v.paid) + '</b> из бюджета оффера.</div>' : '')
-    + (v.status === 'removed' ? '<div class="vb-line warn">Блогер удалил или скрыл ролик — он больше не считается.</div>' : '')
+    + (v.status === 'paid' ? '<div class="vb-line">Выплачено блогеру <b>' + rub(v.paid) + '</b> за ' + fmt(num(v.paidViews) || num(v.views)) + ' ' + plural(num(v.paidViews) || num(v.views), 'просмотр', 'просмотра', 'просмотров') + ' — из бюджета оффера.</div>' : '')
+    + (v.status === 'removed' ? '<div class="vb-line warn">Ролик удалён или скрыт на ' + PN[p] + ' — он не оплачивается.</div>' : '')
+    + (v.status === 'revoked' ? '<div class="vb-line warn">Блогер закрыл доступ к аккаунту — видео не считается.</div>' : '')
     + '<div class="vb-links"><button type="button" data-vb="watch" data-id="' + esc(v.id) + '">Смотреть видео</button>'
-    + (v.url ? '<a href="' + esc(v.url) + '" target="_blank" rel="noopener">Открыть в TikTok</a>' : '') + '</div></div>';
+    + (link ? '<a href="' + esc(link) + '" target="_blank" rel="noopener">Открыть в ' + PN[p] + '</a>' : '') + '</div></div>';
 }
 function advBlock(campId){
-  var c = camp(campId), cache = V.byCamp[String(campId)], list = (cache && cache.list) || [];
+  var c = camp(campId), cache = V.byCamp[String(campId)], list = (cache && cache.list) || [], b = boardOf(campId);
+  var head = '<div class="vb-adv-h"><b>Видео блогеров</b><span>Блогеры загружают ролики со своих подключённых ' + esc(namesOf(allowed(c), ' и ')) + ' — цифры берём у площадки и обновляем каждый день</span></div>';
+  var top = (b && b.off) ? '' : '<div class="vb-top">' + topInner(c, b, 'adv')
+    + '<div class="vb-adv-links"><button type="button" data-vb="ls" data-camp="' + esc(campId) + '" data-tab="lead">' + TROPHY + 'Лидерборд</button>'
+    + '<button type="button" data-vb="ls" data-camp="' + esc(campId) + '" data-tab="people">' + USERS + 'Участники' + (b && b.data ? '<em>' + cntTxt(b.data.members) + '</em>' : '') + '</button></div></div>';
+  if(!list.length) return '<div class="vb-adv" id="vbAdv">' + head + top + '<div class="vb-line">Пока ни одного видео. Как только блогер загрузит ролик, он появится здесь и придёт уведомление.</div></div>';
   var pend = list.filter(function(v){ return v.status === 'review'; }).length;
-  if(!list.length) return '<div class="vb-adv" id="vbAdv"><div class="vb-adv-h"><b>Видео из TikTok</b><span>Блогеры привязывают ролики из своих подтверждённых TikTok — данные обновляются каждый день</span></div>'
-    + '<div class="vb-line">Пока ни одного видео. Как только блогер привяжет ролик, он появится здесь и придёт уведомление.</div></div>';
-  list = list.slice().sort(function(a, b){ var o = { review:0, rejected:1, active:2, paid:3, declined:4, removed:5, revoked:6 }; return (o[a.status] - o[b.status]) || (num(b.createdAt) - num(a.createdAt)); });
-  return '<div class="vb-adv" id="vbAdv"><div class="vb-adv-h"><b>Видео из TikTok</b><span>Данные берём из TikTok блогера и обновляем каждый день</span></div>'
+  var O = { review:0, rejected:1, active:2, paid:3, declined:4, removed:5, revoked:6 };
+  list = list.slice().sort(function(a, b2){ return ((O[a.status] || 0) - (O[b2.status] || 0)) || (num(b2.createdAt) - num(a.createdAt)); });
+  return '<div class="vb-adv" id="vbAdv">' + head + top
     + (pend ? '<div class="vb-adv-alert"><i></i>' + (pend === 1 ? 'Видео ждёт вашей проверки' : 'Видео ждут проверки: ' + pend) + '</div>' : '')
     + list.map(function(v){ return advItem(v, c); }).join('') + '</div>';
 }
@@ -93660,13 +95138,16 @@ function mountAdv(noFetch){
       var old = $('vbAdvSum'); if(old) old.remove();
       if(pend){
         var d = document.createElement('div'); d.id = 'vbAdvSum'; d.className = 'vb-adv-alert'; d.style.marginBottom = '14px'; d.style.cursor = 'pointer';
+        d.setAttribute('role', 'button'); d.setAttribute('tabindex', '0');
         d.innerHTML = '<i></i>' + (pend === 1 ? 'Видео ждёт вашей проверки' : 'Видео ждут проверки: ' + pend) + ' — открыть';
         d.addEventListener('click', function(){ try{ cdSwitchTab('works'); }catch(e){} });
         host.insertBefore(d, host.firstChild);
       }
     } else {
-      var box = $('vbAdv'); var html = advBlock(c.id);
-      if(box) box.outerHTML = html; else host.insertAdjacentHTML('afterbegin', html);
+      var box = $('vbAdv'), html = advBlock(c.id);
+      if(!box) host.insertAdjacentHTML('afterbegin', html);
+      else if(box.__h !== html) box.outerHTML = html;
+      var nb = $('vbAdv'); if(nb) nb.__h = html;
       /* старый список «Работы исполнителей» (ручная сдача) пуст — его фильтры
          и «Работ пока нет» противоречили бы видео выше; если старые работы
          есть (сданы до перехода на видео), список остаётся как был */
@@ -93675,12 +95156,13 @@ function mountAdv(noFetch){
         [].forEach.call(host.querySelectorAll(':scope > .cdo-chips, :scope > .cdo-empty, :scope > .cdo-hint'), function(el){ el.style.display = 'none'; });
       }
     }
-    /* вкладку открыли — берём свежие данные (не чаще раза в 4 с) */
-    if(!noFetch && (!cache || Date.now() - cache.at > 4000)) loadCamp(c.id).then(function(){ mountAdv(true); });
+    if(!noFetch){
+      if(!cache || Date.now() - cache.at > 4000) loadCamp(c.id).then(function(){ mountAdv(true); });
+      loadBoard(c.id).then(function(){ mountAdv(true); });
+    }
   }catch(e){ E(e); }
 }
-/* человек сам открыл оффер или вкладку «Работы» — данные берём свежие,
-   а не из запоминания на 4 секунды (оно только от лишних перерисовок) */
+/* человек сам открыл оффер или вкладку «Работы» — данные берём свежие */
 ['openCampDetail', 'cdSwitchTab'].forEach(function(n){
   var o = window[n]; if(typeof o !== 'function') return;
   window[n] = function(){
@@ -93694,36 +95176,75 @@ function mountAdv(noFetch){
   if(typeof o !== 'function') return;
   window._renderCampDetailBody = function(c){ var r = o.apply(this, arguments); try{ mountAdv(); }catch(e){ E(e); } return r; };
 })();
-function findVid(id){
-  var all = V.list.slice(); Object.keys(V.byCamp).forEach(function(k){ all = all.concat(V.byCamp[k].list); });
-  return all.filter(function(v){ return String(v.id) === String(id); })[0] || null;
+
+/* лидерборд и участники у рекламодателя — те же списки, в шторке */
+var LS = { cid:'', tab:'lead' };
+function listsInner(){
+  var cid = LS.cid, b = boardOf(cid), d = b && b.data, idx = LS.tab === 'people' ? 1 : 0;
+  return '<div class="vb-tabs-in vb-ls-tabs" role="tablist" aria-label="Списки задания">'
+    + '<button type="button" class="vb-tab" role="tab" data-vb="ls-tab" data-tab="lead" aria-selected="' + (idx === 0) + '" tabindex="' + (idx === 0 ? 0 : -1) + '">Лидерборд</button>'
+    + '<button type="button" class="vb-tab" role="tab" data-vb="ls-tab" data-tab="people" aria-selected="' + (idx === 1) + '" tabindex="' + (idx === 1 ? 0 : -1) + '">Участники' + (d ? '<em>' + cntTxt(d.members) + '</em>' : '') + '</button></div>'
+    + '<div id="vbLsBody" role="tabpanel">' + (idx ? peopleHtml(cid) : leadHtml(cid, false)) + '</div>';
 }
-var R = { id:null, reason:'' };
+function openLists(cid, tab){
+  LS = { cid:String(cid), tab:tab === 'people' ? 'people' : 'lead' };
+  var s = sheet('bpVbList');
+  openSheet(s, hd('Участники задания') + '<div id="vbLsWrap">' + listsInner() + '</div>', 'Лидерборд и участники');
+  s.querySelector('.vb-card').classList.add('vb-lsheet');
+  loadBoard(cid).then(paintLists);
+}
+function paintLists(){
+  var w = $('vbLsWrap'); if(!w || !LS.cid) return;
+  var s = $('bpVbList'); if(!s || !s.classList.contains('on')) return;
+  var h = listsInner(); if(w.__h !== h){ w.innerHTML = h; w.__h = h; }
+}
+function setListTab(t){
+  if(LS.tab === t) return;
+  LS.tab = t === 'people' ? 'people' : 'lead';
+  paintLists();
+  var bd = $('vbLsBody'); if(bd){ bd.classList.remove('in'); void bd.offsetWidth; bd.classList.add('vb-pane', 'in'); }
+}
+
+var R = { id:null, busy:{} };
 function advAction(a, t){
   var id = t.getAttribute('data-id') || R.id, v = findVid(id);
   if(a === 'watch'){
     if(!v) return;
-    var s = sheet('bpVbPlayer');
-    openSheet(s, hd('Видео блогера') + '<div class="vb-frame"><iframe src="' + esc(v.player || ('https://www.tiktok.com/player/v1/' + v.videoId)) + '" allow="autoplay; encrypted-media; fullscreen" allowfullscreen title="Видео TikTok"></iframe></div>'
-      + (v.url ? '<a class="vb-go ghost" style="text-decoration:none" href="' + esc(v.url) + '" target="_blank" rel="noopener">Открыть в TikTok</a>' : ''), 'Видео блогера');
+    var p = vplat(v), s = sheet('bpVbPlayer');
+    var src = safeLink(v.player) || (p === 'youtube' ? 'https://www.youtube.com/embed/' + encodeURIComponent(v.videoId) : 'https://www.tiktok.com/player/v1/' + encodeURIComponent(v.videoId));
+    var wide = p === 'youtube' && !/\/shorts\//.test(String(v.url || ''));
+    var link = safeLink(v.url);
+    openSheet(s, hd('Видео блогера') + '<div class="vb-frame' + (wide ? ' wide' : '') + '"><iframe src="' + esc(src) + '" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="Видео ' + PN[p] + '"></iframe></div>'
+      + (link ? '<a class="vb-go ghost" style="text-decoration:none" href="' + esc(link) + '" target="_blank" rel="noopener">Открыть в ' + PN[p] + '</a>' : ''), 'Видео блогера');
     return;
   }
   if(a === 'ok'){
-    if(!v || t.disabled) return; t.disabled = true; t.textContent = 'Засчитываем…';
+    if(!v || t.disabled || R.busy[v.id]) return;
+    R.busy[v.id] = 1; t.disabled = true; t.textContent = 'Засчитываем…';
     api('POST', '/api/tasks/video/review', { id:v.id, ok:true }).then(function(j){
-      if(j && j.video) upsert(j.video);
-      toast('Видео засчитано — 7 дней считаем просмотры', 'ok'); mountAdv();
-    }).catch(function(e){ t.disabled = false; t.textContent = 'Всё верно — засчитать'; toast((e && e.message) || 'Не получилось', 'err'); });
+      delete R.busy[v.id];
+      var nv = j && j.video; if(nv) upsert(nv); dropBoard(v.campId);
+      var st = (nv && nv.status) || '', set = (j && j.settle) || '';
+      var m = 'Видео засчитано', k = 'ok';
+      if(st === 'paid'){ m = 'Видео засчитано — блогеру выплачено ' + rub(nv.paid); try{ if(window.bpMoney && typeof window.bpMoney.sync === 'function') window.bpMoney.sync(); }catch(e){ E(e); } }
+      /* при зачёте ролика на площадке не оказалось — денег не ушло */
+      else if(st === 'removed' || set === 'removed'){ m = 'Ролика больше нет на площадке — видео не оплачено, резерв вернулся в бюджет'; k = 'err'; }
+      else if(nv && nv.riskHold) m = 'Видео засчитано — выплату проверит BloggerPay';
+      else if(nv && (nv.payHold || nv.disputeHeld)) m = 'Видео засчитано — выплата задерживается';
+      else if(st === 'active') m = 'Видео засчитано — выплата пройдёт при ближайшей сверке';
+      toast(m, k); syncLedger(V.byCamp[String(v.campId)] ? V.byCamp[String(v.campId)].list : V.list); mountAdv();
+    }).catch(function(e){ delete R.busy[v.id]; t.disabled = false; t.textContent = 'Всё верно — засчитать'; toast((e && e.message) || 'Не получилось', 'err'); mountAdv(true); });
     return;
   }
   if(a === 'bad'){
-    if(!v) return; R.id = v.id; R.reason = '';
+    if(!v) return; R.id = v.id;
     var sh = sheet('bpVbSheet');
     var chips = ['Нет рекламы в видео', 'Нет маркировки erid', 'Не тот товар', 'Не выполнены условия'];
+    B = null;
     openSheet(sh, hd('Что не так с видео?')
       + '<div class="vb-sub">Напишите, что не так. Это сразу уйдёт администратору BloggerPay — он посмотрит видео и примет решение. До решения выплаты нет.</div>'
       + '<div class="vb-reasons">' + chips.map(function(x){ return '<button type="button" data-chip="' + esc(x) + '">' + esc(x) + '</button>'; }).join('') + '</div>'
-      + '<textarea class="vb-ta" id="vbReason" maxlength="500" placeholder="Например: в видео нет упоминания бренда"></textarea>'
+      + '<textarea class="vb-ta" id="vbReason" maxlength="500" placeholder="Например: в видео нет упоминания бренда" aria-label="Что не так с видео"></textarea>'
       + '<div class="vb-err" id="vbErr2" role="alert"></div>'
       + '<button type="button" class="vb-go" data-vb="send-bad" disabled id="vbSendBad">Отправить в BloggerPay</button>', 'Что не так с видео');
     var ta = $('vbReason'), go = $('vbSendBad');
@@ -93750,19 +95271,19 @@ function advAction(a, t){
   }
 }
 
-/* оффер с видео на проверке или в подсчёте не завершают и не удаляют:
-   деньги по ним ещё не выплачены, касса держит бюджет до выплаты */
+/* оффер с видео на проверке не завершают и не удаляют: деньги по ним
+   ещё в резерве, касса держит бюджет до решения */
 function liveVids(campId){
   var all = V.list.slice(), bc = V.byCamp[String(campId)]; if(bc) all = all.concat(bc.list);
   var seen = {};
-  return all.filter(function(v){ if(!v || seen[v.id]) return false; seen[v.id] = 1; return String(v.campId) === String(campId) && (v.status === 'review' || v.status === 'active' || v.status === 'rejected'); });
+  return all.filter(function(v){ if(!v || seen[v.id]) return false; seen[v.id] = 1; return String(v.campId) === String(campId) && stOf(v).g === 'wait'; });
 }
 ['bpCampFinish', 'campComplete', 'campDelete'].forEach(function(n){
   var o = window[n]; if(typeof o !== 'function') return;
   window[n] = function(id){
     var lv = liveVids(id);
     if(lv.length){
-      toast('Пока нельзя: ' + lv.length + ' ' + (lv.length === 1 ? 'видео' : 'видео') + ' на проверке или в подсчёте. Завершить оффер можно после выплат по ним', 'err');
+      toast('Пока нельзя: ' + lv.length + ' видео на проверке. Завершить оффер можно после решения по ним', 'err');
       return;
     }
     return o.apply(this, arguments);
@@ -93770,41 +95291,62 @@ function liveVids(campId){
 });
 
 /* ═══ УВЕДОМЛЕНИЯ: что поменялось с прошлого раза ═══ */
-var SEEN_KEY = 'bp_vb_seen';
-function seenGet(){ try{ return JSON.parse(localStorage.getItem(SEEN_KEY + ':' + (mySrv() || '')) || '{}') || {}; }catch(e){ return {}; } }
-function seenPut(o){ try{ localStorage.setItem(SEEN_KEY + ':' + (mySrv() || ''), JSON.stringify(o)); }catch(e){} }
-function note(t, d){ try{ if(typeof window.bpNotify === 'function') window.bpNotify('task', t, d, {}); }catch(e){} toast(t + (d ? ' — ' + d : ''), 'ok'); }
+/* bpNotify — и всплывашка, и центр уведомлений; свой тост — только без него, иначе два одинаковых */
+function note(t, d){ try{ if(typeof window.bpNotify === 'function'){ window.bpNotify('task', t, d, {}); return; } }catch(e){} toast(t, 'ok'); }
 function notifyDiff(){
   var sid = mySrv(); if(sid == null) return;
-  var first = true; try{ first = localStorage.getItem(SEEN_KEY + ':' + sid) === null; }catch(e){}
-  var seen = seenGet(), out = {};
+  var key = 'bpvb_seen:' + sid, raw = lsGet(key), first = raw === null;
+  if(first){ var old = lsGet('bp_vb_seen:' + sid); if(old !== null){ raw = old; first = false; } }
+  var seen = {}; try{ seen = JSON.parse(raw || '{}') || {}; }catch(e){}
+  var out = {};
   V.list.forEach(function(v){
     var k = String(v.id), st = v.status + (v.riskHold ? ':hold' : ''), was = seen[k];
     out[k] = st;
     if(first || was === st) return;
-    var c = camp(v.campId), nm = '«' + ((c && (c.name || c.title)) || 'задание') + '»';
+    var c = camp(v.campId), nm = '«' + nameOf(c) + '»';
     if(Number(v.ownerId) === sid && Number(v.bloggerId) !== sid){
       if(!was && v.status === 'review') note('Новое видео по заданию', nm + ': проверьте интеграцию');
       return;
     }
     if(Number(v.bloggerId) !== sid) return;
-    if(v.status === 'active' && !v.riskHold) note('Видео засчитано', nm + ': 7 дней считаем просмотры');
-    else if(v.status === 'paid') note('Выплата по видео', nm + ': ' + rub(v.paid) + ' на балансе');
+    if(v.status === 'paid') note('Видео засчитано — ' + rub(v.paid) + ' на балансе', nm);
     else if(v.status === 'declined') note('Видео не засчитано', nm + (v.decisionNote ? ': ' + v.decisionNote : ''));
     else if(v.status === 'rejected') note('Рекламодатель указал проблему', nm + ': решает BloggerPay');
-    else if(v.status === 'removed') note('Видео пропало из TikTok', nm + ': ролик удалён или скрыт');
+    else if(v.status === 'removed') note('Видео удалено с площадки', nm + ': ролик удалён или скрыт — выплаты нет');
   });
-  seenPut(out);
+  lsSet(key, JSON.stringify(out));
 }
 
+/* выход из аккаунта (bp-logout-clean): кэши слоя — того человека, что
+   вышел; новый не должен увидеть ни его аккаунтов, ни его места в списках */
+window.bpVbDropCache = function(){
+  try{
+    closeMenu(true);
+    ['bpVbSheet', 'bpVbList', 'bpVbPlayer'].forEach(function(id){ var s = $(id); if(s && s.classList.contains('on')){ if(id === 'bpVbPlayer') window.closeBpVbPlayer(); else closeSheet(s); } });
+    var om = $('vbMenu'); if(om) om.remove();
+    AC = { list:null, at:0, p:null, who:undefined };
+    V = { list:[], at:0, p:null, byCamp:{} };
+    BD = {}; WHO = {}; SORT = {};
+    joinBusy = {}; joinTried = {};
+    TS = { id:'', tab:'task', sub:'', subFor:'' };
+    LS = { cid:'', tab:'lead' };
+    R = { id:null, busy:{} };
+    B = null;
+  }catch(e){ E(e); }
+};
+
 /* ═══ сборка ═══ */
-function repaint(){ try{ paintCards(); paintMyTasks(); }catch(e){ E(e); } }
+function repaint(){
+  try{ paintCards(); paintMyTasks(); }catch(e){ E(e); }
+  try{ var sh = $('bpTaskSheet'), id = sh && sh.getAttribute('data-vb-camp'); if(id) augment(id); }catch(e){ E(e); }
+}
 (function(){
   var og = window.goTo; if(typeof og !== 'function') return;
   window.goTo = function(id){
     var r = og.apply(this, arguments);
     var k = String(id);
     if(k === 'tasks' || k === 'mytasks' || k === 'campaigns'){ setTimeout(repaint, 60); load(false); }
+    if(k === 'tasks') setTimeout(boot, 30);
     return r;
   };
 })();
@@ -93818,11 +95360,20 @@ function boot(){
   load(false);
 }
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-/* «Задания» появляются при первом входе — наблюдатель вешаем и тогда */
-(function(){ var og = window.goTo; if(typeof og !== 'function') return; window.goTo = function(id){ var r = og.apply(this, arguments); if(String(id) === 'tasks') setTimeout(boot, 30); return r; }; })();
 /* раз в минуту, пока вкладка на экране: новые видео, решения, выплаты */
-setInterval(function(){ if(!document.hidden && srvOk() && me()) load(true); }, 60000);
-document.addEventListener('visibilitychange', function(){ if(!document.hidden) load(true); });
+setInterval(function(){
+  if(document.hidden || !srvOk() || !me()) return;
+  load(true);
+  var sh = $('bpTaskSheet'), id = sh && sh.getAttribute('data-vb-camp');
+  if(id && isVidTask(camp(id))) loadBoard(id).then(function(){ augment(id); });
+  /* открытая карточка своего оффера: счётчики, участники и лидерборд тоже живые */
+  try{
+    var ov = $('campDetailOverlay');
+    var ac = (ov && ov.classList.contains('open') && typeof _cdActiveCampId !== 'undefined' && _cdActiveCampId != null) ? camp(_cdActiveCampId) : null;
+    if(ac && isOwner(ac) && isVidTask(ac)) loadBoard(ac.id).then(function(){ mountAdv(true); paintLists(); });
+  }catch(e){ E(e); }
+}, 60000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden){ load(true); AC.at = 0; } });
 })();
 </script>
 </body>

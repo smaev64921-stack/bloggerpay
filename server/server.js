@@ -177,15 +177,35 @@ const TT_API_BASE = (cleanKey(ENV.TT_API_BASE) || 'https://open.tiktokapis.com')
    короткие ссылки vm./vt.tiktok.com и спрашиваем oEmbed. Отдельно от
    TT_API_BASE: это разные хосты, и в проверках их подменяют по-разному. */
 const TT_WEB_BASE = (cleanKey(ENV.TT_WEB_BASE) || 'https://www.tiktok.com').replace(/\/+$/, '');
-/* Сколько суток после зачёта считаем просмотры ролика. В конце окна
-   сервер делает финальный замер и платит сам. 0 — окно закрывается сразу
-   (так гоняют проверки), пустое или мусор — неделя. */
-const VID_WINDOW_DAYS = (() => {
-  const raw = String(ENV.VID_WINDOW_DAYS == null ? '' : ENV.VID_WINDOW_DAYS).trim();
+/* YouTube для «Загрузить видео» (06.10.2026, механика v2). YT_API_BASE —
+   куда сервер ходит за данными роликов и канала (videos.list,
+   channels.list), YT_OAUTH_BASE — где меняет код и refresh на доступ
+   (подтверждение канала и обновление доступа). В проверках обе
+   подменяются поддельной площадкой. Вход через Google живёт отдельно и
+   этих адресов не касается.
+   YT_API_KEY — ключ API из Google Cloud (YouTube Data API v3): с ним
+   публичные цифры ролика берутся без доступа к каналу блогера, а
+   владение сверяется по channelId. Без ключа — доступом выбранного
+   канала (его даёт подтверждение с access_type=offline). */
+const YT_API_BASE = (cleanKey(ENV.YT_API_BASE) || 'https://www.googleapis.com').replace(/\/+$/, '');
+const YT_OAUTH_BASE = (cleanKey(ENV.YT_OAUTH_BASE) || 'https://oauth2.googleapis.com').replace(/\/+$/, '');
+const YT_TOKEN_URL = YT_OAUTH_BASE + '/token';
+const YT_API_KEY = cleanKey(ENV.YT_API_KEY);
+/* Окна подсчёта больше нет (механика v2): засчитанный ролик оплачивается
+   сразу, по просмотрам в момент зачёта. После выплаты цифры ещё
+   VID_TRACK_DAYS суток с публикации обновляются раз в сутки — только для
+   показа, на деньги это не влияет. Пустое или мусор — 30. */
+const VID_TRACK_DAYS = (() => {
+  const raw = String(ENV.VID_TRACK_DAYS == null ? '' : ENV.VID_TRACK_DAYS).trim();
   const n = Number(raw);
-  return raw !== '' && Number.isFinite(n) && n >= 0 ? n : 7;
+  return raw !== '' && Number.isFinite(n) && n >= 0 ? n : 30;
 })();
-const VID_WINDOW_MS = Math.round(VID_WINDOW_DAYS * 864e5);
+const VID_TRACK_MS = Math.round(VID_TRACK_DAYS * 864e5);
+/* Свежий замер в момент зачёта не удался: последние цифры моложе суток
+   годятся для выплаты. Старше — выплата ждёт следующего круга, и после
+   VID_PAY_TRIES неудач подряд платим по последним с пометкой владельцу. */
+const VID_FRESH_MS = 24 * 3600 * 1000;
+const VID_PAY_TRIES = 3;
 /* Сколько часов ролик может ждать проверки рекламодателя. Молчит дольше —
    ролик засчитывается сам (decision = 'auto'): иначе молчанием можно было
    бы держать блогера без денег бесконечно. Пустое или мусор — 72 часа. */
@@ -712,6 +732,36 @@ for (const col of ['terms TEXT', 'pay_hold INTEGER DEFAULT 0', 'pay_why TEXT', '
   'last_try_at INTEGER', 'last_miss_at INTEGER', 'frozen INTEGER DEFAULT 0']) {
   try { db.exec('ALTER TABLE task_videos ADD COLUMN ' + col); } catch (e) { /* уже есть */ }
 }
+/* Механика v2 (06.10.2026, VIDEO-SPEC.md, раздел 10):
+   submit_views — просмотры в момент загрузки: выплата идёт по большему из
+     них и свежего замера, ролик не теряет в деньгах, если площадка потом
+     срезала часть просмотров.
+   reserved — оценка суммы при загрузке: столько бюджета держится под ролик,
+     пока по нему не решено.
+   paid_views — просмотры, по которым ролик оплачен (база выплаты; ставится
+     один раз). Просмотры после выплаты в зачёт не идут.
+   hold_kind — чья пауза: 'money' (не хватило денег, ждёт владельца) или
+     'measure' (нет свежего замера, круг повторит сам).
+   pay_tries — сколько раз подряд не удался свежий замер перед выплатой.
+   pay_note — пометка для владельца (например, «оплачено по последнему замеру»). */
+for (const col of ['submit_views INTEGER', 'reserved INTEGER DEFAULT 0', 'paid_views INTEGER',
+  'hold_kind TEXT', 'pay_tries INTEGER DEFAULT 0', 'pay_note TEXT']) {
+  try { db.exec('ALTER TABLE task_videos ADD COLUMN ' + col); } catch (e) { /* уже есть */ }
+}
+/* Участники задания. Вступление жило только в приложении, и сервер не
+   мог показать ни список участников, ни лидерборд. left_at — вышел из
+   задания (строка остаётся: вернуться можно тем же /join). */
+db.exec(`CREATE TABLE IF NOT EXISTS task_members (
+  camp_id TEXT NOT NULL, user_id INTEGER NOT NULL,
+  joined_at INTEGER NOT NULL, left_at INTEGER,
+  UNIQUE(camp_id, user_id)
+)`);
+db.exec('CREATE INDEX IF NOT EXISTS task_members_camp ON task_members(camp_id, left_at, joined_at)');
+/* Старые загрузки (до /join): кто уже загружал видео — тот участник. */
+try {
+  db.exec(`INSERT OR IGNORE INTO task_members (camp_id, user_id, joined_at)
+    SELECT camp_id, blogger_id, MIN(created_at) FROM task_videos GROUP BY camp_id, blogger_id`);
+} catch (e) { console.error('участники заданий: перенос не удался —', e && e.message); }
 /* Снимок дня: одна строка на ролик в сутки (UTC). По ним видно, как ролик
    набирал просмотры, и по ним же ловится резкий скачок без лайков. */
 db.exec(`CREATE TABLE IF NOT EXISTS task_video_stats (
@@ -1063,13 +1113,13 @@ const q = {
   /* выплаты по кампаниям, чтобы рекламодатель видел расход на любом устройстве */
   myReleases: db.prepare(`SELECT op_key, result, created_at FROM ops
     WHERE user_id = ? AND kind = 'release' ORDER BY created_at DESC LIMIT 500`),
-  /* ── «Привязать видео» ── */
+  /* ── «Загрузить видео» (механика v2, VIDEO-SPEC.md, раздел 10) ── */
   vidIns: db.prepare(`INSERT INTO task_videos (camp_id, owner_id, blogger_id, platform, external_id,
       video_id, url, handle, title, duration, posted_at, views, likes, comments, shares, stats_at,
-      status, terms, last_try_at, created_at, updated_at)
-    VALUES (?,?,?,'tiktok',?,?,?,?,?,?,?,?,?,?,?,?,'review',?,?,?,?)`),
+      status, terms, submit_views, reserved, last_try_at, created_at, updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'review',?,?,?,?,?,?)`),
   vidById: db.prepare('SELECT * FROM task_videos WHERE id = ?'),
-  vidByVideo: db.prepare('SELECT id FROM task_videos WHERE platform = ? AND video_id = ?'),
+  vidByVideo: db.prepare('SELECT id, blogger_id FROM task_videos WHERE platform = ? AND video_id = ?'),
   vidByCamp: db.prepare('SELECT * FROM task_videos WHERE camp_id = ? ORDER BY id DESC LIMIT 500'),
   vidMineCamp: db.prepare('SELECT * FROM task_videos WHERE camp_id = ? AND blogger_id = ? ORDER BY id DESC LIMIT 500'),
   vidMineAll: db.prepare(`SELECT * FROM task_videos WHERE blogger_id = ? OR owner_id = ?
@@ -1084,10 +1134,12 @@ const q = {
       comments = excluded.comments, shares = excluded.shares, at = excluded.at`),
   /* Цифры и промахи пишем только строке, которая ещё в работе: между
      чтением строки и ответом площадки её мог закрыть владелец или
-     выплата, и старый снимок не должен её «оживить». */
+     выплата, и старый снимок не должен её «оживить». Оплаченной строке
+     цифры обновляются только для показа (VID_TRACK_DAYS): сумма и база
+     выплаты (paid_views, earned) здесь не трогаются никогда. */
   vidNums: db.prepare(`UPDATE task_videos SET views = ?, likes = ?, comments = ?, shares = ?,
       title = COALESCE(?, title), duration = COALESCE(?, duration), stats_at = ?, miss = 0, last_miss_at = NULL,
-      earned = ?, updated_at = ? WHERE id = ? AND status IN ('review','active')`),
+      updated_at = ? WHERE id = ? AND status IN ('review','active','paid')`),
   vidMiss: db.prepare(`UPDATE task_videos SET miss = miss + 1, last_miss_at = ?, updated_at = ?
     WHERE id = ? AND status IN ('review','active')`),
   vidRemove: db.prepare(`UPDATE task_videos SET status = 'removed', updated_at = ?
@@ -1096,61 +1148,92 @@ const q = {
   vidTerms: db.prepare('UPDATE task_videos SET terms = ? WHERE id = ? AND terms IS NULL'),
   vidRisk: db.prepare(`UPDATE task_videos SET risk = ?, risk_level = ?, risk_why = ?, risk_at = ?,
       risk_hold = ?, updated_at = ? WHERE id = ?`),
-  vidReviewOk: db.prepare(`UPDATE task_videos SET status = 'active', reviewed_at = ?, approved_at = ?,
-      earned = ?, updated_at = ? WHERE id = ? AND status = 'review'`),
+  /* Зачёт рекламодателем: ролик переходит в «засчитано, платим» — сама
+     выплата идёт сразу следом (vidPayout), по свежему замеру. */
+  vidAccept: db.prepare(`UPDATE task_videos SET status = 'active', reviewed_at = ?, approved_at = ?,
+      updated_at = ? WHERE id = ? AND status = 'review'`),
   vidReviewBad: db.prepare(`UPDATE task_videos SET status = 'rejected', review_note = ?, reviewed_at = ?,
       updated_at = ? WHERE id = ? AND status = 'review'`),
   /* Рекламодатель молчит — ролик засчитан сам (decision = 'auto'). */
   vidAutoOk: db.prepare(`UPDATE task_videos SET status = 'active', reviewed_at = ?, approved_at = ?,
-      decision = 'auto', decided_at = ?, earned = ?, updated_at = ? WHERE id = ? AND status = 'review'`),
+      decision = 'auto', decided_at = ?, updated_at = ? WHERE id = ? AND status = 'review'`),
   vidReviewStale: db.prepare(`SELECT * FROM task_videos WHERE status = 'review' AND created_at <= ?
     ORDER BY created_at ASC LIMIT 200`),
   vidDecide: db.prepare(`UPDATE task_videos SET status = ?, decision = ?, decision_note = ?, decided_at = ?,
-      approved_at = ?, risk_hold = ?, pay_hold = 0, pay_why = NULL, decided_views = ?, frozen = ?,
-      earned = ?, updated_at = ? WHERE id = ? AND status = ?`),
-  vidPaid: db.prepare(`UPDATE task_videos SET status = 'paid', earned = ?, paid = ?, paid_at = ?, updated_at = ?
+      approved_at = ?, risk_hold = ?, pay_hold = 0, hold_kind = NULL, pay_why = NULL, pay_tries = 0,
+      decided_views = ?, frozen = ?, updated_at = ? WHERE id = ? AND status = ?`),
+  /* База выплаты фиксируется ОДИН раз — в момент первой попытки
+     заплатить: просмотры на момент проверки и сумма по снимку условий.
+     Дальше (недоплата, доплата после решения владельца) она не плывёт. */
+  vidBasis: db.prepare(`UPDATE task_videos SET earned = ?, paid_views = ?, updated_at = ?
+    WHERE id = ? AND status = 'active' AND paid_views IS NULL`),
+  vidPaid: db.prepare(`UPDATE task_videos SET status = 'paid', paid = ?, paid_at = ?, pay_hold = 0,
+      hold_kind = NULL, pay_why = NULL, pay_note = COALESCE(?, pay_note), updated_at = ?
     WHERE id = ? AND status = 'active'`),
-  /* Заплатили часть (заморозки не хватило) — строка остаётся в работе,
+  /* Заплатили часть (заморозки не хватило) — строка остаётся засчитанной,
      остаток ждёт владельца. */
-  vidPart: db.prepare(`UPDATE task_videos SET paid = ?, paid_at = ?, pay_hold = 1, pay_why = ?, updated_at = ?
-    WHERE id = ? AND status = 'active'`),
-  vidPayHold: db.prepare(`UPDATE task_videos SET pay_hold = 1, pay_why = ?, updated_at = ?
+  vidPart: db.prepare(`UPDATE task_videos SET paid = ?, paid_at = ?, pay_hold = 1, hold_kind = 'money', pay_why = ?,
+      updated_at = ? WHERE id = ? AND status = 'active'`),
+  vidPayHold: db.prepare(`UPDATE task_videos SET pay_hold = 1, hold_kind = ?, pay_why = ?, updated_at = ?
     WHERE id = ? AND status = 'active' AND COALESCE(pay_hold, 0) = 0`),
+  /* Свежий замер не удался, а последнему больше суток: выплата ждёт
+     следующего круга (hold_kind = 'measure' — его круг повторяет сам,
+     владелец тут не нужен). pay_tries — сколько раз подряд не вышло. */
+  vidMeasureFail: db.prepare(`UPDATE task_videos SET pay_hold = 1, hold_kind = 'measure', pay_why = ?, pay_tries = ?,
+      updated_at = ? WHERE id = ? AND status = 'active' AND COALESCE(risk_hold, 0) = 0
+      AND (COALESCE(pay_hold, 0) = 0 OR hold_kind = 'measure')`),
+  vidUnhold: db.prepare(`UPDATE task_videos SET pay_hold = 0, hold_kind = NULL, pay_why = NULL, pay_tries = 0,
+      updated_at = ? WHERE id = ? AND status = 'active' AND hold_kind IN ('measure','access')`),
+  /* Свежий замер не удался по вине доступа (блогер отвязал канал или
+     отозвал доступ, канал отключил владелец): ролик, может быть, уже
+     удалён, и платить «по последним цифрам» нельзя. Пауза 'access' —
+     в очереди владельца; круг изредка пробует снова и платит сам, когда
+     блогер переподключит канал. */
+  vidAccessHold: db.prepare(`UPDATE task_videos SET pay_hold = 1, hold_kind = 'access', pay_why = ?, pay_tries = 0,
+      updated_at = ? WHERE id = ? AND status = 'active' AND COALESCE(risk_hold, 0) = 0
+      AND (COALESCE(pay_hold, 0) = 0 OR hold_kind IN ('measure','access'))`),
   /* Отвязал канал — снимаем только то, что ещё ждёт проверки рекламодателя.
-     Засчитанные ролики (active) остаются: блогер честно отработал, а
-     без доступа их судьбу решит владелец (поздний путь в vidSettle). */
+     Засчитанные (active) остаются: их выплату решит владелец или круг,
+     когда блогер переподключит канал (пауза 'access'). */
   vidRevokable: db.prepare(`SELECT * FROM task_videos
     WHERE blogger_id = ? AND platform = ? AND external_id = ? AND status = 'review'`),
   vidRevokeOne: db.prepare(`UPDATE task_videos SET status = 'revoked', updated_at = ?
     WHERE id = ? AND status = 'review'`),
-  /* Кого пора освежить: цифры старше порога, либо окно активного ролика
-     кончилось, а финального замера после конца окна ещё не было. Ролик с
-     готовым финальным замером (stats_at позже конца окна) и замороженный
-     больше не опрашиваем. Очередь — по последней попытке: ролики, которые
-     площадка не отдаёт, не стоят вечно впереди остальных. */
-  vidDue: db.prepare(`SELECT * FROM task_videos WHERE status IN ('review','active')
-    AND COALESCE(frozen, 0) = 0
-    AND NOT (status = 'active' AND approved_at IS NOT NULL AND COALESCE(stats_at, 0) > approved_at + ?)
-    AND (? = 1 OR stats_at IS NULL OR stats_at < ?
-      OR (status = 'active' AND approved_at IS NOT NULL AND approved_at + ? <= ?))
-    ORDER BY COALESCE(last_try_at, 0) ASC, id ASC LIMIT ?`),
-  /* Кому пора платить. Строки на паузе (накрутка, нехватка денег, нет
-     замера) ждут владельца и в круг не попадают — иначе первые двести
-     таких вечно занимали бы очередь. Споры остаются, но тоже по очереди. */
-  vidPayDue: db.prepare(`SELECT * FROM task_videos WHERE status = 'active'
-    AND approved_at IS NOT NULL AND approved_at + ? <= ?
-    AND COALESCE(risk_hold, 0) = 0 AND COALESCE(pay_hold, 0) = 0
-    ORDER BY COALESCE(last_try_at, 0) ASC, approved_at ASC LIMIT 200`),
+  /* Кого пора освежить (раз в сутки, порог 20 ч): ролики на проверке,
+     засчитанные, которые ждут решения (накрутка, деньги, спор), и уже
+     оплаченные — эти только для показа, пока с публикации не прошло
+     VID_TRACK_DAYS. Засчитанные без паузы и с паузой «нет замера»
+     замеряет сама выплата (vidPayDue). Замороженный не опрашиваем.
+     Очередь — по последней попытке: ролики, которые площадка не отдаёт,
+     не стоят вечно впереди остальных. Оплаченный ролик (только показ)
+     после неудачной попытки ждёт сутки от попытки, а не от замера:
+     иначе мёртвый доступ дёргал бы площадку каждые полчаса. */
+  vidDue: db.prepare(`SELECT * FROM task_videos WHERE COALESCE(frozen, 0) = 0
+    AND (status = 'review'
+      OR (status = 'active' AND NOT (COALESCE(pay_hold, 0) = 1 AND COALESCE(hold_kind, '') IN ('measure','access')))
+      OR (status = 'paid' AND COALESCE(posted_at, created_at) + $track > $now
+        AND ($force = 1 OR COALESCE(last_try_at, 0) < $stale)))
+    AND ($force = 1 OR stats_at IS NULL OR stats_at < $stale)
+    ORDER BY COALESCE(last_try_at, 0) ASC, id ASC LIMIT $lim`),
+  /* Кому пора платить: засчитанные без паузы, а также ждущие свежего
+     замера или доступа (их круг повторяет сам). Накрутка и нехватка
+     денег ждут владельца и в круг не попадают. Споры остаются, но по
+     очереди. */
+  vidPayDue: db.prepare(`SELECT id FROM task_videos WHERE status = 'active'
+    AND COALESCE(risk_hold, 0) = 0
+    AND (COALESCE(pay_hold, 0) = 0 OR COALESCE(hold_kind, '') IN ('measure','access'))
+    ORDER BY COALESCE(last_try_at, 0) ASC, id ASC LIMIT 200`),
   /* Ролики оффера, по которым деньги ещё могут уйти блогеру. */
   vidLive: db.prepare(`SELECT * FROM task_videos WHERE camp_id = ? AND status IN ('review','active','rejected')`),
   /* Очередь владельца: вернул рекламодатель; пауза по накрутке или по
-     деньгам; окно кончилось, а выплату держит открытый спор. */
+     деньгам (пауза «нет замера» решается кругом сама); выплату держит
+     открытый спор. */
   vidQueueCount: db.prepare(`SELECT COUNT(*) AS n FROM task_videos v
     WHERE v.status = 'rejected'
-      OR (v.status IN ('review','active') AND (v.risk_hold = 1 OR v.pay_hold = 1))
-      OR (v.status = 'active' AND v.approved_at IS NOT NULL AND v.approved_at + ? <= ?
-        AND EXISTS (SELECT 1 FROM disputes d WHERE d.deal_id = 'camp:' || v.camp_id AND d.status = 'open'
-          AND (d.payee_id IS NULL OR d.payee_id = v.blogger_id)))`),
+      OR (v.status IN ('review','active') AND (v.risk_hold = 1
+        OR (v.pay_hold = 1 AND COALESCE(v.hold_kind, '') <> 'measure')))
+      OR (v.status = 'active' AND EXISTS (SELECT 1 FROM disputes d WHERE d.deal_id = 'camp:' || v.camp_id
+        AND d.status = 'open' AND (d.payee_id IS NULL OR d.payee_id = v.blogger_id)))`),
   /* Пульт: ролик вместе с тем, что владельцу нужно для решения, — чей
      оффер, кто блогер, что за канал и как его оценили. */
   vidAdmin: db.prepare(`SELECT v.*,
@@ -1164,20 +1247,67 @@ const q = {
     LEFT JOIN channels c ON c.user_id = v.blogger_id AND c.platform = v.platform AND c.external_id = v.external_id
     WHERE ($st = 'all')
       OR ($st = 'queue' AND (v.status = 'rejected'
-        OR (v.status IN ('review','active') AND (v.risk_hold = 1 OR v.pay_hold = 1))
-        OR (v.status = 'active' AND v.approved_at IS NOT NULL AND v.approved_at + $win <= $now
-          AND EXISTS (SELECT 1 FROM disputes d WHERE d.deal_id = 'camp:' || v.camp_id AND d.status = 'open'
-            AND (d.payee_id IS NULL OR d.payee_id = v.blogger_id)))))
+        OR (v.status IN ('review','active') AND (v.risk_hold = 1
+          OR (v.pay_hold = 1 AND COALESCE(v.hold_kind, '') <> 'measure')))
+        OR (v.status = 'active' AND EXISTS (SELECT 1 FROM disputes d WHERE d.deal_id = 'camp:' || v.camp_id
+          AND d.status = 'open' AND (d.payee_id IS NULL OR d.payee_id = v.blogger_id)))))
       OR ($st = 'rejected' AND v.status = 'rejected')
+      OR ($st = 'review' AND v.status = 'review')
       OR ($st = 'active' AND v.status = 'active')
+      OR ($st = 'paid' AND v.status = 'paid')
       OR ($st = 'risk' AND (v.risk_hold = 1 OR v.risk_level IN ('risk','bad')))
     ORDER BY v.id DESC LIMIT 300`),
-  /* TikTok-каналы блогера вместе с наличием доступа к площадке. */
-  vidChannels: db.prepare(`SELECT c.external_id, c.username, c.title, c.risk_level,
+  /* Подтверждённые каналы блогера на площадке вместе с наличием доступа. */
+  vidChannels: db.prepare(`SELECT c.platform, c.external_id, c.username, c.title, c.avatar, c.risk_level,
       (t.access IS NOT NULL) AS has_token
     FROM channels c LEFT JOIN channel_tokens t
       ON t.user_id = c.user_id AND t.platform = c.platform AND t.external_id = c.external_id
-    WHERE c.user_id = ? AND c.platform = 'tiktok' ORDER BY c.id ASC`),
+    WHERE c.user_id = ? AND c.platform = ? ORDER BY c.id ASC`),
+  /* Окно «Загрузка видео»: свои каналы TikTok и YouTube и есть ли чем
+     спросить площадку. Токены наружу не уходят — только признак. */
+  vidAccounts: db.prepare(`SELECT c.platform, c.external_id, c.username, c.title, c.avatar,
+      (t.access IS NOT NULL) AS has_token, (t.refresh IS NOT NULL AND t.refresh <> '') AS has_refresh,
+      t.expires_at
+    FROM channels c LEFT JOIN channel_tokens t
+      ON t.user_id = c.user_id AND t.platform = c.platform AND t.external_id = c.external_id
+    WHERE c.user_id = ? AND c.platform IN ('tiktok','youtube') ORDER BY c.id ASC`),
+  /* ── Участники задания и лидерборд ── */
+  tmJoin: db.prepare(`INSERT INTO task_members (camp_id, user_id, joined_at) VALUES (?,?,?)
+    ON CONFLICT(camp_id, user_id) DO UPDATE SET
+      joined_at = CASE WHEN task_members.left_at IS NULL THEN task_members.joined_at ELSE excluded.joined_at END,
+      left_at = NULL`),
+  tmGet: db.prepare('SELECT * FROM task_members WHERE camp_id = ? AND user_id = ?'),
+  tmLeave: db.prepare('UPDATE task_members SET left_at = ? WHERE camp_id = ? AND user_id = ? AND left_at IS NULL'),
+  tmCount: db.prepare(`SELECT COUNT(*) AS n FROM task_members m JOIN users u ON u.id = m.user_id
+    WHERE m.camp_id = ? AND m.left_at IS NULL AND u.is_blocked = 0`),
+  /* Участники — как у More Views: у кого больше роликов в задании — выше,
+     при равенстве — кто вступил раньше (решение владельца 06.10). */
+  tmList: db.prepare(`SELECT m.user_id, m.joined_at, u.name,
+      (SELECT COUNT(*) FROM task_videos v WHERE v.camp_id = m.camp_id AND v.blogger_id = m.user_id
+        AND v.status IN ('review','rejected','active','paid')) AS vids
+    FROM task_members m JOIN users u ON u.id = m.user_id
+    WHERE m.camp_id = ? AND m.left_at IS NULL AND u.is_blocked = 0
+    ORDER BY vids DESC, m.joined_at ASC, m.user_id ASC LIMIT ? OFFSET ?`),
+  /* Открытая карточка в каталоге (та же, что отдаёт всем /api/cards):
+     по ней приложение открывает профиль участника и чат с ним. */
+  cardPubOf: db.prepare(`SELECT c.id FROM cards c JOIN users u ON u.id = c.user_id
+    WHERE c.user_id = ? AND c.hidden = 0 AND u.is_blocked = 0 ORDER BY c.updated_at DESC LIMIT 1`),
+  /* Лидерборд: по блогеру — засчитанные и ожидающие ролики, просмотры,
+     выплачено в этом задании. Порядок — по просмотрам (по умолчанию);
+     «по сумме выплаты» пересортировывает vidBoardSorted. */
+  boardRows: db.prepare(`SELECT v.blogger_id AS uid, u.name, COUNT(*) AS videos,
+      COALESCE(SUM(v.views), 0) AS views, COALESCE(SUM(v.paid), 0) AS earned, MIN(v.created_at) AS first_at
+    FROM task_videos v JOIN users u ON u.id = v.blogger_id
+    WHERE v.camp_id = ? AND v.status IN ('review','rejected','active','paid') AND u.is_blocked = 0
+    GROUP BY v.blogger_id
+    ORDER BY views DESC, earned DESC, first_at ASC, v.blogger_id ASC LIMIT 5000`),
+  /* Канал, с которого у блогера самый смотримый ролик в этом задании. */
+  boardChan: db.prepare(`SELECT platform, external_id, handle FROM task_videos
+    WHERE camp_id = ? AND blogger_id = ? AND status IN ('review','rejected','active','paid')
+    ORDER BY views DESC, id ASC LIMIT 1`),
+  /* Основной подтверждённый канал — для участника без роликов. */
+  mainChan: db.prepare(`SELECT platform, external_id, username, title, avatar FROM channels
+    WHERE user_id = ? AND platform IN ('tiktok','youtube') ORDER BY id ASC LIMIT 1`),
   lastStats: db.prepare(`SELECT med_views, followers, er_likes FROM channel_stats
     WHERE user_id = ? AND platform = ? AND external_id = ? ORDER BY at DESC, id DESC LIMIT 1`),
 };
@@ -1366,7 +1496,7 @@ function moneyOp(opKey, userId, kind, build) {
 
 /* Выплата из заморозки: hold плательщика → available получателя.
    Одно движение на оба пути — кнопку рекламодателя (/api/deals/release)
-   и выплату за видео в конце окна (vidSettle), — чтобы журнал у них был
+   и выплату за видео в момент зачёта (vidSettle), — чтобы журнал у них был
    одинаковым до строки: рейтинг, расход кампании и сверка читают именно
    его. Зовётся ТОЛЬКО внутри moneyOp. true — заморозка исчерпана. */
 function dealPayMoves(add, d, payeeId, sum) {
@@ -3325,11 +3455,11 @@ const routes = {
     if (sum > left) {
       return { status: 409, body: { error: 'В заморозке осталось ' + left + ' — больше выплатить нельзя' } };
     }
-    /* Бюджет кампании держит и деньги блогеров, чьи ролики ещё считаются:
-       их сервер заплатит сам в конце окна. Ручной выплатой (старый путь)
-       рекламодатель мог бы опустошить заморозку раньше, и заработанное
-       по видео стало бы не из чего платить. Резерв — заработанное или,
-       если известен, потолок по условиям. */
+    /* Бюджет кампании держит и резерв под загруженные видео: их сервер
+       оплатит сам в момент зачёта. Ручной выплатой (старый путь)
+       рекламодатель мог бы опустошить заморозку раньше, и засчитанное
+       видео стало бы не из чего оплатить. Резерв ролика — оценка по
+       просмотрам (при загрузке или сейчас, что больше), см. vidHoldOf. */
     if (dealId.startsWith('camp:')) {
       const reserved = vidReserved(dealId.slice(5));
       if (reserved > 0 && sum > left - reserved) {
@@ -3457,12 +3587,14 @@ const routes = {
     if (!isAdmin(req) && q.refundBlocked.get(dealId, d.payee_id, dealId)) {
       return { status: 409, body: { error: 'Идёт спор — возврат заморожен до решения арбитра', dispute: true } };
     }
-    /* Пока по офферу есть ролики на проверке или в подсчёте, бюджет —
-       это их будущая выплата: вернув его себе, рекламодатель оставил бы
-       блогера без денег за уже засчитанную работу. Оператор может. */
+    /* Пока по заданию есть ролики на проверке (или засчитанные, но ещё не
+       оплаченные), бюджет — это их будущая выплата: вернув его себе,
+       рекламодатель оставил бы блогера без денег за загруженную работу.
+       Так же держится и «Завершить задание» — оно возвращает остаток этим
+       же запросом. Оператор может. */
     if (!isAdmin(req) && dealId.startsWith('camp:') && q.vidLive.all(dealId.slice(5)).length) {
       return { status: 409, body: {
-        error: 'По офферу есть видео на проверке или в подсчёте — вернуть бюджет можно после выплат по ним',
+        error: 'По заданию есть видео на проверке — вернуть бюджет можно после решения по ним',
         code: 'videos_live' } };
     }
     /* Возвращаем ОСТАТОК: часть могла уже уйти исполнителям. */
@@ -3758,7 +3890,10 @@ const routes = {
     });
     if (p === 'youtube') {
       q1.set('client_id', cfg.id);
-      q1.set('access_type', 'online');
+      /* offline — Google отдаёт refresh: без него доступ живёт час, и
+         проверить ролик в задании (механика v2) через день было бы нечем.
+         Вход через Google (/api/auth/google/start) — отдельно, там online. */
+      q1.set('access_type', 'offline');
       /* select_account — чтобы человек КАЖДЫЙ раз выбирал, каким аккаунтом
          входит. Без этого Google молча берёт тот, в котором браузер уже
          сидит: сменить аккаунт и подтвердить второй канал было нельзя. */
@@ -4353,92 +4488,211 @@ const routes = {
     return { status: 200, body: { ok: true, isAdmin: true } };
   },
 
-  /* ── «ПРИВЯЗАТЬ ВИДЕО» (06.10.2026, server/VIDEO-SPEC.md) ──────────
-     Вместо «Сдать работу» блогер привязывает ролик со своего TikTok.
-     Всё, что касается цифр и денег, сервер узнаёт сам: от клиента
-     приходят только ссылка, номер задания и галочка. */
+  /* ── «ЗАГРУЗИТЬ ВИДЕО» (механика v2, server/VIDEO-SPEC.md, раздел 10) ──
+     Блогер загружает ролик со своего подтверждённого TikTok или YouTube,
+     когда готов зафиксировать просмотры. Всё, что касается цифр и денег,
+     сервер узнаёт сам: от клиента приходят только ссылка, номер задания,
+     галочка и (по желанию) выбранный аккаунт. */
   'POST /api/tasks/video/bind': async (req, body) => {
     const u = auth(req);
     if (!u) return vidFail('auth');
     if (!rateLimit(req, 'vbind:' + u.id, 10, 60000)) return vidFail('often');
-    const link = ttLink(body.url);
+    const link = vidLink(body.url);
     if (!link) return vidFail('bad_url');
+    const p = link.platform;
+    /* Площадку определяет ссылка. Выбранный аккаунт другой площадки —
+       это не «не ваш ролик», а промах в окне: говорим прямо, что не так. */
+    const want = body.platform == null || body.platform === '' ? '' : vidPlatNorm(body.platform);
+    if ((want === 'tiktok' || want === 'youtube') && want !== p) return vidFail('wrong_link', { p, other: want });
     if (body.agree !== true) return vidFail('agree');
     const campId = String(body.campId == null ? '' : body.campId).slice(0, 80);
     const ci = campId ? vidCamp(campId) : null;
     if (!ci) return vidFail('no_camp');
     if (!vidCampOpen(ci, campId)) return vidFail('camp_closed');
     if (ci.env.a_id === u.id) return vidFail('own_camp');
-    if (!vidCampTikTok(ci.camp)) return vidFail('not_tiktok');
-    const chans = q.vidChannels.all(u.id).filter((c) => c.has_token);
-    if (!chans.length) return vidFail('no_channel');
+    if (!vidCampAllows(ci.camp, p)) return vidFail('wrong_platform', { list: vidCampPlatNames(ci.camp) });
+    /* Бюджет: свободное = остаток заморозки минус резервы роликов, которые
+       ещё ждут решения. Проверяем до площадки — и ещё раз перед записью. */
+    if (vidFree(campId) <= 0) return vidFail('budget');
 
-    let id = link.id, page = link.url;
-    if (!id) {
-      try { const r = await ttResolve(link.url); id = r.id; page = r.url; }
-      catch (e) { return vidFail(e.vidCode || 'tiktok'); }
+    const all = q.vidChannels.all(u.id, p);
+    if (!all.length) return vidFail('no_channel', { p });
+    const account = body.account == null || body.account === '' ? '' : String(body.account).slice(0, 200);
+    let chans = all;
+    if (account) {
+      const one = all.find((c) => String(c.external_id) === account);
+      if (!one) return vidFail('no_account', { p });
+      chans = [one];
     }
-
-    /* Чей ролик: спрашиваем площадку токеном каждого подтверждённого
-       TikTok блогера — вернёт только владелец. Если ни один канал не
-       ответил, причину берём самую полезную человеку: права → доступ →
-       сбой площадки. */
-    const rank = { scope: 3, token: 2, tiktok: 1 };
-    let owner = null, v = null, answered = false, why = '';
-    const note = (code) => { if (!why || (rank[code] || 0) > (rank[why] || 0)) why = code; };
-    for (const ch of chans) {
-      const tok = q.getToken.get(u.id, 'tiktok', String(ch.external_id));
-      let access = '';
-      try { access = await ttAccess(tok); } catch (e) { note('tiktok'); continue; }
-      if (!access) { note('token'); continue; }
-      try {
-        const got = await ttQuery(access, [id]);
-        answered = true;
-        const hit = got.find((x) => x.id === id);
-        if (hit) { owner = ch; v = hit; break; }
-      } catch (e) { note(e.vidCode || 'tiktok'); }
+    /* Свой уже загруженный ролик — отвечаем сразу, площадку не спрашиваем:
+       повтор одной ссылки не должен тратить квоту YouTube. Чужой ролик
+       идёт обычным путём (ответ «не ваш», а не «кто-то уже загрузил»). */
+    const known = link.id ? q.vidByVideo.get(p, link.id) : null;
+    if (known && known.blogger_id === u.id) return vidFail('taken', { p });
+    if (p === 'youtube') {
+      /* Квота YouTube — общая на проект: загрузки берут не больше своей
+         доли (запас — под замеры при зачёте), и один человек — не больше
+         VID_YT_HOUR проверок в час, с любого адреса. */
+      if (!ytBindRoom()) return vidFail('yt_quota', { p });
+      if (!vidUserQuota(vidYtHour, u.id, VID_YT_HOUR, 3600000)) return vidFail('often', { p, hour: true });
     }
-    if (!owner) {
-      if (!answered) return vidFail(why || 'tiktok');
-      /* Свои каналы ответили, ролика среди своих нет. Есть ли он вообще? */
-      const emb = await ttOembed(vidCanon('', vidHandleOf(page.pathname), id, page));
-      if (!emb.ok && (emb.status === 400 || emb.status === 404)) return vidFail('not_found');
-      return vidFail('not_yours');
-    }
+    const found = await vidLocate(u.id, link, chans, !!account);
+    if (found.fail) return vidFail(found.fail, Object.assign({ p }, found.x || {}));
+    const owner = found.owner, v = found.v, id = found.id;
+    /* Пока ждали площадку, канал могли отвязать (сам блогер или владелец),
+       а задание — закрыть. Дальше до записи await нет. */
+    if (!q.channelOf.get(u.id, p, String(owner.external_id))) return vidFail(account ? 'no_account' : 'no_channel', { p });
+    const ciNow = vidCamp(campId);
+    if (!ciNow || !vidCampOpen(ciNow, campId)) return vidFail('camp_closed');
 
     /* Ролик снят до оффера — значит не под него. Десять минут запаса на
-       расхождение часов. */
+       расхождение часов. После срока задания — не оплачивается. */
     const created = vidCampCreated(ci);
-    if (created && v.at && v.at * 1000 < created - 10 * 60000) return vidFail('too_old');
+    if (created && v.at && v.at * 1000 < created - 10 * 60000) return vidFail('too_old', { p });
+    const dl = vidDeadline(ci.camp.deadline);
+    if (dl && v.at && v.at * 1000 > dl + 10 * 60000) return vidFail('too_late', { p });
     const minSec = Math.max(0, Math.round(Number(ci.camp.minDuration || ci.camp.videoMinSec) || 0));
-    if (minSec && v.duration != null && v.duration < minSec) return vidFail('too_short', minSec);
-    if (q.vidByVideo.get('tiktok', id)) return vidFail('taken');
+    if (minSec && v.duration != null && v.duration < minSec) return vidFail('too_short', { p, n: minSec });
+    if (q.vidByVideo.get(p, id)) return vidFail('taken', { p });
+    const terms = vidTermsOf(ci.camp);
+    if (terms.minViews && v.views < terms.minViews) {
+      return vidFail('few_views', { p, views: v.views, minViews: terms.minViews });
+    }
+    const free = vidFree(campId);
+    if (free <= 0) return vidFail('budget');
+    /* Ролик стоит больше, чем свободно в бюджете, — принимаем, но платить
+       за него будем не больше этого остатка: предел пишется в снимок
+       условий (limit), иначе резерв ушёл бы за бюджет и «Свободно» стало
+       бы отрицательным. */
+    if (vidEarnBy(terms, v.views) > free) terms.limit = free;
 
     const now = Date.now();
-    const handle = vidHandleOf(v.share) || vidHandleOf(page.pathname) || String(owner.username || '');
+    const handle = p === 'youtube'
+      ? (vidNick(owner.username) || v.channelTitle || '')
+      : (vidHandleOf(v.share) || vidHandleOf((found.page || link.url).pathname) || vidNick(owner.username));
+    const url = p === 'youtube'
+      ? (link.shorts ? 'https://www.youtube.com/shorts/' : 'https://www.youtube.com/watch?v=') + id
+      : vidCanon(v.share, handle, id, found.page);
     let rowId;
     try {
-      const info = q.vidIns.run(campId, ci.env.a_id, u.id, String(owner.external_id), id,
-        vidCanon(v.share, handle, id, page), handle || null, v.title || null, v.duration,
+      const info = q.vidIns.run(campId, ci.env.a_id, u.id, p, String(owner.external_id), id,
+        url, handle || null, v.title || null, v.duration,
         v.at ? v.at * 1000 : null, v.views, v.likes, v.comments, v.shares, now,
-        JSON.stringify(vidTermsOf(ci.camp)), now, now, now);
+        JSON.stringify(terms), v.views, vidEarnBy(terms, v.views), now, now, now);
       rowId = Number(info.lastInsertRowid);
     } catch (e) {
       /* Два одновременных запроса с одним роликом: второй упрётся в UNIQUE. */
-      if (/UNIQUE/i.test(String((e && e.message) || ''))) return vidFail('taken');
+      if (/UNIQUE/i.test(String((e && e.message) || ''))) return vidFail('taken', { p });
       throw e;
     }
+    /* Загрузил видео — значит участник задания, даже если приложение
+       старое и о вступлении сервер не знал. */
+    try { q.tmJoin.run(campId, u.id, now); } catch (e) { /* участник — не главное */ }
     q.vidSnap.run(rowId, dayOf(now), v.views, v.likes, v.comments, v.shares, now);
     if (v.cover) vidCoverSet(rowId, v.cover);
     vidJudge(q.vidById.get(rowId));
+    vidBoardDrop(campId);
     const name = vidCampName(ci);
-    /* Привязал → отвязал → привязал: рекламодателю о том же ролике в том
+    /* Загрузил → отвязал → загрузил: рекламодателю о том же ролике в том
        же задании пишем не чаще раза в сутки, иначе это рассылка спама его
        руками. */
     if (vidOnce(vidBindSeen, campId + '|' + id)) {
       vidNotify(ci.env.a_id, 'Новое видео по заданию', '«' + name + '»: проверьте интеграцию', '/?go=campaigns');
     }
     return { status: 200, body: { ok: true, video: vidDTO(q.vidById.get(rowId), 'blogger') } };
+  },
+
+  /* Аккаунты для окна «Загрузка видео»: свои подтверждённые каналы TikTok
+     и YouTube. ready = false — спросить площадку нечем (доступ протух и
+     обновить его нечем): такой аккаунт надо переподключить. */
+  'GET /api/tasks/video/accounts': async (req) => {
+    const u = auth(req);
+    if (!u) return vidFail('auth');
+    if (!rateLimit(req, 'vacc:' + u.id, 60, 60000)) return vidFail('often');
+    const accounts = q.vidAccounts.all(u.id).map((c) => {
+      const ready = vidReady(c);
+      const nick = vidNick(c.username);
+      return {
+        platform: c.platform, id: String(c.external_id),
+        handle: nick ? '@' + nick : '', title: String(c.title || '').slice(0, 80),
+        avatar: vidHttps(c.avatar), ready, why: ready ? '' : 'token',
+      };
+    });
+    return { status: 200, body: { ok: true, accounts } };
+  },
+
+  /* Вступление в задание. До v2 оно жило только в приложении, и сервер не
+     знал участников — не из чего было собрать список и лидерборд. */
+  'POST /api/tasks/join': async (req, body) => {
+    const u = auth(req);
+    if (!u) return vidFail('auth');
+    if (!rateLimit(req, 'tjoin:' + u.id, 30, 60000)) return vidFail('often');
+    const campId = String(body.campId == null ? '' : body.campId).slice(0, 80);
+    const ci = campId ? vidCamp(campId) : null;
+    if (!ci) return vidFail('no_camp');
+    if (ci.env.a_id === u.id) return vidFail('own_camp');
+    const was = q.tmGet.get(campId, u.id);
+    if (was && was.left_at == null) {
+      return { status: 200, body: { ok: true, already: true, joinedAt: was.joined_at } };
+    }
+    if (String(ci.camp.status || '') !== 'active') {
+      return { status: 409, body: { error: 'Задание сейчас не принимает участников', code: 'camp_closed' } };
+    }
+    const now = Date.now();
+    q.tmJoin.run(campId, u.id, now);
+    vidBoardDrop(campId);
+    const m = q.tmGet.get(campId, u.id);
+    return { status: 200, body: { ok: true, already: false, joinedAt: m ? m.joined_at : now } };
+  },
+
+  'POST /api/tasks/leave': async (req, body) => {
+    const u = auth(req);
+    if (!u) return vidFail('auth');
+    if (!rateLimit(req, 'tleave:' + u.id, 30, 60000)) return vidFail('often');
+    const campId = String(body.campId == null ? '' : body.campId).slice(0, 80);
+    if (!campId) return vidFail('no_camp');
+    const info = q.tmLeave.run(Date.now(), campId, u.id);
+    vidBoardDrop(campId);
+    return { status: 200, body: { ok: true, left: Number(info.changes || 0) > 0 } };
+  },
+
+  /* Страница задания, как у More Views: счётчики, полоса бюджета,
+     лидерборд и участники. Видит любой вошедший — задание и его лидерборд
+     открыты всем. Наружу только имя из профиля, ник и аватар
+     подтверждённого аккаунта и цифры по этому заданию: ни почты, ни
+     номеров аккаунтов, ни внешних id каналов (номер участника — только
+     автору задания, см. vidBoardOut). */
+  'GET /api/tasks/board': async (req, body, url) => {
+    const u = auth(req);
+    if (!u) return vidFail('auth');
+    if (!rateLimit(req, 'vboard:' + u.id, 120, 60000)) return vidFail('often');
+    const campId = String(url.searchParams.get('campId') || '').slice(0, 80);
+    const ci = campId ? vidCamp(campId) : null;
+    if (!ci) return vidFail('no_camp');
+    const offset = Math.min(100000, Math.max(0, Math.floor(Number(url.searchParams.get('offset')) || 0)));
+    const lim0 = Math.floor(Number(url.searchParams.get('limit')) || 0);
+    const limit = lim0 > 0 ? Math.min(100, lim0) : 100;
+    /* Как у More Views: по умолчанию «по сумме выплаты», можно «по просмотрам». */
+    const sort = url.searchParams.get('sort') === 'views' ? 'views' : 'earned';
+    const agg = vidBoardAgg(campId);
+    const page = vidBoardPage(agg, campId, offset, limit);
+    const board = vidBoardSorted(agg, sort);
+    const mine = board.mine.get(u.id) || null;
+    const memb = q.tmGet.get(campId, u.id);
+    const isOwn = ci.env.a_id === u.id;
+    return { status: 200, body: {
+      ok: true, campId, sort,
+      members: agg.members, videos: agg.videos, views: agg.views,
+      paid: agg.paid, reserved: agg.reserved, budget: agg.budget, left: agg.left,
+      leaders: vidBoardOut(board.leaders, board.uids, u.id, isOwn),
+      participants: vidBoardOut(page.rows, page.uids, u.id, isOwn), offset, limit,
+      more: offset + page.rows.length < agg.members,
+      me: {
+        rank: mine ? mine.rank : null,
+        videos: mine ? mine.videos : 0, views: mine ? mine.views : 0, earned: mine ? mine.earned : 0,
+        joined: !!(memb && memb.left_at == null), owner: ci.env.a_id === u.id,
+      },
+    } };
   },
 
   /* Список: автору оффера — все ролики оффера, блогеру — свои. */
@@ -4472,7 +4726,8 @@ const routes = {
   },
 
   /* Проверка интеграции автором оффера: «всё верно» — ролик засчитан и
-     окно подсчёта пошло; «есть проблема» — сразу владельцу площадки. */
+     СРАЗУ оплачен по свежему замеру; «есть проблема» — сразу владельцу
+     площадки. */
   'POST /api/tasks/video/review': async (req, body) => {
     const u = auth(req);
     if (!u) return vidFail('auth');
@@ -4488,14 +4743,13 @@ const routes = {
     const now = Date.now();
     const ci = vidCamp(row.camp_id);
     const name = vidCampName(ci);
+    let res = null;
     if (body.ok === true) {
-      const e = vidEarn(row, row.views);
-      const info = q.vidReviewOk.run(now, now, e == null ? 0 : e, now, row.id);
+      const info = q.vidAccept.run(now, now, now, row.id);
       if (!info.changes) return { status: 409, body: { error: 'Это видео уже проверено', code: 'state' } };
-      vidNotify(row.blogger_id, 'Видео засчитано',
-        '«' + name + '»: рекламодатель принял интеграцию. Просмотры считаем '
-        + (VID_WINDOW_DAYS ? VID_WINDOW_DAYS + ' дн.' : 'до финального замера') + ', выплата — в конце срока',
-        '/?go=tasks');
+      try { res = await vidPayout(row.id, {}); }
+      catch (e) { console.error('[видео] выплата при зачёте упала:', (e && e.message) || e); res = { state: 'fail' }; }
+      vidAcceptNotify(row, res, 'owner');
     } else if (body.ok === false) {
       const reason = String(body.reason == null ? '' : body.reason).trim();
       if (reason.length < 5 || reason.length > 500) {
@@ -4504,7 +4758,7 @@ const routes = {
       const info = q.vidReviewBad.run(reason, now, now, row.id);
       if (!info.changes) return { status: 409, body: { error: 'Это видео уже проверено', code: 'state' } };
       tgAlert('vid:rej:' + row.id,
-        '↩️ Рекламодатель вернул видео\n\nПричина: ' + reason
+        '↩️ Рекламодатель вернул видео (' + vidPlatName(row.platform) + ')\n\nПричина: ' + reason
         + '\nОффер: «' + name + '» (' + row.camp_id + ')'
         + '\nРекламодатель: ' + vidWho(row.owner_id)
         + '\nБлогер: ' + vidWho(row.blogger_id)
@@ -4515,14 +4769,16 @@ const routes = {
     } else {
       return { status: 400, body: { error: 'Нужен ответ: ok true или false', code: 'ok' } };
     }
-    return { status: 200, body: { ok: true, video: vidDTO(q.vidById.get(row.id), 'owner') } };
+    vidBoardDrop(row.camp_id);
+    return { status: 200, body: { ok: true, settle: res ? res.state : null, paid: res && res.paid ? res.paid : 0,
+      video: vidDTO(q.vidById.get(row.id), 'owner') } };
   },
 
-  /* Ошибся ссылкой — убрать свою привязку можно, пока её не проверили. */
+  /* Ошибся ссылкой — убрать свою загрузку можно, пока её не проверили. */
   'POST /api/tasks/video/unbind': async (req, body) => {
     const u = auth(req);
     if (!u) return vidFail('auth');
-    /* Пять в час: отвязка + новая привязка — это новое письмо рекламодателю. */
+    /* Пять в час: отвязка + новая загрузка — это новое письмо рекламодателю. */
     if (!rateLimit(req, 'vunbind:' + u.id, 5, 3600000)) return vidFail('often');
     const row = q.vidById.get(Number(body.id) || 0);
     if (!row || (row.owner_id !== u.id && row.blogger_id !== u.id)) return vidFail('no_video');
@@ -4537,11 +4793,13 @@ const routes = {
     }
     q.vidDelHist.run(row.id);
     vidCovers.delete(row.id);
+    vidBoardDrop(row.camp_id);
     return { status: 200, body: { ok: true, id: row.id } };
   },
 
   /* «Обновить сейчас». Площадку не дёргаем чаще раза в 10 минут на ролик:
-     цифры у TikTok и сами обновляются не мгновенно. */
+     цифры и сами обновляются не мгновенно. Оплаченный ролик обновляется
+     только для показа и только VID_TRACK_DAYS с публикации. */
   'POST /api/tasks/video/refresh': async (req, body) => {
     const u = auth(req);
     if (!u) return vidFail('auth');
@@ -4549,31 +4807,34 @@ const routes = {
     const row = q.vidById.get(Number(body.id) || 0);
     if (!row || (row.owner_id !== u.id && row.blogger_id !== u.id)) return vidFail('no_video');
     const view = row.owner_id === u.id ? 'owner' : 'blogger';
-    if (row.status !== 'review' && row.status !== 'active') {
+    const now = Date.now();
+    const tracked = row.status === 'paid' && vidTracked(row, now);
+    if (row.status !== 'review' && row.status !== 'active' && !tracked) {
       return { status: 409, body: { error: 'Цифры этого видео больше не обновляются', code: 'state' } };
     }
     /* Порог — по последней ПОПЫТКЕ, а не по удачному замеру: иначе ролик,
-       который площадка не отдаёт, дёргали бы на каждое нажатие. Ролик с
-       финальным замером и замороженный не обновляются вовсе. */
+       который площадка не отдаёт, дёргали бы на каждое нажатие.
+       Замороженный не обновляется вовсе. */
     const tried = Math.max(row.last_try_at || 0, row.stats_at || 0);
-    if ((tried && Date.now() - tried < 10 * 60000) || row.frozen || vidFinalDone(row)) {
+    if ((tried && now - tried < 10 * 60000) || row.frozen) {
       return { status: 200, body: { ok: true, video: vidDTO(row, view), fresh: false } };
     }
-    const res = await vidRefresh([row], Date.now());
+    const res = await vidRefresh([row], now);
     const code = res.errors[row.id];
-    if (code) return vidFail(code);
+    if (code) return vidFail(code, { p: row.platform || 'tiktok' });
     return { status: 200, body: { ok: true, video: vidDTO(q.vidById.get(row.id), view), fresh: true } };
   },
 
-  /* Пульт: очередь решений и всё по видео. queue — вернул рекламодатель
-     или держит подозрение на накрутку. */
+  /* Пульт: очередь решений и всё по видео. queue — вернул рекламодатель,
+     держит подозрение на накрутку или нехватка денег, либо выплату держит
+     спор. */
   'GET /api/admin/task-videos': async (req, body, url) => {
     if (!isAdmin(req)) return { status: 403, body: { error: 'Нужен X-Admin-Key' } };
     const st = String(url.searchParams.get('status') || 'queue');
-    if (!['queue', 'rejected', 'risk', 'active', 'all'].includes(st)) {
-      return { status: 400, body: { error: 'status: queue, rejected, risk, active или all' } };
+    if (!['queue', 'rejected', 'risk', 'review', 'active', 'paid', 'all'].includes(st)) {
+      return { status: 400, body: { error: 'status: queue, rejected, risk, review, active, paid или all' } };
     }
-    const rows = q.vidAdmin.all({ $st: st, $win: VID_WINDOW_MS, $now: Date.now() });
+    const rows = q.vidAdmin.all({ $st: st });
     return { status: 200, body: { ok: true, videos: rows.map((r) => Object.assign(
       vidDTO(r, 'admin', { history: true }), {
         campName: r.camp_name || '', ownerEmail: r.owner_email || '', ownerName: r.owner_name || '',
@@ -4582,9 +4843,10 @@ const routes = {
       })) } };
   },
 
-  /* Решение владельца: «засчитать» снимает заморозку по накрутке и
-     возвращает в работу ролик, который вернул рекламодатель; «не
-     засчитывать» закрывает его без выплаты. */
+  /* Решение владельца. «Засчитать»: из возражения рекламодателя — это
+     зачёт, ролик оплачивается сразу по свежему замеру; снятая пауза
+     (накрутка, деньги, нет замера) — выплата по цифрам на момент решения.
+     «Не засчитывать» закрывает ролик без выплаты, резерв освобождается. */
   'POST /api/admin/task-videos/decide': async (req, body) => {
     if (!isAdmin(req)) return { status: 403, body: { error: 'Нужен X-Admin-Key' } };
     const row = q.vidById.get(Number(body.id) || 0);
@@ -4602,45 +4864,48 @@ const routes = {
     const now = Date.now();
     const name = vidCampName(vidCamp(row.camp_id));
     const stale = { status: 409, body: { error: 'Видео только что изменилось — обновите список', code: 'state' } };
+    let res = null;
     if (decision === 'count') {
-      let status = row.status, approved = row.approved_at || null, earned = row.earned || 0, frozen = row.frozen ? 1 : 0;
-      if (row.status === 'rejected' || row.status === 'revoked') {
+      let status = row.status, approved = row.approved_at || null, frozen = row.frozen ? 1 : 0;
+      const accepting = row.status === 'rejected' || row.status === 'revoked';
+      if (accepting) {
         status = 'active'; approved = now;
-        const e = vidEarn(row, row.views);
-        if (e != null) earned = e;
         /* Канала нет — опрашивать нечем: платим по цифрам, что есть сейчас. */
         if (row.status === 'revoked') frozen = 1;
       }
+      const wasHeld = row.status === 'active' && !!(row.risk_hold || row.pay_hold);
       /* Решение снимает подозрение в накрутке только с тех цифр, что
          владелец видел: decided_views. Если решение было не о накрутке
          (рекламодатель вернул ролик, не хватило денег), прежняя отметка
          остаётся как была — новая накрутка снова встанет на паузу. */
       const dv = row.risk_hold ? (row.views || 0) : (row.decided_views == null ? null : row.decided_views);
-      if (!q.vidDecide.run(status, 'count', note || null, now, approved, 0, dv, frozen, earned, now, row.id, row.status).changes) {
+      if (!q.vidDecide.run(status, 'count', note || null, now, approved, 0, dv, frozen, now, row.id, row.status).changes) {
         return stale;
       }
-      vidNotify(row.blogger_id, 'Видео засчитано',
-        '«' + name + '»: администратор засчитал видео' + (note ? ' — ' + note : ''), '/?go=tasks');
+      const how = 'Администратор засчитал видео' + (note ? ' — ' + note : '');
       vidNotify(row.owner_id, 'Решение по видео',
         '«' + name + '»: администратор засчитал видео' + (note ? ' — ' + note : ''), '/?go=campaigns');
+      adminLog(req, 'video-count', 'видео ' + row.id, note || null);
+      if (status === 'active') {
+        try { res = await vidPayout(row.id, { noMeasure: wasHeld || frozen === 1, how }); }
+        catch (e) { console.error('[видео] выплата по решению упала:', (e && e.message) || e); res = { state: 'fail' }; }
+      }
+      /* Блогеру — одно уведомление: о выплате (с решением в том же тексте)
+         или, если денег пока нет, о самом решении. */
+      vidCountedNotify(row, res, how);
     } else {
       if (!q.vidDecide.run('declined', 'decline', note || null, now, row.approved_at || null, 0,
-        row.decided_views == null ? null : row.decided_views, row.frozen ? 1 : 0, row.earned || 0, now, row.id, row.status).changes) {
+        row.decided_views == null ? null : row.decided_views, row.frozen ? 1 : 0, now, row.id, row.status).changes) {
         return stale;
       }
       vidNotify(row.blogger_id, 'Видео не засчитано',
         '«' + name + '»: администратор решил не засчитывать видео' + (note ? ' — ' + note : ''), '/?go=tasks');
       vidNotify(row.owner_id, 'Решение по видео',
         '«' + name + '»: администратор не засчитал видео, выплаты по нему не будет', '/?go=campaigns');
+      adminLog(req, 'video-decline', 'видео ' + row.id, note || null);
     }
-    adminLog(req, 'video-' + decision, 'видео ' + row.id, note || null);
-    /* Окно уже кончилось и замер сделан (ролик ждал только решения) —
-       платим сразу, не дожидаясь круга. */
-    let paid = null;
-    if (decision === 'count') {
-      try { paid = vidSettle(q.vidById.get(row.id), Date.now()); } catch (e) { paid = null; }
-    }
-    return { status: 200, body: { ok: true, settle: paid ? paid.state : null,
+    vidBoardDrop(row.camp_id);
+    return { status: 200, body: { ok: true, settle: res ? res.state : null,
       video: vidDTO(q.vidById.get(row.id), 'admin') } };
   },
 
@@ -4676,7 +4941,7 @@ const routes = {
         верификаций_в_очереди: q.kycQueuedCount.get().n,
         /* значок раздела «Видео»: вернул рекламодатель, держит накрутка,
            не хватило денег или замера, либо выплату держит спор */
-        видео_на_решении: q.vidQueueCount.get(VID_WINDOW_MS, Date.now()).n,
+        видео_на_решении: q.vidQueueCount.get().n,
         внесено_всего: toppedUp,
         выплачено_наружу: paidOut,
         ошибок_за_сутки: q.errorCount.get(),
@@ -4996,41 +5261,85 @@ async function ttSyncRound() {
 }
 setInterval(() => { ttSyncRound().catch(() => {}); }, 30 * 60 * 1000).unref();
 
-/* ══ «ПРИВЯЗАТЬ ВИДЕО» (06.10.2026) ═══════════════════════════════════
-   Контракт — server/VIDEO-SPEC.md. Коротко: блогер вставляет ссылку на
-   ролик со своего подтверждённого TikTok, сервер сам спрашивает площадку
-   и записывает цифры, рекламодатель проверяет интеграцию, владелец решает
-   спорное, а в конце окна сервер сам платит из заморозки кампании.
+/* ══ «ЗАГРУЗИТЬ ВИДЕО» (06.10.2026, механика v2 — как в More Views) ═════
+   Контракт — server/VIDEO-SPEC.md, раздел 10. Коротко: блогер загружает
+   ролик со своего подтверждённого TikTok или YouTube, когда готов
+   зафиксировать просмотры. Сервер сам спрашивает площадку, ролик ли это
+   этого аккаунта и сколько у него просмотров, и резервирует под него
+   оценку из бюджета. Рекламодатель проверяет интеграцию; засчитанный
+   ролик оплачивается СРАЗУ — по свежему замеру в момент зачёта и один
+   раз. Просмотры после выплаты в зачёт не идут. Окна подсчёта больше нет.
 
-   Почему владение доказывает именно video/query: TikTok отдаёт по нему
-   ТОЛЬКО ролики владельца токена. Чужой ролик с нашим токеном просто не
-   вернётся — подделать это из приложения нельзя, в отличие от ссылки. */
+   Почему владение доказывает именно площадка: TikTok по video/query
+   отдаёт ТОЛЬКО ролики владельца токена; YouTube в videos.list называет
+   channelId ролика, и он обязан совпасть с подтверждённым каналом. */
 
-/* Ошибки привязки: код для приложения и готовый русский текст. */
+const VID_PLAT = { tiktok: 'TikTok', youtube: 'YouTube' };
+function vidPlatName(p) { return VID_PLAT[p] || 'TikTok'; }
+/* 12345 → «12 345»: так числа читаются в тексте ошибки и уведомлении. */
+function vidNum(n) { return String(Math.max(0, Math.round(Number(n) || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+function vidViewsWord(n) {
+  const a = Math.abs(Math.round(Number(n) || 0)) % 100, b = a % 10;
+  if (a > 10 && a < 20) return 'просмотров';
+  if (b === 1) return 'просмотр';
+  if (b >= 2 && b <= 4) return 'просмотра';
+  return 'просмотров';
+}
+
+/* Ошибки загрузки: код для приложения и готовый русский текст. Тексты с
+   площадкой собираются по месту: x.p — площадка ссылки. */
 const VID_ERR = {
   auth: [401, 'Нужен вход'],
-  often: [429, 'Слишком часто — подождите минуту и попробуйте снова'],
-  bad_url: [400, 'Это не ссылка на видео TikTok'],
+  often: [429, (x) => (x.hour
+    ? 'Слишком много проверок YouTube за час — попробуйте позже'
+    : 'Слишком часто — подождите минуту и попробуйте снова')],
+  yt_quota: [503, 'Проверки YouTube-видео на сегодня закончились — попробуйте завтра'],
+  bad_url: [400, 'Это не ссылка на видео TikTok или YouTube'],
+  wrong_link: [400, (x) => 'Ссылка с ' + vidPlatName(x.p) + ', а выбран аккаунт ' + vidPlatName(x.other)
+    + ' — выберите ' + (x.p === 'youtube' ? 'YouTube-канал' : 'TikTok-аккаунт') + ' или вставьте другую ссылку'],
   agree: [400, 'Подтвердите, что в видео есть реклама из задания'],
   no_camp: [404, 'Задание не найдено'],
   camp_closed: [409, 'Задание уже не принимает видео'],
   own_camp: [409, 'Это ваше задание'],
+  wrong_platform: [409, (x) => 'В этом задании принимаются видео только из: ' + (x.list || '—')],
+  /* Старый код: v2 его не возвращает (теперь wrong_platform), оставлен,
+     чтобы старое приложение понимало ответ, если он придёт откуда-то ещё. */
   not_tiktok: [409, 'В этом задании нет TikTok'],
-  no_channel: [409, 'Сначала подтвердите свой TikTok в профиле'],
-  token: [409, 'Доступ к TikTok истёк — переподключите аккаунт'],
-  scope: [409, 'Переподключите TikTok и разрешите доступ к роликам'],
+  budget: [409, 'Бюджет задания закончился'],
+  no_channel: [409, (x) => 'Сначала подключите свой ' + vidPlatName(x.p)],
+  no_account: [409, 'Этот аккаунт не подключён — подключите его заново'],
+  token: [409, (x) => (x.p === 'youtube'
+    ? 'Доступ к YouTube истёк — переподключите канал'
+    : 'Доступ к TikTok истёк — переподключите аккаунт')],
+  scope: [409, (x) => (x.p === 'youtube'
+    ? 'Переподключите YouTube и разрешите доступ к каналу'
+    : 'Переподключите TikTok и разрешите доступ к роликам')],
   not_found: [404, 'Видео не найдено — проверьте ссылку'],
-  not_yours: [409, 'Это видео не с вашего подтверждённого TikTok'],
+  not_public: [409, 'Видео закрыто — откройте его для всех и попробуйте снова'],
+  not_yours: [409, (x) => (x.chosen
+    ? 'Этого видео нет на ' + (x.handle ? 'аккаунте ' + x.handle : 'выбранном аккаунте')
+      + ' — выберите другой аккаунт или проверьте ссылку'
+    : 'Это видео не с ваших подключённых аккаунтов ' + vidPlatName(x.p))],
   too_old: [409, 'Видео опубликовано раньше, чем появилось задание'],
-  too_short: [409, 'Видео короче N сек — так в условиях задания'],
-  taken: [409, 'Это видео уже привязано к заданию'],
-  tiktok: [502, 'TikTok сейчас не отвечает — попробуйте через минуту'],
+  too_late: [409, 'Видео опубликовано после срока задания — такие не оплачиваются'],
+  too_short: [409, (x) => 'Видео короче ' + x.n + ' сек — так в условиях задания'],
+  few_views: [409, (x) => 'У видео ' + vidNum(x.views) + ' ' + vidViewsWord(x.views) + ', а в задании минимум '
+    + vidNum(x.minViews) + ' — загрузите, когда наберёт'],
+  taken: [409, 'Это видео уже загружено в задание'],
   no_video: [404, 'Видео не найдено'],
+  tiktok: [502, 'TikTok сейчас не отвечает — попробуйте через минуту'],
+  youtube: [502, 'YouTube сейчас не отвечает — попробуйте через минуту'],
 };
-function vidFail(code, n) {
-  const e = VID_ERR[code] || VID_ERR.tiktok;
-  const text = code === 'too_short' ? 'Видео короче ' + n + ' сек — так в условиях задания' : e[1];
-  return { status: e[0], body: { error: text, code } };
+function vidFail(code, x) {
+  const o = x || {};
+  let c = VID_ERR[code] ? code : (o.p === 'youtube' ? 'youtube' : 'tiktok');
+  /* Сбой площадки называем по той площадке, о которой речь. */
+  if ((c === 'tiktok' || c === 'youtube') && (o.p === 'tiktok' || o.p === 'youtube')) c = o.p;
+  const e = VID_ERR[c];
+  const body = { error: typeof e[1] === 'function' ? e[1](o) : e[1], code: c };
+  if (o.p === 'tiktok' || o.p === 'youtube') body.platform = o.p;
+  if (c === 'few_views') { body.views = Number(o.views) || 0; body.minViews = Number(o.minViews) || 0; }
+  return { status: e[0], body };
 }
 function ttErr(code, message) {
   const e = new Error(message || code);
@@ -5046,10 +5355,14 @@ function ttCodeOf(code) {
   return 'tiktok';
 }
 
-/* Ссылки. Принимаем только хосты TikTok и только https: сервер ходит по
+/* ── Ссылки ──
+   TikTok: только хосты TikTok и только https — сервер ходит по короткой
    ссылке сам, и без белого списка его можно было бы послать куда угодно
    (в том числе во внутреннюю сеть хостинга). Хост TT_WEB_BASE добавлен,
-   чтобы проверки могли подставить свою площадку. */
+   чтобы проверки могли подставить свою площадку.
+   YouTube: по ссылке сервер НИКУДА не ходит — id достаём разбором, цифры
+   спрашиваем у API по id. Белый список хостов, только https, без пароля
+   и порта в адресе: youtube.com.evil.ru или youtube.com@evil.ru — не YouTube. */
 const TT_HOSTS = new Set(['www.tiktok.com', 'tiktok.com', 'm.tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com']);
 const TT_WEB_ORIGIN = (() => { try { return new URL(TT_WEB_BASE).origin; } catch (e) { return ''; } })();
 const TT_VID_RE = /(?:\/video\/|\/v\/|\/embed\/v2\/|\/player\/v1\/)(\d{15,21})/;
@@ -5059,16 +5372,8 @@ function ttUrlOk(u) {
   if (u.protocol === 'https:' && TT_HOSTS.has(u.hostname.toLowerCase())) return true;
   return !!TT_WEB_ORIGIN && u.origin === TT_WEB_ORIGIN;
 }
-/* Разбор того, что вставил человек: ссылка может прийти вместе с текстом
-   («Смотри! https://vm.tiktok.com/…»), без https:// или с хвостом ?_r=1.
-   null — это не ссылка на ролик TikTok; id пуст — короткая, её раскроем. */
-function ttLink(raw) {
-  let s = String(raw == null ? '' : raw).trim().slice(0, 600);
-  const m = /https?:\/\/[^\s<>"']+/i.exec(s);
-  if (m) s = m[0];
-  else if (/^((www|m|vm|vt)\.)?tiktok\.com\//i.test(s)) s = 'https://' + s;
-  let u;
-  try { u = new URL(s); } catch (e) { return null; }
+/* null — это не ролик TikTok; id пуст — короткая ссылка, её раскроем. */
+function ttLinkOf(u) {
   if (!ttUrlOk(u)) return null;
   const id = TT_VID_RE.exec(u.pathname);
   if (id) return { url: u, id: id[1] };
@@ -5076,6 +5381,43 @@ function ttLink(raw) {
   if ((host === 'vm.tiktok.com' || host === 'vt.tiktok.com') && /^\/[\w-]{3,}\/?$/.test(u.pathname)) return { url: u, id: '' };
   if (/^\/t\/[\w-]{3,}\/?$/.test(u.pathname)) return { url: u, id: '' };
   return null;
+}
+const YT_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be']);
+const YT_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+function ytLinkOf(u) {
+  if (!u || u.protocol !== 'https:' || u.username || u.password || u.port) return null;
+  const host = u.hostname.toLowerCase();
+  if (!YT_HOSTS.has(host)) return null;
+  const seg = u.pathname.split('/').filter(Boolean);
+  let id = '', shorts = false;
+  if (host === 'youtu.be') id = seg.length === 1 ? seg[0] : '';
+  else if (seg.length === 1 && seg[0] === 'watch') id = String(u.searchParams.get('v') || '');
+  else if (seg.length === 2 && (seg[0] === 'shorts' || seg[0] === 'live' || seg[0] === 'embed')) {
+    id = seg[1]; shorts = seg[0] === 'shorts';
+  }
+  if (!YT_ID_RE.test(id)) return null;
+  return { platform: 'youtube', id, shorts, url: u };
+}
+/* Разбор того, что вставил человек: ссылка может прийти вместе с текстом
+   («Смотри! https://vm.tiktok.com/…»), без https:// или с хвостом ?_r=1.
+   Площадку определяет сама ссылка. null — не ролик TikTok и не YouTube. */
+function vidLink(raw) {
+  let s = String(raw == null ? '' : raw).trim().slice(0, 600);
+  const m = /https?:\/\/[^\s<>"']+/i.exec(s);
+  if (m) s = m[0];
+  else {
+    const b = /(?:^|\s)((?:(?:www|m|vm|vt)\.)?tiktok\.com\/[^\s<>"']+|(?:(?:www|m)\.)?youtube\.com\/[^\s<>"']+|youtu\.be\/[^\s<>"']+)/i.exec(s);
+    if (!b) return null;
+    s = 'https://' + b[1];
+  }
+  /* «…https://youtu.be/xxxxxxxxxxx.» — точка конца фразы не часть ссылки. */
+  s = s.replace(/[.,!?;:)\]}»"'…]+$/, '');
+  let u;
+  try { u = new URL(s); } catch (e) { return null; }
+  const yt = ytLinkOf(u);
+  if (yt) return yt;
+  const tt = ttLinkOf(u);
+  return tt ? Object.assign({ platform: 'tiktok' }, tt) : null;
 }
 /* Короткая ссылка → адрес ролика. HEAD без автоперехода: каждый шаг
    сверяем с белым списком сами, не больше пяти шагов, на каждый пять
@@ -5129,7 +5471,7 @@ async function ttOembed(link) {
   return j ? { ok: true, data: j } : { ok: false, status: r.status };
 }
 
-/* Ролик из ответа площадки → наш вид. id строкой (см. ttQuery). */
+/* Ролик из ответа TikTok → наш вид. id строкой (см. ttQuery). */
 function ttVid(v) {
   const n = (x) => Math.max(0, Math.round(Number(x) || 0));
   return {
@@ -5178,9 +5520,259 @@ async function ttQuery(access, ids) {
   throw ttErr('tiktok', 'TikTok не ответил: ' + ((last && last.message) || 'нет связи'));
 }
 
+/* ── YouTube ──
+   videos.list отдаёт по id название, обложку, дату, длительность (ISO 8601),
+   статус доступа, канал и счётчики. Спрашиваем ключом API (YT_API_KEY),
+   а без него — доступом выбранного канала блогера (ytAccess). */
+function ytIsoSec(s) {
+  const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(String(s || ''));
+  if (!m || String(s) === 'P' || String(s) === 'PT') return null;
+  return Number(m[1] || 0) * 86400 + Number(m[2] || 0) * 3600 + Number(m[3] || 0) * 60 + Math.round(Number(m[4] || 0));
+}
+function ytThumb(id) { return YT_ID_RE.test(String(id || '')) ? 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg' : null; }
+function ytVid(it) {
+  const n = (x) => Math.max(0, Math.round(Number(x) || 0));
+  const sn = (it && it.snippet) || {}, stt = (it && it.statistics) || {};
+  const cd = (it && it.contentDetails) || {}, st = (it && it.status) || {};
+  const th = sn.thumbnails || {};
+  const cover = String(((th.high || th.medium || th.default || {}).url) || '');
+  const at = Date.parse(String(sn.publishedAt || ''));
+  return {
+    id: String((it && it.id) || ''),
+    at: Number.isFinite(at) ? Math.floor(at / 1000) : 0,
+    cover: /^https:\/\//i.test(cover) ? cover.slice(0, 1000) : '',
+    share: '',
+    title: String(sn.title || '').slice(0, 150),
+    duration: ytIsoSec(cd.duration),
+    views: n(stt.viewCount), likes: n(stt.likeCount), comments: n(stt.commentCount), shares: 0,
+    channelId: String(sn.channelId || ''),
+    channelTitle: String(sn.channelTitle || '').slice(0, 80),
+    privacy: String(st.privacyStatus || ''),
+  };
+}
+/* Ответ Google → наш код. По доступу канала 401 — протух (token), 403 «не
+   хватает прав» — нет права на чтение (scope). Остальное (квота, ключ,
+   сбой) — сбой площадки: человек тут ничего не починит. */
+function ytCodeOf(status, j, viaToken) {
+  const errs = j && j.error && Array.isArray(j.error.errors) ? j.error.errors : [];
+  const reason = String((errs[0] && errs[0].reason) || (j && j.error && j.error.status) || '');
+  if (viaToken && (status === 401 || /authError|UNAUTHENTICATED/i.test(reason))) return 'token';
+  if (viaToken && status === 403 && /insufficientPermissions|PERMISSION_DENIED/i.test(reason)) return 'scope';
+  return 'youtube';
+}
+/* Квота YouTube Data API — одна на весь проект (по умолчанию 10 000
+   единиц в сутки, videos.list стоит 1). Загрузки берут из неё не больше
+   70 %: остальное — запас под замеры при зачёте и суточное обновление,
+   иначе один настойчивый аккаунт выжег бы квоту, и выплаты встали бы.
+   Сутки у Google — по тихоокеанскому времени; считаем по UTC−8. Счёт в
+   памяти процесса: после перезапуска он начнётся заново — это запас, а
+   не точный учёт. */
+const YT_DAY_UNITS = Math.max(100, Math.round(Number(ENV.YT_DAILY_UNITS) || 10000));
+const YT_BIND_UNITS = Math.floor(YT_DAY_UNITS * 0.7);
+const ytUnits = { day: '', n: 0 };
+function ytUnitsNow() {
+  const d = new Date(Date.now() - 8 * 3600e3).toISOString().slice(0, 10);
+  if (ytUnits.day !== d) { ytUnits.day = d; ytUnits.n = 0; }
+  return ytUnits;
+}
+function ytBindRoom() { return ytUnitsNow().n < YT_BIND_UNITS; }
+/* Ответ videos.list при загрузке живёт 3 минуты: повтор той же ссылки
+   (в том числе отказ «мало просмотров», «не ваш») квоту не тратит. Замер
+   при зачёте и обновление идут мимо — им нужны свежие цифры. */
+const ytLook = new Map();
+const YT_LOOK_MS = 3 * 60000;
+function ytLookGet(k) {
+  const c = ytLook.get(k);
+  if (!c) return null;
+  if (Date.now() - c.at > YT_LOOK_MS) { ytLook.delete(k); return null; }
+  return c.items;
+}
+function ytLookSet(k, items) {
+  ytLook.set(k, { at: Date.now(), items });
+  if (ytLook.size > 2000) ytLook.delete(ytLook.keys().next().value);
+}
+/* Не больше limit раз за ms на человека — с любого адреса (rateLimit
+   считает пару «человек + адрес»). */
+const VID_YT_HOUR = 30;
+const vidYtHour = new Map();
+function vidUserQuota(map, key, limit, ms) {
+  const now = Date.now();
+  const arr = (map.get(key) || []).filter((t) => now - t < ms);
+  if (arr.length >= limit) { map.set(key, arr); return false; }
+  arr.push(now);
+  map.set(key, arr);
+  if (map.size > 5000) map.delete(map.keys().next().value);
+  return true;
+}
+async function ytVideos(ids, how) {
+  const list = [...new Set((ids || []).map(String).filter((x) => YT_ID_RE.test(x)))].slice(0, 50);
+  if (!list.length) return [];
+  const qs = new URLSearchParams({ part: 'snippet,statistics,contentDetails,status', id: list.join(','), maxResults: '50' });
+  if (how && how.key) qs.set('key', how.key);
+  const headers = how && how.access ? { Authorization: 'Bearer ' + how.access } : {};
+  let last;
+  for (let i = 0; i < 2; i++) {
+    let r, j;
+    try {
+      ytUnitsNow().n++;
+      r = await fetch(YT_API_BASE + '/youtube/v3/videos?' + qs.toString(), { headers, signal: AbortSignal.timeout(12000) });
+      j = await r.json().catch(() => null);
+    } catch (e) { last = e; continue; }
+    if (r.ok && j) return (Array.isArray(j.items) ? j.items : []).map(ytVid).filter((v) => v.id);
+    const code = ytCodeOf(r.status, j, !!(how && how.access));
+    if (code === 'youtube' && r.status >= 500) { last = new Error('HTTP ' + r.status); continue; }
+    throw ttErr(code, 'YouTube: HTTP ' + r.status
+      + (j && j.error && j.error.message ? ' — ' + String(j.error.message).slice(0, 160) : ''));
+  }
+  throw ttErr('youtube', 'YouTube не ответил: ' + ((last && last.message) || 'нет связи'));
+}
+/* Свежий доступ к YouTube-каналу. Google живёт часом, дальше меняем по
+   refresh (его даёт access_type=offline при подтверждении канала).
+   Пусто — обновить нечем, канал надо переподключить: refresh нет, или
+   Google сказал invalid_grant / unauthorized_client (доступ отозван).
+   Сбой самого Google (5xx, не JSON, нет связи) — это не «доступ истёк»:
+   повторяем и бросаем 'youtube', чтобы не просить человека зря. */
+async function ytAccess(row) {
+  const cfg = OAUTH.youtube;
+  if (!row || !row.access) return '';
+  const alive = row.expires_at && new Date(row.expires_at).getTime() > Date.now() + 60000;
+  if (alive) return row.access;
+  if (!row.refresh || !cfg.id || !cfg.secret) return '';
+  let t = null, last;
+  for (let i = 0; i < 2 && !t; i++) {
+    try {
+      const r = await fetch(YT_TOKEN_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: cfg.id, client_secret: cfg.secret,
+          grant_type: 'refresh_token', refresh_token: row.refresh,
+        }),
+        signal: AbortSignal.timeout(12000),
+      });
+      const j = await r.json().catch(() => null);
+      if (r.ok && j && j.access_token) { t = j; break; }
+      const err = String((j && j.error) || '');
+      if (err === 'invalid_grant' || err === 'unauthorized_client') return '';
+      last = new Error('HTTP ' + r.status + (err ? ' ' + err : (j ? '' : ', не JSON')));
+    } catch (e) { last = e; }
+  }
+  if (!t) throw ttErr('youtube', 'Google не обновил доступ: ' + ((last && last.message) || 'нет связи'));
+  const exp = t.expires_in ? new Date(Date.now() + Number(t.expires_in) * 1000).toISOString() : null;
+  q.putToken.run(row.user_id, row.platform, row.external_id, t.access_token, t.refresh_token || row.refresh, exp);
+  return t.access_token;
+}
+
+/* Цифры роликов ОДНОГО канала блогера — только найденные и только этого
+   канала. Бросает ttErr с кодом token / scope / tiktok / youtube. */
+async function vidFetch(platform, userId, extId, ids) {
+  const list = (ids || []).map(String);
+  if (platform === 'youtube') {
+    let how;
+    if (YT_API_KEY) how = { key: YT_API_KEY };
+    else {
+      const access = await ytAccess(q.getToken.get(userId, 'youtube', String(extId)));
+      if (!access) throw ttErr('token');
+      how = { access };
+    }
+    const out = [];
+    for (let i = 0; i < list.length; i += 50) out.push(...await ytVideos(list.slice(i, i + 50), how));
+    return out.filter((v) => v.channelId === String(extId));
+  }
+  const tok = q.getToken.get(userId, 'tiktok', String(extId));
+  let access = '';
+  try { access = tok ? await ttAccess(tok) : ''; }
+  catch (e) { throw ttErr('tiktok', String((e && e.message) || e)); }
+  if (!access) throw ttErr('token');
+  const out = [];
+  for (let i = 0; i < list.length; i += 20) out.push(...await ttQuery(access, list.slice(i, i + 20)));
+  return out;
+}
+/* Ролик виден всем. Закрытый или «по ссылке» на YouTube — для задания
+   его всё равно что нет: рекламу в нём никто не увидит. */
+function vidSeen(platform, v) {
+  return platform !== 'youtube' || !v.privacy || v.privacy === 'public';
+}
+
+/* Чей ролик. chans — каналы площадки, среди которых ищем (один, если
+   блогер выбрал аккаунт). Если ни один канал не ответил, причину берём
+   самую полезную человеку: права → доступ → сбой площадки. */
+async function vidLocate(userId, link, chans, chosen) {
+  const p = link.platform;
+  let id = link.id, page = link.url;
+  if (p === 'tiktok' && !id) {
+    try { const r = await ttResolve(link.url); id = r.id; page = r.url; }
+    catch (e) { return { fail: e.vidCode || 'tiktok' }; }
+  }
+  const rank = { scope: 3, token: 2, tiktok: 1, youtube: 1 };
+  let why = '';
+  const note = (code) => { if (!why || (rank[code] || 0) > (rank[why] || 0)) why = code; };
+  const yours = chosen ? { chosen: true, handle: vidShowName(chans[0]) } : {};
+
+  if (p === 'tiktok') {
+    let answered = false;
+    for (const ch of chans) {
+      if (!ch.has_token) { note('token'); continue; }
+      try {
+        const got = await vidFetch('tiktok', userId, ch.external_id, [id]);
+        answered = true;
+        const hit = got.find((x) => x.id === id);
+        if (hit) return { owner: ch, v: hit, id, page };
+      } catch (e) { note(e.vidCode || 'tiktok'); }
+    }
+    if (!answered) return { fail: why || 'tiktok' };
+    /* Свои каналы ответили, ролика среди своих нет. Есть ли он вообще? */
+    const emb = await ttOembed(vidCanon('', vidHandleOf(page.pathname), id, page));
+    if (!emb.ok && (emb.status === 400 || emb.status === 404)) return { fail: 'not_found' };
+    return { fail: 'not_yours', x: yours };
+  }
+
+  let items = [];
+  if (YT_API_KEY) {
+    const ck = 'k|' + id;
+    items = ytLookGet(ck);
+    if (!items) {
+      try { items = await ytVideos([id], { key: YT_API_KEY }); }
+      catch (e) { return { fail: e.vidCode || 'youtube' }; }
+      ytLookSet(ck, items);
+    }
+  } else {
+    /* Без ключа спрашиваем доступом канала. Публичный ролик видит любой
+       доступ; закрытый — только доступ его владельца, поэтому при пустом
+       ответе пробуем остальные свои каналы. */
+    let answered = false;
+    for (const ch of chans) {
+      if (!ch.has_token) { note('token'); continue; }
+      const ck = 'a|' + userId + '|' + ch.external_id + '|' + id;
+      const hit = ytLookGet(ck);
+      if (hit) {
+        answered = true;
+        if (hit.length) { items = hit; break; }
+        continue;
+      }
+      let access = '';
+      try { access = await ytAccess(q.getToken.get(userId, 'youtube', String(ch.external_id))); }
+      catch (e) { note(e.vidCode || 'youtube'); continue; }
+      if (!access) { note('token'); continue; }
+      try {
+        const got = await ytVideos([id], { access });
+        answered = true;
+        ytLookSet(ck, got);
+        if (got.length) { items = got; break; }
+      } catch (e) { note(e.vidCode || 'youtube'); }
+    }
+    if (!answered) return { fail: why || 'youtube' };
+  }
+  const v = items.find((x) => x.id === id);
+  if (!v) return { fail: 'not_found' };
+  const owner = chans.find((c) => String(c.external_id) === v.channelId);
+  if (!owner) return { fail: 'not_yours', x: yours };
+  if (!vidSeen('youtube', v)) return { fail: 'not_public' };
+  return { owner, v, id, page };
+}
+
 /* Обложка у TikTok — ссылка с подписью, которая живёт несколько часов.
    Хранить её в базе бессмысленно: держим в памяти свежей и отдаём, пока
-   не протухла, а дальше приложение покажет плеер без обложки. */
+   не протухла. У YouTube обложка постоянная — её собираем по id. */
 const vidCovers = new Map();
 const VID_COVER_MS = 5 * 3600 * 1000;
 function vidCoverSet(id, url) {
@@ -5199,7 +5791,19 @@ function vidHandleOf(s) {
   const m = /\/@([\w.-]{1,40})\/video\//.exec(String(s || ''));
   return m ? m[1] : '';
 }
-/* Постоянная ссылка ролика: без меток ?_r=1 и с ником, если он известен. */
+/* Ник канала без «@» (у YouTube customUrl приходит как «@name»). */
+function vidNick(s) {
+  const t = String(s == null ? '' : s).trim().replace(/^@+/, '');
+  return /^[\w.\-À-ɏЀ-ӿ]{1,60}$/.test(t) ? t : '';
+}
+/* Как назвать канал человеку: «@ник» или название. */
+function vidShowName(c) {
+  if (!c) return '';
+  const n = vidNick(c.username);
+  return n ? '@' + n : String(c.title || '').trim().slice(0, 60);
+}
+function vidHttps(u) { const s = String(u || ''); return /^https:\/\/[^\s"'<>]+$/i.test(s) ? s.slice(0, 1000) : ''; }
+/* Постоянная ссылка ролика TikTok: без меток ?_r=1 и с ником, если он известен. */
 function vidCanon(share, handle, id, page) {
   if (handle) return 'https://www.tiktok.com/@' + handle + '/video/' + id;
   try { const s = new URL(share); if (ttUrlOk(s)) return s.origin + s.pathname; } catch (e) { /* ниже */ }
@@ -5228,6 +5832,18 @@ function vidMs(v) {
   const t = Date.parse(String(v));
   return Number.isFinite(t) ? t : 0;
 }
+/* Срок задания. Шторка «Условия задания» пишет его датой без времени
+   («2026-10-10» из <input type=date>), а Date.parse читает такую дату как
+   полночь UTC — и ролик, вышедший днём последнего дня, оказался бы «после
+   срока». Дата без времени — это конец того дня по Москве. */
+function vidDeadline(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const t = Date.parse(s + 'T23:59:59.999+03:00');
+    return Number.isFinite(t) ? t : 0;
+  }
+  return vidMs(v);
+}
 /* Когда оффер появился: из самого оффера, а если поля нет — когда его
    конверт впервые лёг на сервер (SQLite хранит это в UTC без пояса). */
 function vidCampCreated(ci) {
@@ -5238,8 +5854,8 @@ function vidCampCreated(ci) {
 }
 /* Площадки оффера приходят по-разному: списком, строкой «tt,tg» или
    объектом {tt:true, yt:false}, и в двух полях — platforms и
-   platformsList (мастер заданий пишет второе). TikTok есть, если он
-   есть хоть в одном; не заданы нигде — значит любые. */
+   platformsList (мастер заданий пишет второе), а у старых — одной
+   строкой platform. Берём объединение, имена приводим к одному виду. */
 function vidPlatList(v) {
   if (typeof v === 'string') v = v.split(/[,;\s]+/);
   else if (v && typeof v === 'object' && !Array.isArray(v)) v = Object.keys(v).filter((k) => v[k]);
@@ -5247,24 +5863,40 @@ function vidPlatList(v) {
   return v.map((x) => String((x && typeof x === 'object' ? (x.id || x.key || x.platform) : x) || '').trim().toLowerCase())
     .filter(Boolean);
 }
-function vidCampTikTok(camp) {
-  const all = vidPlatList(camp.platforms).concat(vidPlatList(camp.platformsList));
-  if (!all.length && typeof camp.platform === 'string' && camp.platform.trim()) all.push(camp.platform.trim().toLowerCase());
-  if (!all.length) return true;
-  return all.includes('tt') || all.includes('tiktok');
+const VID_SYN = { tt: 'tiktok', tiktok: 'tiktok', 'тикток': 'tiktok', yt: 'youtube', youtube: 'youtube', 'ютуб': 'youtube',
+  tg: 'telegram', telegram: 'telegram', ig: 'instagram', inst: 'instagram', insta: 'instagram', instagram: 'instagram',
+  vk: 'vk', vkontakte: 'vk', twitch: 'twitch' };
+const VID_PNAMES = { tiktok: 'TikTok', youtube: 'YouTube', telegram: 'Telegram', instagram: 'Instagram',
+  vk: 'VK', twitch: 'Twitch', rutube: 'RUTUBE', dzen: 'Дзен' };
+function vidPlatNorm(x) { const k = String(x == null ? '' : x).trim().toLowerCase(); return VID_SYN[k] || k; }
+function vidCampPlats(camp) {
+  let all = vidPlatList(camp.platforms).concat(vidPlatList(camp.platformsList));
+  if (!all.length && typeof camp.platform === 'string') all = vidPlatList(camp.platform);
+  return [...new Set(all.map(vidPlatNorm).filter(Boolean))];
 }
-/* Оффер принимает видео: он активен, срок не вышел и в заморозке есть
-   деньги — без них в конце окна платить было бы не из чего. */
+/* Видео с этой площадки оффер принимает? Площадки не заданы — TikTok и
+   YouTube. ФОРМАТ оффера (клипы, баннеры, UGC) не ограничивает. */
+function vidCampAllows(camp, platform) {
+  const all = vidCampPlats(camp);
+  if (!all.length) return platform === 'tiktok' || platform === 'youtube';
+  return all.includes(platform);
+}
+function vidCampPlatNames(camp) {
+  return vidCampPlats(camp).map((p) => VID_PNAMES[p] || (p.charAt(0).toUpperCase() + p.slice(1)).slice(0, 24)).join(', ');
+}
+/* Оффер принимает видео: он активен и в заморозке есть деньги — без них
+   платить было бы не из чего. Срок задания сюда не входит: после срока
+   ролик, вышедший ДО него, загрузить можно (как в More Views — блогер
+   сам решает, когда зафиксировать просмотры), а вышедший после — нет
+   (too_late). */
 function vidCampOpen(ci, campId) {
   if (String(ci.camp.status || '') !== 'active') return false;
-  const dl = vidMs(ci.camp.deadline);
-  if (dl && dl < Date.now()) return false;
   const d = q.deal.get('camp:' + campId);
   return !!(d && d.status === 'held' && d.amount - d.paid > 0);
 }
-/* Условия оффера, по которым считается ролик, — снимок в момент привязки.
+/* Условия оффера, по которым считается ролик, — снимок в момент загрузки.
    Конверт оффера рекламодатель переписывает сам (sync/put), и считай мы
-   по живому конверту, после зачёта он мог бы поставить ставку в ноль. */
+   по живому конверту, после загрузки он мог бы поставить ставку в ноль. */
 function vidTermsOf(c) {
   const n = (x) => Math.max(0, Math.round(Number(x) || 0));
   return {
@@ -5288,13 +5920,12 @@ function vidTerms(row) {
   try { q.vidTerms.run(JSON.stringify(t), row.id); row.terms = JSON.stringify(t); } catch (e) { /* не записалось — посчитаем ещё раз */ }
   return t;
 }
-/* Сколько заработал ролик по условиям (п. 1 контракта). Это именно
-   заработок блогера: остаток заморозки здесь НЕ учитывается — его
-   сверяют при выплате (vidSettle), и нехватка денег уходит владельцу,
-   а не тихо срезает сумму. null — условий нет, прежнюю сумму не трогать. */
-function vidEarn(row, views) {
-  const t = vidTerms(row);
-  if (!t) return null;
+/* Сумма по условиям: фикс — fixedPrice, если минимум просмотров взят;
+   иначе floor(views × rate / 1000), сверху потолок cap; ниже minViews — 0.
+   Остаток заморозки здесь НЕ учитывается: его сверяет выплата, и
+   нехватка денег уходит владельцу, а не тихо срезает сумму. */
+function vidEarnBy(t, views) {
+  if (!t) return 0;
   const n = (x) => Math.max(0, Math.round(Number(x) || 0));
   const v = n(views);
   const minV = n(t.minViews);
@@ -5306,24 +5937,58 @@ function vidEarn(row, views) {
     const cap = n(t.cap);
     if (cap) s = Math.min(s, cap);
   }
+  /* limit — сколько было свободно в бюджете, когда ролик загружали, если
+     ролик стоил больше (см. загрузку): дальше этого остатка он не идёт. */
+  const lim = n(t.limit);
+  if (lim) s = Math.min(s, lim);
   return Math.max(0, s);
 }
-/* Сколько из заморозки кампании ещё может уйти по роликам: по каждой
-   живой строке — заработанное или потолок по условиям (фикс-цена или
-   maxPayout), что больше, за вычетом уже выплаченного. Без потолка
-   (за просмотры без верхней границы) резервируем заработанное. */
+/* null — условий нет, прежнюю сумму не трогать. */
+function vidEarn(row, views) {
+  const t = vidTerms(row);
+  return t ? vidEarnBy(t, views) : null;
+}
+/* Просмотры, по которым ролик будет оплачен: зафиксированные при выплате,
+   а до неё — большее из «при загрузке» и последнего замера (ролик,
+   потерявший часть просмотров после загрузки, не теряет в деньгах). */
+function vidBasisViews(r) {
+  if (r.paid_views != null) return Number(r.paid_views) || 0;
+  return Math.max(Number(r.submit_views) || 0, Number(r.views) || 0);
+}
+/* Резерв одного ролика — сколько из бюджета ещё может уйти этому ролику:
+   до выплаты — большее из оценки при загрузке и оценки по текущим
+   просмотрам; после частичной выплаты — недоплата. Закрытый ролик
+   (выплачен, отклонён, удалён, отвязан) ничего не держит. */
+const VID_LIVE = new Set(['review', 'rejected', 'active']);
+function vidHoldOf(r) {
+  if (!r || !VID_LIVE.has(r.status)) return 0;
+  const base = r.paid_views != null ? (r.earned || 0)
+    : Math.max(r.reserved || 0, vidEarn(r, vidBasisViews(r)) || 0);
+  return Math.max(0, base - (r.paid || 0));
+}
 function vidReserved(campId) {
   let s = 0;
-  for (const r of q.vidLive.all(String(campId))) {
-    const t = vidTerms(r);
-    const cap = !t ? 0 : t.payMode === 'fixed' ? (t.fixedPrice || 0) : (t.cap || 0);
-    s += Math.max(0, Math.max(r.earned || 0, cap) - (r.paid || 0));
-  }
+  for (const r of q.vidLive.all(String(campId))) s += vidHoldOf(r);
   return s;
 }
-/* Финальный замер готов: цифры сняты после конца окна. */
-function vidFinalDone(row) {
-  return !!(row && row.status === 'active' && row.approved_at && (row.stats_at || 0) > row.approved_at + VID_WINDOW_MS);
+/* Свободно в бюджете задания: остаток заморозки минус резервы. */
+function vidFree(campId) {
+  const d = q.deal.get('camp:' + campId);
+  const left = d && d.status === 'held' ? Math.max(0, d.amount - d.paid) : 0;
+  return left - vidReserved(campId);
+}
+/* Оплаченный ролик ещё обновляем для показа? (VID_TRACK_DAYS с публикации) */
+function vidTracked(r, now) {
+  return !!r && r.status === 'paid' && (Number(r.posted_at || r.created_at) || 0) + VID_TRACK_MS > (now || Date.now());
+}
+/* Есть ли чем спросить площадку о роликах этого канала. */
+function vidReady(c) {
+  if (c.platform === 'youtube' && YT_API_KEY) return true;
+  if (!c.has_token) return false;
+  const exp = c.expires_at ? new Date(c.expires_at).getTime() : 0;
+  if (exp && exp > Date.now() + 60000) return true;
+  const cfg = OAUTH[c.platform];
+  return !!(c.has_refresh && cfg && cfg.id && cfg.secret);
 }
 /* Не чаще раза в сутки на ключ (в памяти процесса). true — можно. */
 function vidOnce(map, key, ms) {
@@ -5346,28 +6011,46 @@ function vidDTO(r, view, opts) {
     try { why = JSON.parse(r.risk_why); } catch (e) { why = [String(r.risk_why)]; }
     if (!Array.isArray(why)) why = [];
   }
+  const yt = r.platform === 'youtube';
+  const vid = String(r.video_id);
+  /* До выплаты earned — сколько ролик стоит сейчас по условиям; после —
+     сколько начислено по просмотрам на момент проверки. */
+  const unpaid = VID_LIVE.has(r.status) && r.paid_views == null;
+  const est = unpaid ? (vidEarn(r, vidBasisViews(r)) || 0) : (r.earned || 0);
+  /* Ролик пришёл, когда в бюджете оставалось меньше, чем он стоил: за него
+     заплатят не больше этого остатка — человеку надо это видеть. */
+  let budgetCap = null;
+  try { const t = r.terms ? JSON.parse(r.terms) : null; if (t && Number(t.limit) > 0) budgetCap = Math.round(Number(t.limit)); }
+  catch (e) { budgetCap = null; }
   const out = {
     id: r.id, campId: r.camp_id, bloggerId: r.blogger_id, ownerId: r.owner_id,
-    platform: r.platform || 'tiktok', videoId: String(r.video_id),
+    platform: r.platform || 'tiktok', videoId: vid,
     url: r.url || '', handle: r.handle || '', title: r.title || '',
     duration: r.duration == null ? null : r.duration, postedAt: r.posted_at || null,
     views: r.views || 0, likes: r.likes || 0, comments: r.comments || 0, shares: r.shares || 0,
     statsAt: r.stats_at || null,
+    submitViews: r.submit_views == null ? null : r.submit_views,
+    paidViews: r.paid_views == null ? null : r.paid_views,
     status: r.status, reviewNote: r.review_note || '', reviewedAt: r.reviewed_at || null,
     approvedAt: r.approved_at || null, decision: r.decision || null,
     decisionNote: r.decision_note || '', decidedAt: r.decided_at || null,
-    windowEndsAt: r.approved_at ? r.approved_at + VID_WINDOW_MS : null,
-    earned: r.earned || 0, paid: r.paid || 0, paidAt: r.paid_at || null,
+    /* Окна подсчёта в v2 нет: оставлено для старых приложений — момент зачёта. */
+    windowEndsAt: r.approved_at || null,
+    earned: est, paid: r.paid || 0, paidAt: r.paid_at || null,
+    reserved: vidHoldOf(r), budgetCap,
     risk: view === 'blogger' || r.risk == null ? null : r.risk,
     riskLevel: r.risk_level || null, riskWhy: why, riskHold: !!r.risk_hold,
-    /* Выплата на паузе не из-за накрутки: не хватило денег в заморозке или
-       нет финального замера. Причину видят рекламодатель и владелец. */
+    /* Выплата на паузе не из-за накрутки: не хватило денег в заморозке,
+       нет свежего замера или доступа к каналу. Причину видят рекламодатель
+       и владелец. */
     payHold: !!r.pay_hold,
     holdReason: view !== 'blogger' && r.pay_hold ? (r.pay_why || '') : '',
-    /* Окно открыто или кончилось, а выплату держит открытый спор по заданию. */
+    /* Пометка для владельца: например, выплачено по последнему замеру. */
+    payNote: view !== 'blogger' ? (r.pay_note || '') : '',
+    /* Засчитано, а выплату держит открытый спор по заданию. */
     disputeHeld: r.status === 'active' && !!q.openDisputeFor.get('camp:' + r.camp_id, r.blogger_id),
-    cover: vidCoverOf(r.id),
-    player: 'https://www.tiktok.com/player/v1/' + String(r.video_id),
+    cover: yt ? (vidCoverOf(r.id) || ytThumb(vid)) : vidCoverOf(r.id),
+    player: yt ? 'https://www.youtube.com/embed/' + vid : 'https://www.tiktok.com/player/v1/' + vid,
   };
   if (opts && opts.history) out.history = q.vidHist.all(r.id);
   return out;
@@ -5388,13 +6071,16 @@ function vidWho(uid) {
    только с тех цифр, что владелец видел (decided_views): пока просмотров
    не больше чем вдвое против них, ролик сам себя не заморозит. Дальше —
    это уже новый рост, и плохая оценка снова ставит паузу. Иначе одно
-   решение по 5 000 просмотров пропускало бы потом накрутку до миллиона. */
+   решение по 5 000 просмотров пропускало бы потом накрутку до миллиона.
+   Оплаченный ролик оценку получает (её видят рекламодатель и владелец),
+   но паузы и тревоги уже не будет: деньги ушли. */
 function vidJudge(row) {
   if (!row) return null;
+  const plat = row.platform || 'tiktok';
   const today = dayOf(row.stats_at || Date.now());
   const prev = q.vidHist.all(row.id).filter((h) => h.day !== today);
-  const st = q.lastStats.get(row.blogger_id, 'tiktok', row.external_id) || {};
-  const ch = q.channelOf.get(row.blogger_id, 'tiktok', row.external_id) || {};
+  const st = q.lastStats.get(row.blogger_id, plat, row.external_id) || {};
+  const ch = q.channelOf.get(row.blogger_id, plat, row.external_id) || {};
   const res = quality.assessVideo(
     { views: row.views, likes: row.likes, comments: row.comments, shares: row.shares },
     prev,
@@ -5409,7 +6095,7 @@ function vidJudge(row) {
   if ((res.level === 'risk' || res.level === 'bad') && live) {
     const ci = vidCamp(row.camp_id);
     tgAlert('vid:risk:' + row.id + ':' + res.level,
-      '🚩 Видео по заданию: цифры выбиваются\n\n'
+      '🚩 Видео по заданию (' + vidPlatName(plat) + '): цифры выбиваются\n\n'
       + 'Оценка: ' + riskWord(res.level) + ' (' + res.risk + ' из 100)\n'
       + 'Оффер: «' + vidCampName(ci) + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n'
       + 'Просмотров ' + row.views + ', лайков ' + row.likes + ', комментариев ' + row.comments
@@ -5421,21 +6107,12 @@ function vidJudge(row) {
   return res;
 }
 
-/* Свежие цифры ролика → строка, снимок дня, оценка. Сумма растёт, пока
-   окно открыто, и ещё один раз — финальным замером сразу после конца
-   окна; дальше она заморожена, даже если ролик продолжают смотреть. */
+/* Свежие цифры ролика → строка, снимок дня, оценка. Сумма и база выплаты
+   здесь не меняются: их фиксирует только выплата (vidSettle). */
 function vidApply(row, v, now) {
-  let earned = row.earned || 0;
-  if (row.status === 'active' && row.approved_at) {
-    const end = row.approved_at + VID_WINDOW_MS;
-    if (now <= end || (row.stats_at || 0) <= end) {
-      const e = vidEarn(row, v.views);
-      if (e != null) earned = e;
-    }
-  }
   /* Строку закрыли, пока ждали площадку, — цифры уже не её дело. */
   if (!q.vidNums.run(v.views, v.likes, v.comments, v.shares, v.title || null, v.duration,
-    now, earned, now, row.id).changes) return false;
+    now, now, row.id).changes) return false;
   q.vidSnap.run(row.id, dayOf(now), v.views, v.likes, v.comments, v.shares, now);
   if (v.cover) vidCoverSet(row.id, v.cover);
   vidJudge(q.vidById.get(row.id));
@@ -5444,121 +6121,119 @@ function vidApply(row, v, now) {
 
 /* Канал отвязан (сам, владельцем или пропал из базы). Снимаем только
    ролики, которые ещё ждут проверки рекламодателя, и честно говорим об
-   этом обеим сторонам. Засчитанные (active) остаются в работе: их
-   обновление будет падать, и после окна они уйдут владельцу на решение.
+   этом обеим сторонам. Засчитанные (active) остаются: без канала их не
+   оплатят «по последним цифрам» — решит владелец или круг, когда блогер
+   переподключит канал (пауза 'access').
    why: 'self' — блогер отвязал сам, 'admin' — владелец, 'gone' — канала нет. */
 function vidRevoke(userId, platform, extId, why) {
   let n = 0;
+  const P = vidPlatName(platform);
   try {
     const now = Date.now();
     for (const r of q.vidRevokable.all(Number(userId), String(platform), String(extId))) {
       if (!q.vidRevokeOne.run(now, r.id).changes) continue;
       n++;
+      vidBoardDrop(r.camp_id);
       const name = vidCampName(vidCamp(r.camp_id));
-      const cause = why === 'admin' ? 'администратор отключил TikTok-канал, с которого оно привязано'
-        : why === 'self' ? 'вы отключили TikTok-канал, с которого оно привязано'
-        : 'TikTok-канал, с которого оно привязано, больше не подключён к профилю';
+      const cause = why === 'admin' ? 'администратор отключил ' + P + '-канал, с которого оно загружено'
+        : why === 'self' ? 'вы отключили ' + P + '-канал, с которого оно загружено'
+        : P + '-канал, с которого оно загружено, больше не подключён к профилю';
       vidNotify(r.blogger_id, 'Видео снято с проверки',
         '«' + name + '»: ' + cause + '. Без канала видео не проверить, и выплаты по нему не будет. '
         + 'Если это ошибка — напишите в поддержку.', '/?go=tasks');
       vidNotify(r.owner_id, 'Видео снято с проверки',
-        '«' + name + '»: блогер больше не подключён к TikTok-каналу этого видео — проверять его не нужно, '
+        '«' + name + '»: блогер больше не подключён к ' + P + '-каналу этого видео — проверять его не нужно, '
         + 'бюджет по нему не расходуется', '/?go=campaigns');
     }
   } catch (e) { console.error('[видео] отзыв не записался:', (e && e.message) || e); }
   return n;
 }
 
-/* Нет доступа к TikTok блогера: владельцу — тревога, блогеру — просьба
+/* Нет доступа к площадке блогера: владельцу — тревога, блогеру — просьба
    переподключить. И то и другое не чаще раза в сутки на блогера: круг
    идёт каждые полчаса, и без порога это был бы поток одинаковых писем. */
-function vidTokenAlert(b, ext, n, detail) {
-  if (!vidOnce(vidTokenSeen, String(b))) return;
-  tgAlert('vid:token:' + b,
-    '🔑 Видео по заданиям: нет доступа к TikTok блогера' + (detail ? ' (' + detail + ')' : '') + '\n\n'
+function vidTokenAlert(b, platform, ext, n, detail) {
+  if (!vidOnce(vidTokenSeen, String(b) + '|' + platform)) return;
+  const P = vidPlatName(platform);
+  tgAlert('vid:token:' + b + ':' + platform,
+    '🔑 Видео по заданиям: нет доступа к ' + P + ' блогера' + (detail ? ' (' + detail + ')' : '') + '\n\n'
     + 'Блогер: ' + vidWho(b) + ', канал ' + ext
-    + '\nРоликов ждут обновления: ' + n + '. Цифры не обновляются, пока человек не переподключит TikTok.',
+    + '\nРоликов ждут обновления: ' + n + '. Цифры не обновляются, пока человек не переподключит ' + P
+    + '; засчитанные без замера не оплачиваются — ждут его или вашего решения.',
     'server');
-  vidNotify(b, 'Переподключите TikTok',
-    'Нет доступа к вашему TikTok — просмотры привязанных видео не обновляются. Подключите TikTok в профиле заново, '
-    + 'иначе выплату по видео будет решать администратор по последним цифрам.', '/?go=profile');
+  vidNotify(b, 'Переподключите ' + P,
+    'Нет доступа к вашему ' + P + ' — мы не видим загруженные видео: просмотры не обновляются, а выплата за засчитанные '
+    + 'ждёт. Подключите ' + P + ' в профиле заново.', '/?go=profile');
 }
 
-/* Освежить пачку роликов. Группируем по каналу: у каждого свой доступ, и
-   площадка отдаёт только ролики владельца токена. Нет доступа или прав —
-   цифры не трогаем (это не «ролик пропал»), а владельцу пишем тревогу.
-   Каждую попытку отмечаем в last_try_at — по ней очередь круга. После
-   каждого await строку перечитываем: пока ждали площадку, её могли
-   закрыть (решение владельца, выплата), и старый снимок не должен её
-   переписать. */
+/* Освежить пачку роликов. Группируем по каналу: у каждого свой доступ.
+   Нет доступа или прав — цифры не трогаем (это не «ролик пропал»), а
+   владельцу пишем тревогу. Каждую попытку отмечаем в last_try_at — по ней
+   очередь круга. После каждого await строку перечитываем: пока ждали
+   площадку, её могли закрыть (решение владельца, выплата), и старый
+   снимок не должен её переписать. Оплаченный ролик освежается только для
+   показа: промахи по нему не считаются, деньги уже ушли. */
 const VID_MISS_GAP_MS = 20 * 3600 * 1000;
 async function vidRefresh(rows, now) {
   const out = { checked: 0, updated: 0, missed: 0, removed: 0, revoked: 0, failed: 0, errors: {} };
   const groups = new Map();
   for (const r of rows) {
-    const k = r.blogger_id + '|' + r.external_id;
+    const k = r.blogger_id + '|' + (r.platform || 'tiktok') + '|' + r.external_id;
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(r);
   }
-  const live = (r) => r && (r.status === 'review' || r.status === 'active');
+  const live = (r) => r && (r.status === 'review' || r.status === 'active' || r.status === 'paid');
   for (const list of groups.values()) {
-    const b = list[0].blogger_id, ext = String(list[0].external_id);
+    const b = list[0].blogger_id, p = list[0].platform || 'tiktok', ext = String(list[0].external_id);
     for (const r of list) q.vidTry.run(now, r.id);
     const fail = (code, part) => { for (const r of (part || list)) out.errors[r.id] = code; out.failed += (part || list).length; };
-    if (!q.channelOf.get(b, 'tiktok', ext)) {
+    if (!q.channelOf.get(b, p, ext)) {
       /* Канала больше нет: снимаем только то, что ждёт проверки, а
-         засчитанные остаются — их решит владелец после окна. */
-      out.revoked += vidRevoke(b, 'tiktok', ext, 'gone');
-      const act = list.map((r) => q.vidById.get(r.id)).filter((r) => r && r.status === 'active');
-      if (act.length) {
-        vidTokenAlert(b, ext, act.length, 'канал отвязан');
-        fail('no_channel', act);
-      }
+         засчитанные остаются — их выплату решат круг или владелец. */
+      out.revoked += vidRevoke(b, p, ext, 'gone');
+      const act = list.map((r) => q.vidById.get(r.id)).filter((r) => r && (r.status === 'active' || r.status === 'paid'));
+      if (act.some((r) => r.status === 'active')) vidTokenAlert(b, p, ext, act.length, 'канал отвязан');
+      if (act.length) fail('no_channel', act);
       continue;
     }
-    const tok = q.getToken.get(b, 'tiktok', ext);
-    let access = '';
-    try { access = tok ? await ttAccess(tok) : ''; }
-    catch (e) { fail('tiktok'); continue; }
-    if (!access) {
-      vidTokenAlert(b, ext, list.length, '');
-      fail('token');
+    let got;
+    try { got = await vidFetch(p, b, ext, list.map((r) => String(r.video_id))); }
+    catch (e) {
+      const code = e.vidCode || (p === 'youtube' ? 'youtube' : 'tiktok');
+      /* Тревога и просьба переподключить — только если на кону ещё что-то
+         есть (ролик на проверке или засчитан, но не оплачен). Оплаченные
+         обновляются лишь для показа: по ним молчим. */
+      const open = list.some((r) => { const c = q.vidById.get(r.id); return !!c && c.status !== 'paid'; });
+      if (code === 'token' || code === 'scope') {
+        if (open) vidTokenAlert(b, p, ext, list.length, code + ': ' + String(e.message || '').slice(0, 160));
+      } else console.error('[видео] площадка не ответила:', (e && e.message) || e);
+      fail(code);
       continue;
     }
-    for (let i = 0; i < list.length; i += 20) {
-      const part = list.slice(i, i + 20);
-      let got;
-      try { got = await ttQuery(access, part.map((r) => r.video_id)); }
-      catch (e) {
-        const code = e.vidCode || 'tiktok';
-        if (code !== 'tiktok') vidTokenAlert(b, ext, list.length, code + ': ' + String(e.message || '').slice(0, 160));
-        else console.error('[видео] площадка не ответила:', (e && e.message) || e);
-        fail(code, part);
-        continue;
-      }
-      const byId = new Map(got.map((v) => [v.id, v]));
-      for (const r0 of part) {
-        const r = q.vidById.get(r0.id);
-        if (!live(r)) continue;
-        out.checked++;
-        const v = byId.get(String(r.video_id));
-        if (v) { if (vidApply(r, v, now)) out.updated++; continue; }
-        /* Не вернулся: удалён, скрыт или стал приватным. Один раз — бывает
-           и сбой; дважды — ролика нет, считать больше нечего. Промахи
-           считаем не чаще раза в 20 часов: два круга подряд по полчаса
-           — это одна и та же минута площадки, а не «дважды». */
-        if (r.last_miss_at && now - r.last_miss_at < VID_MISS_GAP_MS) { out.missed++; continue; }
-        if (!q.vidMiss.run(now, now, r.id).changes) continue;
-        if ((r.miss || 0) + 1 >= 2 && q.vidRemove.run(now, r.id).changes) {
-          out.removed++;
-          const name = vidCampName(vidCamp(r.camp_id));
-          vidNotify(r.blogger_id, 'Видео больше не видно',
-            '«' + name + '»: ролик удалён или скрыт — просмотры по нему больше не считаются', '/?go=tasks');
-          vidNotify(r.owner_id, 'Видео по заданию удалено',
-            '«' + name + '»: блогер удалил или скрыл ролик — выплаты по нему не будет', '/?go=campaigns');
-        } else {
-          out.missed++;
-        }
+    const byId = new Map(got.filter((v) => vidSeen(p, v)).map((v) => [v.id, v]));
+    for (const r0 of list) {
+      const r = q.vidById.get(r0.id);
+      if (!live(r)) continue;
+      out.checked++;
+      const v = byId.get(String(r.video_id));
+      if (v) { if (vidApply(r, v, now)) out.updated++; continue; }
+      if (r.status === 'paid') { out.missed++; continue; }
+      /* Не вернулся: удалён, скрыт или стал приватным. Один раз — бывает
+         и сбой; дважды — ролика нет. Промахи считаем не чаще раза в 20
+         часов: два круга подряд по полчаса — это одна и та же минута
+         площадки, а не «дважды». */
+      if (r.last_miss_at && now - r.last_miss_at < VID_MISS_GAP_MS) { out.missed++; continue; }
+      if (!q.vidMiss.run(now, now, r.id).changes) continue;
+      if ((r.miss || 0) + 1 >= 2 && q.vidRemove.run(now, r.id).changes) {
+        out.removed++;
+        vidBoardDrop(r.camp_id);
+        const name = vidCampName(vidCamp(r.camp_id));
+        vidNotify(r.blogger_id, 'Видео больше не видно',
+          '«' + name + '»: ролик удалён или скрыт на ' + vidPlatName(p) + ' — выплаты по нему не будет', '/?go=tasks');
+        vidNotify(r.owner_id, 'Видео по заданию удалено',
+          '«' + name + '»: блогер удалил или скрыл ролик — выплаты по нему не будет', '/?go=campaigns');
+      } else {
+        out.missed++;
       }
     }
   }
@@ -5572,7 +6247,8 @@ function vidHoldAlert(row, why) {
   tgAlert('vid:hold:' + row.id,
     '⏸ Выплата за видео ждёт вашего решения\n\n' + why + '\n'
     + 'Оффер: «' + vidCampName(vidCamp(row.camp_id)) + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n'
-    + 'К выплате: ' + Math.max(0, (row.earned || 0) - (row.paid || 0)) + ' ₽\n' + (row.url || '')
+    + 'Площадка: ' + vidPlatName(row.platform) + '\n'
+    + 'К выплате сейчас: ' + vidHoldOf(row) + ' ₽\n' + (row.url || '')
     + '\n\nРешение: ' + PUBLIC_URL + '/admin',
     'server');
 }
@@ -5580,7 +6256,7 @@ function vidHoldAlert(row, why) {
 /* Поставить выплату на паузу до владельца (pay_hold) с причиной. Тревога
    и письмо блогеру — только при переходе в паузу, а не каждый круг. */
 function vidPayHoldSet(row, why, now, blogMsg) {
-  if (!q.vidPayHold.run(why, now, row.id).changes) return false;
+  if (!q.vidPayHold.run('money', why, now, row.id).changes) return false;
   tgAlert('vid:payhold:' + row.id,
     '⏸ Выплата за видео ждёт вашего решения\n\n' + why + '\n'
     + 'Оффер: «' + vidCampName(vidCamp(row.camp_id)) + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n'
@@ -5589,60 +6265,198 @@ function vidPayHoldSet(row, why, now, blogMsg) {
   if (blogMsg) vidNotify(row.blogger_id, 'Выплата за видео задерживается', blogMsg, '/?go=tasks');
   return true;
 }
+function vidDate(ms) {
+  const d = new Date(Number(ms) || 0);
+  return ('0' + d.getUTCDate()).slice(-2) + '.' + ('0' + (d.getUTCMonth() + 1)).slice(-2) + ' '
+    + ('0' + d.getUTCHours()).slice(-2) + ':' + ('0' + d.getUTCMinutes()).slice(-2) + ' UTC';
+}
 
-/* Конец окна: выплата из заморозки кампании. Тем же движением, что
-   /api/deals/release (dealPayMoves), под ключом sys:vidpay:<id> — повтор
-   круга или второй процесс второй раз не заплатят. Сумму пересчитываем
-   внутри транзакции по свежему остатку заморозки.
-   Сколько заработал блогер (earned) и сколько нашлось в заморозке — разные
-   вещи: если денег не хватает, платим, что есть, а остаток ставим на
-   паузу владельцу (pay_hold). «По условиям выплаты нет» блогер слышит
-   только тогда, когда он действительно ничего не заработал. */
-/* сколько ждать финальный замер после окна, прежде чем отдать ролик владельцу */
-const VID_LATE_MS = 72 * 3600 * 1000;
-function vidSettle(row, now) {
-  if (!row || row.status !== 'active' || !row.approved_at) return { state: 'skip' };
-  const end = row.approved_at + VID_WINDOW_MS;
-  if (end > now) return { state: 'open' };
-  if (row.risk_hold || row.pay_hold) return { state: 'held' };
+/* Свежий замер одного ролика — перед выплатой. ok: цифры записаны (и
+   оценка накрутки пересчитана); gone: площадка ролика не отдала (удалён,
+   скрыт, закрыт); fail: спросить не вышло (нет доступа, сбой). */
+async function vidMeasure(row, now) {
+  const p = row.platform || 'tiktok';
+  q.vidTry.run(now, row.id);
+  if (!q.channelOf.get(row.blogger_id, p, row.external_id)) {
+    /* Канал отвязан. С ключом YouTube ролик всё равно видно: удалён или
+       закрыт — так и запишем. Платить без канала не будем — решит владелец. */
+    if (p === 'youtube' && YT_API_KEY) {
+      try {
+        const got = await ytVideos([String(row.video_id)], { key: YT_API_KEY });
+        const v = got.find((x) => x.id === String(row.video_id) && x.channelId === String(row.external_id));
+        if (!v || !vidSeen(p, v)) return { gone: true };
+        const cur = q.vidById.get(row.id);
+        if (cur && cur.status === 'active') vidApply(cur, v, now);
+      } catch (e) { /* не вышло — решит владелец */ }
+    }
+    return { fail: 'no_channel' };
+  }
+  let got;
+  try { got = await vidFetch(p, row.blogger_id, row.external_id, [String(row.video_id)]); }
+  catch (e) {
+    const code = e.vidCode || (p === 'youtube' ? 'youtube' : 'tiktok');
+    if (code === 'token' || code === 'scope') vidTokenAlert(row.blogger_id, p, row.external_id, 1, code);
+    return { fail: code };
+  }
+  const v = got.find((x) => x.id === String(row.video_id));
+  if (!v || !vidSeen(p, v)) return { gone: true };
+  const cur = q.vidById.get(row.id);
+  if (!cur || cur.status !== 'active') return { skip: true };
+  vidApply(cur, v, now);
+  return { ok: true };
+}
+
+/* ── ВЫПЛАТА В МОМЕНТ ЗАЧЁТА ──
+   Единственная дорога денег за видео. Сюда сходятся все пути зачёта:
+   «всё верно» рекламодателя, автозачёт через VID_AUTO_ACCEPT_H, решение
+   владельца после возражения или паузы, и круг — для засчитанных, но ещё
+   не оплаченных (в том числе старых строк из времён окна подсчёта).
+   Порядок: накрутка и спор держат → свежий замер (один запрос к площадке)
+   → база выплаты фиксируется один раз → деньги одним движением под ключом
+   sys:vidpay:<id>. Повтор и второй процесс второй раз не заплатят.
+   opts.noMeasure — платить по цифрам на момент решения владельца. */
+const VID_RETRY_MS = 20 * 60 * 1000;
+const VID_ACCESS_RETRY_MS = 3 * 3600 * 1000;
+const VID_ACCESS_FAIL = new Set(['token', 'scope', 'no_channel']);
+const vidPaying = new Set();
+async function vidPayout(id, opts) {
+  if (vidPaying.has(id)) return { state: 'busy' };
+  vidPaying.add(id);
+  try { return await vidPayoutRun(id, opts || {}); }
+  finally { vidPaying.delete(id); }
+}
+async function vidPayoutRun(id, o) {
+  let row = q.vidById.get(id);
+  if (!row || row.status !== 'active') return { state: 'skip' };
+  const now = Date.now();
+  if (row.risk_hold) {
+    q.vidTry.run(now, id);
+    vidHoldAlert(row, 'Подозрение на накрутку просмотров.');
+    return { state: 'held', why: 'risk' };
+  }
+  if (q.openDisputeFor.get('camp:' + row.camp_id, row.blogger_id)) {
+    q.vidTry.run(now, id);
+    vidHoldAlert(row, 'По заданию открыт спор.');
+    return { state: 'held', why: 'dispute' };
+  }
+  if (row.pay_hold && row.hold_kind !== 'measure' && row.hold_kind !== 'access') return { state: 'held', why: 'money' };
+  /* Пауза «нет замера» повторяется кругом, но не чаще раза в 20 минут:
+     иначе в одном круге она сжигала бы все попытки подряд. Пауза «нет
+     доступа» — реже: ждём, пока блогер переподключит канал. */
+  if (row.pay_hold && row.hold_kind === 'measure' && row.last_try_at && now - row.last_try_at < VID_RETRY_MS) {
+    return { state: 'held', why: 'measure', wait: true };
+  }
+  if (row.pay_hold && row.hold_kind === 'access' && row.last_try_at && now - row.last_try_at < VID_ACCESS_RETRY_MS) {
+    return { state: 'held', why: 'access', wait: true };
+  }
   const name = vidCampName(vidCamp(row.camp_id));
-  /* Финального замера нет (площадка не ответила, ролик не вернулся,
-     доступ к TikTok умер) — по старым цифрам сами не платим. Трое суток
-     ждём, дальше ролик уходит владельцу: он решает, платить ли по
-     последнему подтверждённому замеру. Если владелец уже сказал
-     «засчитать» после этого срока — платим по последнему замеру, не
-     ставя паузу по кругу. Замороженный ролик (засчитан после отзыва
-     канала) не опрашивается — его цифры и есть финальные. */
-  const final = row.frozen || (row.miss === 0 && row.stats_at && row.stats_at > end);
-  if (!final) {
-    const byAdmin = row.decision === 'count' && row.decided_at && row.decided_at >= end + VID_LATE_MS;
-    if (!byAdmin) {
-      if (now <= end + VID_LATE_MS) return { state: 'wait' };
-      const why = row.miss > 0
-        ? 'Нет финального замера: ролик не вернулся из TikTok'
-        : 'Нет финального замера: доступ к TikTok потерян';
-      vidPayHoldSet(row, why, now, '«' + name + '»: не удалось снять финальные цифры ролика в TikTok. '
-        + 'Выплату по последнему замеру (' + (row.earned || 0) + ' ₽) проверит администратор.');
-      return { state: 'held' };
+  const P = vidPlatName(row.platform);
+  let note = null;
+  if (row.paid_views == null && !row.frozen && !o.noMeasure) {
+    const m = await vidMeasure(row, now);
+    row = q.vidById.get(id);
+    if (!row || row.status !== 'active') return { state: 'skip' };
+    if (m.gone) {
+      if (!q.vidRemove.run(now, id).changes) return { state: 'skip' };
+      vidBoardDrop(row.camp_id);
+      vidNotify(row.blogger_id, 'Видео не засчитано',
+        '«' + name + '»: при проверке ролика не нашлось на ' + P + ' — он удалён или скрыт. Выплаты по нему не будет', '/?go=tasks');
+      vidNotify(row.owner_id, 'Видео по заданию удалено',
+        '«' + name + '»: ролика больше нет на ' + P + ' — выплаты по нему не будет, резерв вернулся в бюджет', '/?go=campaigns');
+      return { state: 'removed' };
+    }
+    if (m.ok && row.risk_hold) {
+      vidHoldAlert(row, 'Подозрение на накрутку по свежему замеру.');
+      return { state: 'held', why: 'risk' };
+    }
+    /* Замер не удался из-за доступа: канал отвязан, доступ отозван или
+       прав не хватает. Это не сбой площадки — так бывает и когда ролик
+       удалили и закрыли доступ, чтобы его не проверили. «По последним
+       цифрам» здесь не платим: пауза к владельцу, а круг повторит, когда
+       блогер переподключит канал. */
+    if (!m.ok && VID_ACCESS_FAIL.has(m.fail)) {
+      const first = !(row.pay_hold && row.hold_kind === 'access');
+      const why = (m.fail === 'no_channel' ? P + '-канал блогера отвязан' : 'Нет доступа к ' + P + ' блогера (' + m.fail + ')')
+        + ' — свежий замер не сделать. Решите сами или дождитесь, пока блогер переподключит канал';
+      if (!q.vidAccessHold.run(why, now, id).changes) return { state: 'skip' };
+      if (first) {
+        vidHoldAlert(row, why + '.');
+        /* Про токен и права блогеру уже написал vidTokenAlert (раз в сутки). */
+        if (m.fail === 'no_channel') {
+          vidNotify(row.blogger_id, 'Выплата за видео задерживается',
+            '«' + name + '»: ' + P + '-канал, с которого загружено видео, отключён — без него ролик не проверить. '
+            + 'Подключите ' + P + ' в профиле заново, и выплата пройдёт.', '/?go=profile');
+        }
+      }
+      return { state: 'held', why: 'access' };
+    }
+    /* Ролик уже ждёт доступа, а теперь ещё и площадка не ответила: доступ
+       не подтвердился — «по последним цифрам» не платим, ждём дальше. */
+    if (!m.ok && row.pay_hold && row.hold_kind === 'access') return { state: 'held', why: 'access' };
+    if (!m.ok) {
+      const fresh = row.stats_at && now - row.stats_at <= VID_FRESH_MS;
+      if (!fresh) {
+        const tries = (row.pay_tries || 0) + 1;
+        if (tries < VID_PAY_TRIES) {
+          const first = !row.pay_hold;
+          q.vidMeasureFail.run('Нет свежего замера: ' + P + ' не отдал цифры ролика — повторим через полчаса', tries, now, id);
+          if (first) {
+            vidNotify(row.blogger_id, 'Выплата за видео задерживается',
+              '«' + name + '»: ' + P + ' не отдал свежие цифры ролика — попробуем ещё раз в течение часа', '/?go=tasks');
+          }
+          return { state: 'held', why: 'measure', tries };
+        }
+        note = 'Оплачено по последнему замеру' + (row.stats_at ? ' от ' + vidDate(row.stats_at) : '')
+          + ': свежий замер из ' + P + ' не удался ' + tries + ' раза подряд (' + m.fail + ')';
+        tgAlert('vid:lastknown:' + id, '⚠️ Видео оплачено по последнему замеру\n\n' + note
+          + '\nОффер: «' + name + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n' + (row.url || '')
+          + '\n\nПроверить: ' + PUBLIC_URL + '/admin', 'server');
+      }
     }
   }
-  const dealId = 'camp:' + row.camp_id;
-  if (q.openDisputeFor.get(dealId, row.blogger_id)) {
-    /* Спор: очередь круга двигаем, чтобы двести споров не заняли её всю. */
-    q.vidTry.run(now, row.id);
-    vidHoldAlert(row, 'По заданию открыт спор.');
-    return { state: 'held' };
+  if (row.pay_hold && (row.hold_kind === 'measure' || row.hold_kind === 'access')) {
+    q.vidUnhold.run(now, id);
+    row = q.vidById.get(id);
+    if (!row || row.status !== 'active') return { state: 'skip' };
   }
+  return vidSettle(row, now, note, o.how);
+}
+
+/* Деньги: из заморозки кампании тем же движением, что /api/deals/release
+   (dealPayMoves), под ключом sys:vidpay:<id>. Сумма — по просмотрам на
+   момент проверки (vidBasisViews), один раз; пересчитывается внутри
+   транзакции по свежему остатку заморозки. Денег меньше, чем заработано, —
+   платим, что есть, остаток ставим на паузу владельцу (pay_hold, 'money').
+   «По условиям выплаты нет» блогер слышит только при нулевой сумме. */
+function vidSettle(row, now, note, how) {
+  if (!row || row.status !== 'active') return { state: 'skip' };
+  if (row.risk_hold || row.pay_hold) return { state: 'held', why: row.risk_hold ? 'risk' : (row.hold_kind || 'money') };
+  const name = vidCampName(vidCamp(row.camp_id));
+  const dealId = 'camp:' + row.camp_id;
+  if (row.paid_views == null) {
+    const views = vidBasisViews(row);
+    const e = vidEarn(row, views);
+    q.vidBasis.run(e == null ? (row.earned || 0) : e, views, now, row.id);
+    row = q.vidById.get(row.id);
+    if (!row || row.status !== 'active' || row.paid_views == null) return { state: 'skip' };
+  }
+  const views = Number(row.paid_views) || 0;
   const earned = Math.max(0, row.earned || 0);
   const owe = Math.max(0, earned - (row.paid || 0));
+  /* how — кто засчитал, если не рекламодатель («Рекламодатель не ответил
+     за 3 дня…», «администратор засчитал…»): одной строкой в том же
+     уведомлении, а не вторым письмом. */
+  const tail = how ? '. ' + how : '';
   if (earned <= 0) {
-    /* Порог просмотров не взят — окно закрывается без выплаты. */
-    q.vidPaid.run(0, row.paid || 0, now, now, row.id);
-    vidNotify(row.blogger_id, 'Подсчёт по видео закрыт', '«' + name + '»: по условиям задания выплаты нет', '/?go=tasks');
+    q.vidPaid.run(row.paid || 0, now, note, now, row.id);
+    vidBoardDrop(row.camp_id);
+    vidNotify(row.blogger_id, 'Видео засчитано', '«' + name + '»: по условиям задания выплаты нет — '
+      + vidNum(views) + ' ' + vidViewsWord(views) + ' на момент проверки' + tail, '/?go=tasks');
     return { state: 'paid', paid: 0 };
   }
   if (owe <= 0) {
-    q.vidPaid.run(earned, row.paid || 0, now, now, row.id);
+    q.vidPaid.run(row.paid || 0, now, note, now, row.id);
+    vidBoardDrop(row.camp_id);
     return { state: 'paid', paid: 0 };
   }
   const d = q.deal.get(dealId);
@@ -5654,19 +6468,22 @@ function vidSettle(row, now) {
     const key = row.paid > 0 ? sysKey('vidpay', row.id + '-' + row.paid) : sysKey('vidpay', row.id);
     const r = moneyOp(key, d.payer_id, 'release', (add) => {
       const cur = q.vidById.get(row.id);
-      if (!cur || cur.status !== 'active' || cur.pay_hold || cur.risk_hold) throw httpError(409, 'Ролик уже не ждёт выплаты');
+      if (!cur || cur.status !== 'active' || cur.pay_hold || cur.risk_hold || cur.paid_views == null) {
+        throw httpError(409, 'Ролик уже не ждёт выплаты');
+      }
       const due = Math.max(0, (cur.earned || 0) - (cur.paid || 0));
       const dd = q.deal.get(dealId);
       const left = dd && dd.status === 'held' ? Math.max(0, dd.amount - dd.paid) : 0;
       const sum = Math.min(due, left);
       if (sum <= 0) throw httpError(409, 'В заморозке не осталось денег');
       const closed = dealPayMoves(add, dd, cur.blogger_id, sum);
-      if (sum >= due) q.vidPaid.run(cur.earned || 0, (cur.paid || 0) + sum, now, now, cur.id);
+      if (sum >= due) q.vidPaid.run((cur.paid || 0) + sum, now, note, now, cur.id);
       else {
         q.vidPart.run((cur.paid || 0) + sum, now, 'В заморозке кампании не хватило денег: недоплачено '
           + (due - sum) + ' ₽', now, cur.id);
       }
-      return { ok: true, dealId, paid: sum, left: left - sum, closed, to: cur.blogger_id, video: cur.id, short: due - sum };
+      return { ok: true, dealId, paid: sum, left: left - sum, closed, to: cur.blogger_id, video: cur.id,
+        short: due - sum, views: cur.paid_views };
     });
     if (r.status !== 200) {
       console.error('[видео] выплата не прошла:', row.id, r.status, r.body && r.body.error);
@@ -5674,8 +6491,10 @@ function vidSettle(row, now) {
         + ', оффер «' + name + '»\n' + String((r.body && r.body.error) || r.status), 'server');
       return { state: 'fail' };
     }
+    if (r.body.repeated) return { state: 'paid', paid: 0, repeated: true };
     paid = Number(r.body.paid) || 0;
   }
+  vidBoardDrop(row.camp_id);
   const short = owe - paid;
   if (short > 0) {
     /* Денег в заморозке меньше, чем заработано. Заплаченное — уже у
@@ -5696,55 +6515,90 @@ function vidSettle(row, now) {
     } else {
       vidPayHoldSet(row, why, now, msg);
     }
-    return { state: 'held', paid, short };
+    return { state: 'held', why: 'money', paid, short };
   }
-  vidNotify(row.blogger_id, 'Выплата за видео', '«' + name + '»: начислено ' + paid + ' ₽', '/?go=tasks');
+  vidNotify(row.blogger_id, 'Видео засчитано — ' + vidNum(paid) + ' ₽ на балансе',
+    '«' + name + '»: ' + vidNum(paid) + ' ₽ за ' + vidNum(views) + ' ' + vidViewsWord(views)
+    + ' на момент проверки' + tail, '/?go=tasks');
   return { state: 'paid', paid };
 }
 
-/* Рекламодатель не ответил за VID_AUTO_ACCEPT_H часов — ролик засчитан сам.
-   Иначе молчанием можно было бы держать блогера без денег сколько угодно. */
-function vidAutoAccept(now) {
+/* После зачёта, если выплата не прошла сразу, блогеру — почему. Выплата
+   и нехватка денег пишут сами (vidSettle), «нет замера» — vidPayoutRun. */
+function vidAcceptNotify(row, res, how) {
+  if (!res || res.state !== 'held') return;
+  if (res.why !== 'risk' && res.why !== 'dispute') return;
+  const name = vidCampName(vidCamp(row.camp_id));
+  const txt = res.why === 'risk'
+    ? 'перед выплатой администратор проверит просмотры — деньги придут после его решения'
+    : 'выплата ждёт решения спора по заданию';
+  const lead = how && how !== 'owner' ? how + '. ' + txt.charAt(0).toUpperCase() + txt.slice(1) : txt;
+  vidNotify(row.blogger_id, 'Видео засчитано', '«' + name + '»: ' + lead, '/?go=tasks');
+}
+/* Зачёт не рекламодателем (авто, владелец): блогеру — одно уведомление.
+   Выплата и «ролика нет» пишут сами (с how в том же тексте), пауза по
+   накрутке и спору — vidAcceptNotify; общий текст — только когда никто
+   из них ничего не сказал. */
+function vidCountedNotify(row, res, how) {
+  const st = res && res.state;
+  if (st === 'paid' || st === 'removed') return;
+  if (st === 'held' && (res.why === 'risk' || res.why === 'dispute')) { vidAcceptNotify(row, res, how); return; }
+  const name = vidCampName(vidCamp(row.camp_id));
+  vidNotify(row.blogger_id, 'Видео засчитано', '«' + name + '»: ' + how, '/?go=tasks');
+}
+
+/* Рекламодатель не ответил за VID_AUTO_ACCEPT_H часов — ролик засчитан
+   сам и сразу оплачен. Иначе молчанием можно было бы держать блогера без
+   денег сколько угодно. */
+async function vidAutoAccept(now, count) {
   let n = 0;
   for (const r of q.vidReviewStale.all(now - VID_AUTO_ACCEPT_MS)) {
-    const e = vidEarn(r, r.views);
-    if (!q.vidAutoOk.run(now, now, now, e == null ? (r.earned || 0) : e, now, r.id).changes) continue;
+    if (!q.vidAutoOk.run(now, now, now, now, r.id).changes) continue;
     n++;
+    vidBoardDrop(r.camp_id);
     const name = vidCampName(vidCamp(r.camp_id));
     const days = Math.round(VID_AUTO_ACCEPT_MS / 864e5);
     const txt = 'Рекламодатель не ответил за ' + (days >= 1 ? days + ' ' + (days === 1 ? 'день' : days < 5 ? 'дня' : 'дней')
       : Math.round(VID_AUTO_ACCEPT_MS / 3600e3) + ' ч') + ' — видео засчитано автоматически';
-    vidNotify(r.blogger_id, 'Видео засчитано', '«' + name + '»: ' + txt, '/?go=tasks');
     vidNotify(r.owner_id, 'Видео засчитано', '«' + name + '»: ' + txt, '/?go=campaigns');
+    let s = null;
+    try { s = await vidPayout(r.id, { how: txt }); }
+    catch (e) { console.error('[видео] выплата при автозачёте упала:', (e && e.message) || e); }
+    if (count) count(s);
+    vidCountedNotify(r, s, txt);
   }
   return n;
 }
 
-/* Фоновый круг: раз в 30 минут, не больше ~200 роликов за раз. Цифры
-   освежаются раз в сутки (порог 20 часов, чтобы круг не «уезжал»), плюс
-   финальный замер у тех, чьё окно кончилось. Потом — выплаты. */
+/* Фоновый круг: раз в 30 минут. Сначала автозачёт (и выплата), потом
+   выплаты засчитанных, которые ещё ждут (старые строки окна, повтор
+   «нет замера», снятый спор), потом суточное обновление цифр: ролики на
+   проверке и оплаченные (только показ, VID_TRACK_DAYS). */
 let vidSyncBusy = false;
 async function vidSyncRound(opts) {
   if (vidSyncBusy) return { busy: true };
   vidSyncBusy = true;
   try {
+    const tally = { paid: 0, held: 0, waiting: 0, removedAtPay: 0 };
+    const count = (s) => {
+      if (!s) return;
+      if (s.state === 'paid') tally.paid++;
+      else if (s.state === 'held') { if (s.why === 'measure') tally.waiting++; else tally.held++; }
+      else if (s.state === 'removed') tally.removedAtPay++;
+    };
+    const auto = await vidAutoAccept(Date.now(), count);
+    for (const r of q.vidPayDue.all()) {
+      let s;
+      try { s = await vidPayout(r.id, {}); }
+      catch (e) { console.error('[видео] выплата упала:', (e && e.message) || e); continue; }
+      count(s);
+    }
     const now = Date.now();
-    const auto = vidAutoAccept(now);
-    const rows = q.vidDue.all(VID_WINDOW_MS, (opts && opts.force) ? 1 : 0, now - 20 * 3600 * 1000,
-      VID_WINDOW_MS, now, 200);
+    const rows = q.vidDue.all({ $track: VID_TRACK_MS, $now: now, $force: (opts && opts.force) ? 1 : 0,
+      $stale: now - 20 * 3600 * 1000, $lim: 200 });
     const res = await vidRefresh(rows, now);
     delete res.errors;
-    res.autoAccepted = auto;
-    res.paid = 0; res.held = 0; res.waiting = 0;
-    for (const r of q.vidPayDue.all(VID_WINDOW_MS, Date.now())) {
-      let s;
-      try { s = vidSettle(r, Date.now()); }
-      catch (e) { console.error('[видео] выплата упала:', (e && e.message) || e); continue; }
-      if (s.state === 'paid') res.paid++;
-      else if (s.state === 'held') res.held++;
-      else if (s.state === 'wait') res.waiting++;
-    }
-    return res;
+    return Object.assign(res, { autoAccepted: auto }, tally);
   } catch (e) {
     console.error('[видео] круг обновления упал:', (e && e.message) || e);
     return { error: String((e && e.message) || e) };
@@ -5753,6 +6607,106 @@ async function vidSyncRound(opts) {
   }
 }
 setInterval(() => { vidSyncRound().catch(() => {}); }, 30 * 60 * 1000).unref();
+
+/* ── Лидерборд и участники задания (как в More Views) ──
+   Наружу — имя из профиля, ник и аватар подтверждённого аккаунта, число
+   роликов, просмотры и выплаченное в этом задании. Номера аккаунтов,
+   почта и внешние id каналов остаются здесь: в кэше они нужны, чтобы
+   найти «моё место», но в ответ не попадают. Кэш на оффер — 60 секунд,
+   сбрасывается, когда в задании что-то поменялось. */
+const vidBoards = new Map();
+function vidBoardDrop(campId) { vidBoards.delete(String(campId)); }
+function vidPubName(s) {
+  let t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+  /* Почта вместо имени — не показываем; номер Телеграма из имени по
+     умолчанию («Пользователь 123456») — тоже. */
+  if (/[^\s@]+@[^\s@]+\.[^\s@]+/.test(t)) t = '';
+  if (/^Пользователь\s+\d+$/.test(t)) t = 'Пользователь';
+  return (t || 'Блогер').slice(0, 40);
+}
+function vidPubChan(campId, uid) {
+  const top = campId ? q.boardChan.get(String(campId), uid) : null;
+  let ch = null, platform = '';
+  if (top) {
+    platform = top.platform || 'tiktok';
+    ch = q.channelOf.get(uid, platform, String(top.external_id));
+  } else {
+    ch = q.mainChan.get(uid);
+    platform = ch ? ch.platform : '';
+  }
+  let nick = vidNick(ch && ch.username);
+  if (!nick && top && platform === 'tiktok') nick = vidNick(top.handle);
+  return {
+    handle: nick ? '@' + nick : '',
+    platform: platform === 'tiktok' || platform === 'youtube' ? platform : '',
+    avatar: vidHttps(ch && ch.avatar),
+  };
+}
+function vidBoardAgg(campId) {
+  const key = String(campId);
+  const now = Date.now();
+  const hit = vidBoards.get(key);
+  if (hit && now - hit.at < 60000) return hit;
+  const ranked = q.boardRows.all(key).map((r, i) => ({
+    uid: r.uid, rank: i + 1, name: r.name, firstAt: Number(r.first_at) || 0,
+    videos: Number(r.videos) || 0, views: Number(r.views) || 0, earned: Number(r.earned) || 0,
+  }));
+  const d = q.deal.get('camp:' + key);
+  const reserved = vidReserved(key);
+  const agg = {
+    at: now, key, ranked, sorted: {}, byUid: new Map(ranked.map((r) => [r.uid, r])), pages: new Map(),
+    members: Number((q.tmCount.get(key) || {}).n) || 0,
+    videos: ranked.reduce((s, r) => s + r.videos, 0),
+    views: ranked.reduce((s, r) => s + r.views, 0),
+    budget: d ? d.amount : 0, paid: d ? d.paid : 0, reserved,
+    left: d && d.status === 'held' ? Math.max(0, d.amount - d.paid - reserved) : 0,
+  };
+  vidBoards.set(key, agg);
+  if (vidBoards.size > 500) vidBoards.delete(vidBoards.keys().next().value);
+  return agg;
+}
+/* Лидерборд в нужном порядке: по просмотрам (по умолчанию) или по сумме
+   выплаты. Номера аккаунтов в строках нет (контракт v2, п. 3): для
+   кнопок «Профиль» и «Чат» — card, id открытой карточки в каталоге (её и
+   так видят все в /api/cards), а «вы» сервер отмечает сам (me). Номер
+   аккаунта получает только автор задания (uid в ответе ему) — чтобы
+   написать участнику без карточки; номера участников его роликов он и
+   так видит в /api/tasks/videos. Внутренние номера держим рядом, в uids. */
+function vidCardOf(uid) { const r = q.cardPubOf.get(uid); return r ? String(r.id) : ''; }
+function vidBoardSorted(agg, sort) {
+  if (agg.sorted[sort]) return agg.sorted[sort];
+  const list = sort === 'views' ? agg.ranked.slice() : agg.ranked.slice().sort((a, b) =>
+    (b.earned - a.earned) || (b.views - a.views) || (a.firstAt - b.firstAt) || (a.uid - b.uid));
+  const mine = new Map(list.map((r, i) => [r.uid, Object.assign({}, r, { rank: i + 1 })]));
+  const top = list.slice(0, 50);
+  const leaders = top.map((r, i) => Object.assign({ rank: i + 1, name: vidPubName(r.name) },
+    vidPubChan(agg.key, r.uid), { card: vidCardOf(r.uid), videos: r.videos, views: r.views, earned: r.earned }));
+  agg.sorted[sort] = { leaders, uids: top.map((r) => r.uid), mine };
+  return agg.sorted[sort];
+}
+function vidBoardPage(agg, campId, offset, limit) {
+  const k = offset + '|' + limit;
+  if (agg.pages.has(k)) return agg.pages.get(k);
+  const ms = q.tmList.all(String(campId), limit, offset);
+  const rows = ms.map((m, i) => {
+    const r = agg.byUid.get(m.user_id);
+    return Object.assign({ rank: offset + i + 1, name: vidPubName(m.name) }, vidPubChan(campId, m.user_id),
+      { card: vidCardOf(m.user_id), videos: r ? r.videos : 0, joinedAt: m.joined_at });
+  });
+  const page = { rows, uids: ms.map((m) => m.user_id) };
+  if (agg.pages.size < 50) agg.pages.set(k, page);
+  return page;
+}
+/* Строки наружу для того, кто спрашивает: «вы» — его строка, uid — только
+   автору задания. */
+function vidBoardOut(rows, uids, me, owner) {
+  return rows.map((x, i) => {
+    const o = Object.assign({}, x);
+    if (uids[i] === me) o.me = true;
+    if (owner) o.uid = uids[i];
+    return o;
+  });
+}
 
 /* ── Возврат от Телеграма после входа ──
    Телеграм возвращает человека с полями id, first_name, last_name,
@@ -6020,7 +6974,7 @@ async function handleVerifyCallback(req, res, url) {
   try {
     let channel;
     if (p === 'youtube') {
-      const tok = await ask(cfg.token, {
+      const tok = await ask(YT_TOKEN_URL, {
         method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           code, client_id: cfg.id, client_secret: cfg.secret,
@@ -6029,7 +6983,7 @@ async function handleVerifyCallback(req, res, url) {
       });
       if (!tok.access_token) throw new Error(tok.error_description || 'YouTube не выдал доступ');
       const me = await ask(
-        'https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true',
+        YT_API_BASE + '/youtube/v3/channels?part=snippet,statistics&mine=true',
         { headers: { Authorization: 'Bearer ' + tok.access_token } });
       const it = me.items && me.items[0];
       if (!it) throw new Error('У этого аккаунта нет канала на YouTube');
