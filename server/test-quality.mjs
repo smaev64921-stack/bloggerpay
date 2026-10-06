@@ -4,7 +4,7 @@
 
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { assess, median, quantile } = require('./quality.js');
+const { assess, assessVideo, median, quantile } = require('./quality.js');
 
 let passed = 0, failed = 0;
 function ok(c, name, extra) {
@@ -99,6 +99,32 @@ ok(strict.risk > live.risk, 'пороги настраиваются снару�
 const junk = assess({ followers: 'ой', videos: [{ views: 'нет' }, null, { views: 100 }] });
 ok(junk && junk.stats.videos === 1, 'мусорные записи отброшены', junk.stats);
 ok(assess(null).level === 'unknown', 'пустой вход не роняет');
+
+/* ── один ролик задания (assessVideo) ── */
+console.log('\nОценка ролика задания');
+const chan = { medViews: 600, followers: 2000, erLikes: 0.07, riskLevel: 'ok' };
+const vOk = assessVideo({ views: 12000, likes: 900, comments: 40, shares: 25 }, [], chan);
+ok(vOk.level === 'ok' && vOk.risk === 0, 'обычный ролик не помечен', vOk);
+ok(vOk.reasons.length === 1 && /обычно/.test(vOk.reasons[0]), 'без выдуманных претензий', vOk.reasons);
+const vViral = assessVideo({ views: 200000, likes: 16000, comments: 500, shares: 900 }, [], chan);
+ok(vViral.level === 'ok', 'вирусный ролик с лайками — не накрутка', vViral);
+const vSmall = assessVideo({ views: 1500, likes: 1, comments: 0, shares: 0 }, [], chan);
+ok(vSmall.level === 'ok', 'на полутора тысячах просмотров доли не судим', vSmall);
+const vBad = assessVideo({ views: 100000, likes: 100, comments: 0, shares: 0 }, [], chan);
+ok(vBad.level === 'bad' && vBad.risk === 100, 'сто тысяч просмотров без лайков и разговоров у канала на 600 — bad', vBad);
+ok(vBad.reasons.length === 3, 'названы все три признака', vBad.reasons);
+const vQuiet = assessVideo({ views: 8000, likes: 30, comments: 0, shares: 0 }, [], {});
+ok(vQuiet.level === 'risk' && vQuiet.risk === 60, 'мало лайков и полная тишина — risk', vQuiet);
+const days = [{ day: '2026-10-01', views: 3000, likes: 240 }, { day: '2026-10-02', views: 5000, likes: 400 }];
+const vJump = assessVideo({ views: 60000, likes: 700, comments: 30, shares: 10 }, days, {});
+ok(vJump.reasons.some((r) => /За сутки/.test(r)) && vJump.level === 'watch', 'скачок за сутки без лайков замечен', vJump);
+const vGrow = assessVideo({ views: 60000, likes: 4800, comments: 90, shares: 40 }, days, {});
+ok(!vGrow.reasons.some((r) => /За сутки/.test(r)), 'скачок вместе с лайками — не повод', vGrow.reasons);
+const vChan = assessVideo({ views: 12000, likes: 900, comments: 40, shares: 25 }, [], { riskLevel: 'bad' });
+ok(vChan.risk === 15 && /канал/.test(vChan.reasons[0]), 'плохой канал добавляет 15', vChan);
+ok(assessVideo(null, null, null).level === 'ok', 'пустой вход не роняет');
+ok(assessVideo({ views: 8000, likes: 30, comments: 0, shares: 0 }, [], {}, { vidWeightSilent: 0 }).risk === 35,
+  'пороги ролика настраиваются снаружи');
 
 console.log(`\nИтого: ${passed} ok, ${failed} FAIL\n`);
 process.exit(failed ? 1 : 0);

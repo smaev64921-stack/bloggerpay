@@ -61,6 +61,23 @@ const THRESHOLDS = {
 
   /* Потолок оценки, пока данных мало: не выносим приговор по трём роликам. */
   capWhenLowConfidence: 50,
+
+  /* ── Один ролик, привязанный к заданию (assessVideo, 06.10.2026) ──
+     Здесь уже не канал целиком, а конкретная интеграция, за которую
+     платят по просмотрам. Пороги по просмотрам — чтобы не судить ролик,
+     который только вышел: на сотне просмотров доли шумят. */
+  vidViewsForLikes: 2000,         /* с этих просмотров смотрим на долю лайков */
+  vidViewsForTalk: 5000,          /* с этих — на полную тишину без комментариев и репостов */
+  vidOverMedian: 25,              /* во столько раз больше медианы канала… */
+  vidOverFollowers: 10,           /* …и во столько раз больше подписчиков */
+  vidJumpFactor: 5,               /* суточный прирост во столько раз больше прошлого… */
+  vidJumpMin: 20000,              /* …и не меньше стольких просмотров */
+  vidJumpLikesShare: 0.3,         /* доля новых лайков ниже этой части обычной */
+  vidWeightLikes: 35,
+  vidWeightSilent: 25,
+  vidWeightOutlier: 40,
+  vidWeightJump: 40,
+  vidChannelBad: 15,              /* сам канал уже помечен «очень похоже на накрутку» */
 };
 
 function num(v) {
@@ -230,6 +247,87 @@ function assess(input, over) {
   return { risk, level, confidence, stats, reasons };
 }
 
+/* ── Оценка одного ролика задания ──
+   Зачем отдельно от assess: канал может быть живым, а конкретный ролик
+   под рекламу — докручен, потому что за него платят по просмотрам.
+   cur      — цифры ролика сейчас { views, likes, comments, shares };
+   prevDays — снимки прошлых суток [{ day, views, likes, comments, shares }];
+   channel  — база канала { medViews, followers, erLikes, riskLevel }.
+   Выход как у assess: { risk 0..100, level, reasons[] по-русски }.
+   И здесь это не приговор, а повод владельцу посмотреть самому. */
+function assessVideo(cur, prevDays, channel, over) {
+  const T = Object.assign({}, THRESHOLDS, over || {});
+  const c = cur || {};
+  const views = Math.max(0, num(c.views));
+  const likes = Math.max(0, num(c.likes));
+  const comments = Math.max(0, num(c.comments));
+  const shares = Math.max(0, num(c.shares));
+  const ch = channel || {};
+  const prev = (Array.isArray(prevDays) ? prevDays : [])
+    .filter((d) => d && Number.isFinite(Number(d.views)))
+    .slice().sort((a, b) => String(a.day || '').localeCompare(String(b.day || '')));
+  const er = views > 0 ? likes / views : 0;
+  let risk = 0;
+  const reasons = [];
+
+  /* 1. Просмотры есть, лайков нет. */
+  if (views >= T.vidViewsForLikes && er < T.erLikesDead) {
+    risk += T.vidWeightLikes;
+    reasons.push('У ролика ' + ru(views) + ' просмотров и всего ' + ru(likes) + ' лайков — '
+      + pct(er) + '%. Обычно это единицы процентов.');
+  }
+
+  /* 2. Полная тишина: ни одного комментария и репоста при заметных просмотрах. */
+  if (views >= T.vidViewsForTalk && comments === 0 && shares === 0) {
+    risk += T.vidWeightSilent;
+    reasons.push('При ' + ru(views) + ' просмотрах ни одного комментария и ни одного репоста.');
+  }
+
+  /* 3. Ролик выбивается из канала: в десятки раз больше обычного и
+        больше всей аудитории — а лайков при этом мало. Вирусный ролик
+        тоже выбивается, но его лайкают. */
+  const med = num(ch.medViews), fol = num(ch.followers);
+  if (med > 0 && fol > 0 && views > T.vidOverMedian * med && views > T.vidOverFollowers * fol
+      && er < T.erLikesLow) {
+    risk += T.vidWeightOutlier;
+    reasons.push('Ролик набрал ' + ru(views) + ' просмотров — в ' + Math.round(views / med)
+      + ' раз больше обычного для канала (медиана ' + ru(med) + ') и в ' + Math.round(views / fol)
+      + ' раз больше числа подписчиков, а лайков при этом всего ' + pct(er) + '%.');
+  }
+
+  /* 4. Скачок за сутки без лайков. Сравниваем с прошлыми сутками: живой
+        ролик, ушедший в рекомендации, приносит и лайки в своей обычной
+        доле; закупленные просмотры — нет. */
+  if (prev.length) {
+    const last = prev[prev.length - 1];
+    const before = prev.length > 1 ? prev[prev.length - 2] : null;
+    const grow = views - num(last.views);
+    const growPrev = before ? num(last.views) - num(before.views) : num(last.views);
+    const newLikes = Math.max(0, likes - num(last.likes));
+    const usual = num(last.views) > 0 ? num(last.likes) / num(last.views) : num(ch.erLikes);
+    if (grow > T.vidJumpMin && grow > T.vidJumpFactor * Math.max(1, growPrev)
+        && usual > 0 && newLikes / grow < T.vidJumpLikesShare * usual) {
+      risk += T.vidWeightJump;
+      reasons.push('За сутки +' + ru(grow) + ' просмотров — в '
+        + Math.round(grow / Math.max(1, growPrev)) + ' раз больше, чем сутками раньше, а новых лайков всего '
+        + ru(newLikes) + ' (' + pct(newLikes / grow) + '% против обычных ' + pct(usual) + '%).');
+    }
+  }
+
+  /* 5. Канал сам уже под подозрением. */
+  if (String(ch.riskLevel || '') === 'bad') {
+    risk += T.vidChannelBad;
+    reasons.push('Сам канал по своим цифрам очень похож на накрутку.');
+  }
+
+  risk = Math.max(0, Math.min(100, Math.round(risk)));
+  const level = risk <= T.levelOk ? 'ok'
+    : risk <= T.levelWatch ? 'watch'
+      : risk <= T.levelRisk ? 'risk' : 'bad';
+  if (!reasons.length) reasons.push('Цифры ролика выглядят обычно.');
+  return { risk, level, reasons };
+}
+
 const LEVEL_RU = {
   ok: 'обычный канал',
   watch: 'стоит присмотреться',
@@ -238,4 +336,4 @@ const LEVEL_RU = {
   unknown: 'данных нет',
 };
 
-module.exports = { assess, median, quantile, THRESHOLDS, LEVEL_RU };
+module.exports = { assess, assessVideo, median, quantile, THRESHOLDS, LEVEL_RU };

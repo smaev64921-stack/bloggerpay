@@ -15,8 +15,8 @@
   телефона, а её «начисления» и «блокировки» сервер не видел. Владелец
   попросил одно место и без мини-аппа — всё здесь, и всё с сервера.
 
-  Разделы: Обзор · Выплаты · Верификация · Спорные деньги · Пользователи ·
-  Каталог · Поломки · Площадки · Журнал.
+  Разделы: Обзор · Выплаты · Верификация · Спорные деньги · Видео заданий ·
+  Пользователи · Каталог · Поломки · Площадки · Журнал.
 
   Страница НЕ входит в мини-апп и не скачивается пользователям. Открывается
   по адресу /admin (или прежнему /operator). Вход — ключ владельца один
@@ -197,6 +197,65 @@
   .plat-out{white-space:pre-wrap;font-size:var(--fs-sm);line-height:1.5;margin-top:10px}
   .plat-out.good{color:var(--ok)} .plat-out.warn{color:var(--warn)}
 
+  /* ── видео заданий ──
+     Карточка в три колонки: обложка · кто и что · цифры и решение.
+     Все колонки через minmax(0,…): длинная почта или название без пробелов
+     иначе растягивают сетку, и на телефоне страница «уезжает» вбок —
+     та же ловушка, что с лентой разделов. */
+  .vlist{display:flex;flex-direction:column;gap:10px}
+  .vcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:15px;
+    display:grid;grid-template-columns:88px minmax(0,1fr) minmax(0,290px);gap:14px 18px;align-items:start}
+  .vcard.hold{border-color:rgba(255,107,107,.32)}
+  .vcover{position:relative;display:block;width:100%;aspect-ratio:9/16;border-radius:10px;overflow:hidden;background:var(--card2);border:1px solid var(--line)}
+  .vcover img{position:relative;z-index:1;width:100%;height:100%;object-fit:cover;display:block}
+  .vcover img.broken{display:none}
+  .vcover > span{position:absolute;inset:0;display:grid;place-items:center;color:var(--t3)}
+  .vmain{min-width:0;display:flex;flex-direction:column;gap:9px}
+  .vtags{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+  .vtitle{font-weight:600;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+  .vmeta{color:var(--t3);font-size:var(--fs-sm);word-break:break-word}
+  .vmeta b{color:var(--t2);font-weight:600}
+  .vppl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .vppl > div{background:var(--card2);border-radius:10px;padding:8px 10px;min-width:0}
+  .vppl i{display:block;font-style:normal;color:var(--t3);font-size:var(--fs-sm)}
+  .vppl .who span{word-break:break-all}
+  .vnote{border:1px solid color-mix(in srgb,var(--warn) 32%,transparent);background:var(--warnbg);border-radius:10px;padding:8px 11px;word-break:break-word;line-height:1.5}
+  .vnote.risk{border-color:color-mix(in srgb,var(--bad) 32%,transparent);background:var(--badbg)}
+  .vnote.calm{border-color:var(--line2);background:var(--card2)}
+  .vnote > i{display:block;font-style:normal;color:var(--t3);font-size:var(--fs-sm);margin-bottom:2px}
+  .vnote ul{margin:4px 0 0;padding-left:18px;font-size:var(--fs-sm);color:var(--t2)}
+  .vside,.vside > div{min-width:0;display:flex;flex-direction:column;gap:10px}
+  .vstats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .vstats div{background:var(--card2);border-radius:10px;padding:7px 10px;min-width:0}
+  .vstats b{display:block;font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vstats i{display:block;font-style:normal;color:var(--t3);font-size:var(--fs-sm)}
+  /* График прироста: один ряд — подписи не нужны, цифры в подсказке у
+     столбика и в таблице «По дням». Прошлые дни приглушены, последний —
+     акцентом: глазу видно, куда ролик идёт сейчас. */
+  .spark svg{display:block;width:100%;height:44px;overflow:visible}
+  .spark .b{fill:rgba(91,147,245,.38)} .spark .b.last{fill:var(--acc2)}
+  .spark .hit{fill:transparent}
+  .spark g:hover .b{fill:var(--t1)}
+  .spark p{margin:4px 0 0;color:var(--t3);font-size:var(--fs-sm)}
+  .vdays summary{cursor:pointer;color:var(--t3);font-size:var(--fs-sm);margin-top:2px}
+  .vdays summary:hover{color:var(--t1)}
+  .vdays table{margin-top:6px}
+  .vdays th,.vdays td{padding:4px 6px;font-size:var(--fs-sm);letter-spacing:0;text-transform:none}
+  .vdays td{border-bottom:1px solid var(--line)}
+  .vside .kv{font-size:var(--fs-sm)}
+  a.btn{text-decoration:none}
+  @media (max-width:900px){
+    .vcard{grid-template-columns:72px minmax(0,1fr)}
+    /* под карточкой: цифры и график слева, окно, деньги и кнопки справа —
+       во всю ширину суммы уезжали от подписей на полэкрана */
+    .vside{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 18px;align-items:start}
+  }
+  @media (max-width:560px){
+    .vcard{grid-template-columns:60px minmax(0,1fr);padding:13px;gap:12px}
+    .vppl{grid-template-columns:minmax(0,1fr)}
+    .vside{grid-template-columns:minmax(0,1fr)}
+  }
+
   .note{color:var(--t3);font-size:var(--fs-sm);margin-top:16px;line-height:1.65;max-width:78ch}
 
   /* ── боковая карточка человека ── */
@@ -331,7 +390,11 @@ function esc(s){
 function safeUrl(u){ u = String(u || ''); return /^https?:\/\//i.test(u) ? u : ''; }
 function when(s){
   if(!s) return '';
-  var d = new Date(String(s).replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(s)) ? '' : 'Z'));
+  /* Число — метка времени: у видео заданий время хранится в миллисекундах,
+     а не строкой SQLite. Секунды (меньше 1e11) переводим, чтобы не
+     получить 1970 год, если сервер когда-нибудь отдаст их. */
+  var d = typeof s === 'number' ? new Date(s < 1e11 ? s * 1000 : s)
+    : new Date(String(s).replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(s)) ? '' : 'Z'));
   if(isNaN(d)) return esc(s);
   return d.toLocaleString('ru', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' });
 }
@@ -362,6 +425,9 @@ var ICON = {
   x:'<svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>',
   copy:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
   refresh:'<svg class="i" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></svg>',
+  videos:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.3v5.4l4.6-2.7z"/></svg>',
+  pulse:'<svg class="i" viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>',
+  ext:'<svg class="i" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
 };
 
 var SECTIONS = [
@@ -369,6 +435,10 @@ var SECTIONS = [
   { id:'wd',     t:'Выплаты',        sub:'Сервер деньги не отправляет — переводите своим банком и отмечайте здесь.', badge:'wd' },
   { id:'kyc',    t:'Верификация',    sub:'Сверьте анкету с фото паспорта и селфи. Без подтверждения вывод закрыт.', badge:'kyc' },
   { id:'deals',  t:'Спорные деньги', sub:'Деньги, замороженные под сделки и бюджеты кампаний. Делить — только по спору.' },
+  /* tool — своя кнопка раздела в шапке, рядом с «Обновить»: «Обновить»
+     перечитывает нашу базу, а эта спрашивает TikTok о свежих цифрах. */
+  { id:'videos', t:'Видео заданий',  sub:'Ролики блогеров по заданиям. Возражения рекламодателей и подозрения на накрутку ждут вашего решения.', badge:'videos',
+    tool:'<button type="button" class="btn ghost sm" data-act="vidsync" title="Спросить TikTok о свежих цифрах сейчас, не дожидаясь суточного круга">' + ICON.pulse + 'Обновить данные сейчас</button>' },
   'sep',
   { id:'users',  t:'Пользователи',   sub:'Все аккаунты на сервере: баланс, проверка личности, каналы, блокировка.' },
   { id:'cards',  t:'Каталог',        sub:'Карточки блогеров в общем каталоге. Скрытая карточка пропадает у всех, но остаётся у автора.' },
@@ -474,7 +544,7 @@ function leave(){
 
 /* ─────────────────────────── меню и маршруты ─────────────────────────── */
 var SEC = 'home';
-var BADGES = { wd:'', kyc:'', errors:'' };
+var BADGES = { wd:'', kyc:'', videos:'', errors:'' };
 function paintNav(){
   $('nav').innerHTML = SECTIONS.map(function(s){
     if(s === 'sep') return '<div class="sep"></div>';
@@ -493,7 +563,7 @@ function go(id, fromHash){
   var s = secById(id);
   $('pageTitle').textContent = s.t;
   $('pageSub').textContent = s.sub;
-  $('tools').innerHTML = '<button type="button" class="btn ghost sm" data-act="reload" title="Обновить">' + ICON.refresh + 'Обновить</button>';
+  $('tools').innerHTML = (s.tool || '') + '<button type="button" class="btn ghost sm" data-act="reload" title="Обновить">' + ICON.refresh + 'Обновить</button>';
   $('view').innerHTML = '<div class="empty">Загружаем…</div>';
   paintNav();
   if(!fromHash && location.hash !== '#' + id){ try{ history.replaceState(null, '', '#' + id); }catch(e){ location.hash = id; } }
@@ -522,6 +592,7 @@ function refreshBadges(){
     OV = o;
     BADGES.wd = o.заявок_в_очереди ? String(o.заявок_в_очереди) : '';
     BADGES.kyc = o.верификаций_в_очереди ? String(o.верификаций_в_очереди) : '';
+    BADGES.videos = o.видео_на_решении ? String(o.видео_на_решении) : '';
     BADGES.errors = (o.ошибок_за_сутки && o.ошибок_за_сутки.n) ? String(o.ошибок_за_сутки.n) : '';
     paintNav();
     return o;
@@ -629,6 +700,11 @@ VIEWS.home = function(){
       + todoBtn('kyc', 'kyc', o.верификаций_в_очереди ? 'warn' : 'ok',
           o.верификаций_в_очереди ? ('Проверка личности: ' + o.верификаций_в_очереди) : 'Проверок личности нет',
           o.верификаций_в_очереди ? 'без решения вывод у людей закрыт' : 'все анкеты разобраны')
+      /* сервер без «Видео заданий» поля не пришлёт — тогда и строки нет,
+         а не ложное «всё разобрано» */
+      + (o.видео_на_решении == null ? '' : todoBtn('videos', 'videos', o.видео_на_решении ? 'warn' : 'ok',
+          o.видео_на_решении ? ('Видео ждут решения: ' + o.видео_на_решении) : 'Спорных видео нет',
+          o.видео_на_решении ? 'возражения рекламодателей и подозрения на накрутку' : 'возражений и подозрений на накрутку нет'))
       + todoBtn('deals', 'deals', deals.length ? '' : 'ok',
           deals.length ? ('Заморожено: ' + deals.length + ' ' + plural(deals.length, 'сделка', 'сделки', 'сделок')) : 'Замороженных денег нет',
           deals.length ? ('остаток ' + money(held) + ' — вмешиваться только по спору') : 'все сделки закрыты')
@@ -752,6 +828,250 @@ VIEWS.deals = function(){
       + 'Для бюджета кампании без назначенного исполнителя можно только вернуть остаток заказчику — и это закроет бюджет для всех блогеров кампании. Решение необратимо.</p>';
   });
 };
+
+/* ── Видео заданий ──
+   Блогер привязывает ролик из своего подтверждённого TikTok, рекламодатель
+   проверяет интеграцию. Сюда приходит то, что рекламодатель вернул с
+   причиной, и ролики с признаками накрутки: их выплата ждёт владельца.
+   Цифры ролика сервер берёт у TikTok сам — здесь их только показываем. */
+var VID = { tab:'queue', sig:'', covers:{}, open:{} };
+var VID_TABS = [['queue','На решении'],['rejected','Отклонены рекламодателем'],['risk','Подозрение на накрутку'],['active','Засчитаны'],['all','Все']];
+var VID_EMPTY = {
+  queue:'Решать нечего: возражений рекламодателей и подозрений на накрутку нет',
+  rejected:'Рекламодатели ничего не вернули',
+  risk:'Подозрений на накрутку нет',
+  active:'Засчитанных видео сейчас нет',
+  all:'Видео к заданиям пока никто не привязал',
+};
+/* статус строки → [надпись, класс .st из уже готовых цветов] */
+var VID_ST = {
+  review:['Ждёт рекламодателя','processing'], active:['Засчитано · считаем','approved'],
+  rejected:['Вернул рекламодатель','queued'], declined:['Не засчитано','off'],
+  paid:['Выплачено','paid'], removed:['Удалено из TikTok','off'], revoked:['Доступ отозван','off'],
+};
+/* Уровни — те же, что в quality.js (LEVEL_RU); для значка — короче.
+   [значок, класс .st, полная фраза, класс плашки с причинами] */
+var VID_RISK = {
+  ok:['цифры обычные','approved','обычные цифры для живого ролика',''],
+  watch:['присмотреться','queued','стоит присмотреться','calm'],
+  risk:['риск накрутки','blocked','много несовпадений','risk'],
+  bad:['накрутка','blocked','очень похоже на накрутку','risk'],
+};
+function vidNum(n){ return (Math.round(Number(n) || 0)).toLocaleString('ru'); }
+function vidDur(sec){ sec = Math.round(Number(sec) || 0); return sec ? Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2) : ''; }
+function vidDay(d){ var m = /^\d{4}-(\d\d)-(\d\d)$/.exec(String(d || '')); return m ? m[2] + '.' + m[1] : esc(d); }
+/* Адрес плеера собираем сами из номера ролика (только цифры): ссылку
+   из чужих данных в href без проверки не ставим. */
+function vidPlayer(v){
+  if(/^\d{5,25}$/.test(String(v.videoId || ''))) return 'https://www.tiktok.com/player/v1/' + v.videoId;
+  return /^https:\/\/www\.tiktok\.com\//.test(String(v.player || '')) ? v.player : '';
+}
+function vidWhy(w){
+  if(Array.isArray(w)) return w;
+  if(!w) return [];
+  try{ var a = JSON.parse(w); return Array.isArray(a) ? a : [String(w)]; }catch(e){ return [String(w)]; }
+}
+function vidHist(hist, desc){
+  return (hist || []).filter(function(x){ return x && x.day; }).slice().sort(function(a, b){
+    var r = a.day < b.day ? -1 : a.day > b.day ? 1 : 0; return desc ? -r : r; });
+}
+/* Прирост просмотров за сутки. В снимке дня — накопленные цифры, поэтому
+   столбик — разница с прошлым снимком; пропущенный день (сервер не
+   достучался) честно складывается в следующий столбик. Один ряд — без
+   легенды: цифры в подсказке у столбика и в таблице «По дням». */
+function vidSpark(hist){
+  var h = vidHist(hist);
+  if(h.length < 2) return '<div class="spark"><p>' + (h.length ? 'График прироста появится после второго замера' : 'Замеров ещё не было') + '</p></div>';
+  var pts = [];
+  for(var i = 1; i < h.length; i++) pts.push({ day:h[i].day, gain:Math.max(0, (Number(h[i].views) || 0) - (Number(h[i - 1].views) || 0)) });
+  pts = pts.slice(-14);
+  var W = 280, H = 44, gap = 2, n = pts.length;
+  var bw = Math.min(26, (W - gap * (n - 1)) / n), x0 = W - (bw * n + gap * (n - 1));   /* к правому краю: последний день — справа */
+  var peak = pts.reduce(function(a, p){ return p.gain > a.gain ? p : a; }, pts[0]);
+  var max = peak.gain || 1;
+  var bars = pts.map(function(p, k){
+    var x = x0 + k * (bw + gap), bh = Math.max(2, Math.round(p.gain / max * H));
+    return '<g><title>' + vidDay(p.day) + ': +' + vidNum(p.gain) + ' просмотров</title>'
+      + '<rect class="hit" x="' + (x - gap / 2).toFixed(1) + '" y="0" width="' + (bw + gap).toFixed(1) + '" height="' + H + '"/>'
+      + '<rect class="b' + (k === n - 1 ? ' last' : '') + '" x="' + x.toFixed(1) + '" y="' + (H - bh) + '" width="' + bw.toFixed(1) + '" height="' + bh + '" rx="1.5"/></g>';
+  }).join('');
+  return '<div class="spark"><svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMaxYMax meet" role="img" aria-label="Прирост просмотров за сутки">' + bars + '</svg>'
+    + '<p>Прирост просмотров за сутки · пик +' + vidNum(peak.gain) + ' (' + vidDay(peak.day) + ')</p></div>';
+}
+function vidDays(v){
+  var h = vidHist(v.history, true);
+  if(!h.length) return '';
+  return '<details class="vdays" data-vid="' + Number(v.id) + '"' + (VID.open[v.id] ? ' open' : '') + '><summary>По дням · ' + h.length + '</summary>'
+    + '<table><thead><tr><th>День</th><th class="num">Просм.</th><th class="num">Лайки</th><th class="num">Комм.</th><th class="num">Репосты</th></tr></thead><tbody>'
+    + h.map(function(x){
+        return '<tr><td>' + vidDay(x.day) + '</td><td class="num">' + vidNum(x.views) + '</td><td class="num">' + vidNum(x.likes) + '</td>'
+          + '<td class="num">' + vidNum(x.comments) + '</td><td class="num">' + vidNum(x.shares) + '</td></tr>';
+      }).join('') + '</tbody></table></details>';
+}
+function vidWho(role, id, name, email, extra){
+  var inner = '<b>' + esc(name || (id ? 'id ' + id : '—')) + '</b><span>' + esc(email || '') + '</span>';
+  return '<div><i>' + role + '</i>'
+    + (Number(id) ? '<button type="button" class="linkish who" style="display:block;max-width:100%" data-user="' + Number(id) + '">' + inner + '</button>' : '<div class="who">' + inner + '</div>')
+    + (extra || '') + '</div>';
+}
+function vidCard(v){
+  /* Задержка за накрутку что-то значит, пока выплаты не было: у отклонённого
+     или уже закрытого видео флаг мог остаться, но решать там нечего. */
+  var live = v.status === 'review' || v.status === 'active' || v.status === 'rejected';
+  /* задержка — за накрутку (riskHold) или по деньгам (payHold: не хватило
+     бюджета, нет финального замера) */
+  var id = Number(v.id), st = VID_ST[v.status] || [v.status || '—', 'off'], rk = VID_RISK[v.riskLevel],
+      hold = live && (!!Number(v.riskHold) || !!v.payHold);
+  var player = vidPlayer(v), orig = safeUrl(v.url), handle = String(v.handle || '').replace(/^@/, '');
+  var name = v.title ? String(v.title).slice(0, 60) : (handle ? '@' + handle : 'видео № ' + id);
+  var cover = VID.covers[id] || safeUrl(v.cover);
+  if(cover) VID.covers[id] = cover;
+  var now = Date.now(), wEnd = Number(v.windowEndsAt) || 0;
+
+  var tags = '<span class="st ' + st[1] + '">' + esc(st[0]) + '</span>'
+    + (rk ? '<span class="st ' + rk[1] + '">' + esc(rk[0]) + (v.riskLevel !== 'ok' && v.risk != null ? ' · ' + Number(v.risk) : '') + '</span>' : '')
+    + (hold ? '<span class="st blocked">выплата задержана</span>' : '')
+    + '<span class="mute">№ ' + id + '</span>';
+  var meta = [handle ? '<b>@' + esc(handle) + '</b>' : '', v.postedAt ? 'опубликовано ' + when(v.postedAt) : '', vidDur(v.duration)]
+    .filter(Boolean).join(' · ');
+
+  var chan = v.channelTitle || v.channelRiskLevel
+    ? '<div class="vmeta" style="margin-top:3px">TikTok' + (v.channelTitle ? ' · ' + esc(v.channelTitle) : '')
+      + (VID_RISK[v.channelRiskLevel] ? ' · канал: <span' + (/^(risk|bad)$/.test(v.channelRiskLevel) ? ' style="color:var(--bad)"' : '') + '>'
+        + esc(VID_RISK[v.channelRiskLevel][2]) + '</span>' : '') + '</div>'
+    : '';
+
+  var notes = '';
+  if(v.reviewNote) notes += '<div class="vnote"><i>Рекламодатель вернул видео' + (v.reviewedAt ? ' · ' + when(v.reviewedAt) : '') + '</i>' + esc(v.reviewNote) + '</div>';
+  var why = vidWhy(v.riskWhy);
+  if(rk && v.riskLevel !== 'ok' && (why.length || hold)){
+    notes += '<div class="vnote ' + rk[3] + '"><i>Оценка накрутки' + (v.risk != null ? ': ' + Number(v.risk) + ' из 100' : '') + ' — ' + esc(rk[2])
+      + (hold ? ' · выплата ждёт вашего решения' : '') + '</i>'
+      + (why.length ? '<ul>' + why.map(function(r){ return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>' : '') + '</div>';
+  }
+  if(v.payHold && v.holdReason) notes += '<div class="vnote risk"><i>Выплата задержана</i>' + esc(v.holdReason) + '</div>';
+  if(v.disputeHeld) notes += '<div class="vnote"><i>Открыт спор по заданию</i>Выплата за видео ждёт решения арбитра — раздел «Спорные деньги».</div>';
+  if(v.status === 'revoked') notes += '<div class="vnote calm"><i>Доступ к TikTok снят</i>Блогер отвязал канал или он пропал. «Засчитать» вернёт видео в подсчёт с последними цифрами.</div>';
+  if(v.decision) notes += '<div class="vnote calm"><i>' + (v.decision === 'auto' ? 'Рекламодатель не ответил за 3 дня' : 'Решение владельца') + (v.decidedAt ? ' · ' + when(v.decidedAt) : '') + '</i>'
+    + '<b>' + (v.decision === 'count' ? 'Засчитать' : v.decision === 'decline' ? 'Не засчитывать' : v.decision === 'auto' ? 'Засчитано автоматически' : esc(v.decision)) + '</b>'
+    + (v.decisionNote ? ' — ' + esc(v.decisionNote) : '') + '</div>';
+
+  var win = wEnd ? (wEnd > now ? 'до ' + when(wEnd) : 'закрылось ' + when(wEnd))
+    : (v.status === 'review' || v.status === 'rejected' ? 'откроется после зачёта' : '—');
+  var kv = '<div class="kv"><span>Окно подсчёта</span><b>' + win + '</b>'
+    + '<span>Начислено</span><b class="money">' + money(v.earned) + '</b>'
+    + '<span>Выплачено</span><b class="money">' + money(v.paid) + '</b>'
+    + (v.paidAt ? '<span>Дата выплаты</span><b>' + when(v.paidAt) + '</b>' : '') + '</div>';
+
+  /* Кнопки — только там, где решение что-то меняет: «засчитать» из
+     возражения или снять задержку за накрутку; «не засчитывать» — пока
+     выплаты не было. Видео, которое ждёт рекламодателя без подозрений, —
+     его ход, не наш. */
+  var canCount = v.status === 'rejected' || v.status === 'revoked' || hold;
+  var canDecline = live && (v.status !== 'review' || hold);
+  var data = ' data-vid="' + id + '" data-st="' + esc(v.status) + '" data-hold="' + (hold ? 1 : 0) + '" data-name="' + esc(name) + '"';
+  var acts = (canCount || canDecline) ? '<div class="acts">'
+    + (canCount ? '<button type="button" class="btn ok sm" data-viddo="count"' + data + '>Засчитать</button>' : '')
+    + (canDecline ? '<button type="button" class="btn bad sm" data-viddo="decline"' + data + '>Не засчитывать</button>' : '') + '</div>' : '';
+  var links = '<div class="acts">'
+    + (player ? '<a class="btn ghost sm" href="' + esc(player) + '" target="_blank" rel="noopener noreferrer">' + ICON.ext + 'Открыть видео</a>' : '')
+    + (orig ? '<a class="btn ghost sm" href="' + esc(orig) + '" target="_blank" rel="noopener noreferrer" title="' + esc(orig) + '">Ссылка блогера</a>' : '') + '</div>';
+
+  return '<article class="vcard' + (hold ? ' hold' : '') + '">'
+    + '<a class="vcover"' + (player ? ' href="' + esc(player) + '" target="_blank" rel="noopener noreferrer"' : '') + ' aria-label="Открыть видео">'
+    + '<span>' + ICON.videos + '</span>'
+    + (cover ? '<img class="vimg" data-vid="' + id + '" src="' + esc(cover) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '') + '</a>'
+    + '<div class="vmain"><div class="vtags">' + tags + '</div>'
+    + '<div><div class="vtitle">' + esc(v.title || 'Без подписи') + '</div>' + (meta ? '<div class="vmeta">' + meta + '</div>' : '') + '</div>'
+    + '<div class="vmeta">Задание: <b>' + esc(v.campName || '—') + '</b>' + (v.campId ? ' · <span class="req" style="white-space:nowrap">' + esc(v.campId) + '</span>' : '') + '</div>'
+    + '<div class="vppl">' + vidWho('Рекламодатель', v.ownerId, v.ownerName, v.ownerEmail, '')
+    + vidWho('Блогер', v.bloggerId, v.bloggerName, v.bloggerEmail, chan) + '</div>'
+    + notes + '</div>'
+    + '<div class="vside"><div><div class="vstats">'
+    + '<div><b>' + vidNum(v.views) + '</b><i>просмотры</i></div><div><b>' + vidNum(v.likes) + '</b><i>лайки</i></div>'
+    + '<div><b>' + vidNum(v.comments) + '</b><i>комментарии</i></div><div><b>' + vidNum(v.shares) + '</b><i>репосты</i></div></div>'
+    + '<div class="vmeta">' + (v.statsAt ? 'цифры TikTok на ' + when(v.statsAt) : 'цифр от TikTok ещё нет') + '</div>'
+    + vidSpark(v.history) + vidDays(v) + '</div>'
+    + '<div>' + kv + acts + links + '</div></div></article>';
+}
+VIEWS.videos = function(first, seq){
+  var tab = VID.tab;
+  return api('GET', '/api/admin/task-videos?status=' + encodeURIComponent(tab)).then(function(j){
+    if(SEC !== 'videos' || seq !== loadSeq || tab !== VID.tab) return;
+    var rows = j.videos || [];
+    /* Фоновый тик раз в 20 секунд: ничего не поменялось — не трогаем
+       страницу, иначе мигают обложки и сбивается прокрутка. Адрес обложки
+       в сравнение не берём: TikTok подписывает его, и он меняется сам. */
+    var sig = tab + '|' + JSON.stringify(rows, function(k, val){ return k === 'cover' ? undefined : val; });
+    if(!first && sig === VID.sig && $('vidList')) return;
+    VID.sig = sig;
+    var chips = '<div class="chips">' + VID_TABS.map(function(t){
+      return '<button type="button" class="chip' + (t[0] === VID.tab ? ' on' : '') + '" data-vidtab="' + t[0] + '">' + t[1] + '</button>'; }).join('')
+      + '<span class="mute" style="margin-left:auto;align-self:center">' + rows.length + ' видео</span></div>';
+    $('view').innerHTML = chips
+      + (!rows.length ? '<div class="box" id="vidList"><div class="empty">' + esc(VID_EMPTY[tab] || 'Здесь пусто') + '</div></div>'
+        : '<div class="vlist" id="vidList">' + rows.map(vidCard).join('') + '</div>')
+      + '<p class="note">Блогер привязывает ролик из своего подтверждённого TikTok, рекламодатель проверяет интеграцию. '
+      + 'Сюда приходит то, что рекламодатель <b>вернул с причиной</b>, и ролики с <b>признаками накрутки</b> — их выплата ждёт вашего решения. '
+      + '<b>Засчитать</b> — снять задержку и считать просмотры; выплату сервер сделает сам в конце окна подсчёта. '
+      + '<b>Не засчитывать</b> — выплаты по видео не будет. Причину решения увидят блогер и рекламодатель. '
+      + 'Цифры сервер берёт у TikTok раз в сутки; «Обновить данные сейчас» спрашивает площадку сразу.</p>';
+  });
+};
+function vidDecide(t){
+  var ds = t.dataset, id = Number(ds.vid), count = ds.viddo === 'count', hold = ds.hold === '1', from = ds.st;
+  var who = '<b>' + esc(ds.name) + '</b>';
+  var html = !count ? 'Не засчитывать ' + who + '?\nВыплаты по этому видео не будет — решение окончательное.'
+    : from === 'rejected' ? 'Засчитать ' + who + ' вопреки возражению рекламодателя?\nНачнётся окно подсчёта просмотров; в конце окна сервер сам выплатит блогеру из бюджета задания.'
+      + (hold ? '\nЗадержка выплаты из-за подозрения на накрутку тоже снимется.' : '')
+    : from === 'review' ? 'Снять подозрение на накрутку с ' + who + '?\nВидео всё ещё ждёт проверки рекламодателем; после его «всё верно» выплата пойдёт как обычно.'
+    : 'Снять подозрение на накрутку с ' + who + '?\nВыплата пройдёт как обычно — в конце окна подсчёта, а если окно уже закрылось, то в ближайший круг обновления.';
+  return ask({
+    title: count ? 'Засчитать видео' : 'Не засчитывать видео',
+    html: html + '\n\nПричину решения увидят блогер и рекламодатель.',
+    input:'area', required:'Напишите причину решения',
+    placeholder: count ? 'Например: реклама в видео есть, условия задания выполнены' : 'Например: рекламы из задания в видео нет',
+    sugg: count ? ['Реклама в видео есть, условия задания выполнены', 'Претензия рекламодателя не подтвердилась', 'Рост просмотров естественный — ролик попал в рекомендации']
+                : ['Рекламы из задания в видео нет', 'Видео не соответствует заданию', 'Нет маркировки рекламы', 'Накрутка просмотров'],
+    check: function(val){ return val.length < 5 ? 'Напишите чуть подробнее — это прочтут обе стороны' : val.length > 500 ? 'Не длиннее 500 знаков' : ''; },
+    ok: count ? 'Засчитать' : 'Не засчитывать', okClass: count ? 'ok' : '', danger: !count,
+  }).then(function(r){
+    if(!r.ok) return;
+    t.disabled = true;
+    return api('POST', '/api/admin/task-videos/decide', { id: id, decision: count ? 'count' : 'decline', note: r.value })
+      .then(function(){ after(count ? 'Засчитано — блогер и рекламодатель получат уведомление' : 'Не засчитано — обе стороны получат уведомление'); });
+  });
+}
+/* Ответ ручного круга: какие числа сервер вернёт, заранее не знаем —
+   показываем знакомые, остальное не выдумываем. */
+function vidSyncText(j){
+  if(j && j.busy) return 'Сервер уже обновляет данные — загляните через минуту';
+  var parts = [];
+  [['checked','проверено'],['updated','обновлено'],['removed','удалено'],['paid','выплачено'],['held','задержано']].forEach(function(p){
+    if(j && typeof j[p[0]] === 'number') parts.push(p[1] + ' ' + j[p[0]]);
+  });
+  return 'Данные обновлены' + (parts.length ? ': ' + parts.join(', ') : '');
+}
+function vidSync(t){
+  if(t.disabled) return;
+  var label = t.innerHTML;
+  t.disabled = true; t.innerHTML = ICON.pulse + 'Спрашиваем TikTok…';
+  api('POST', '/api/admin/task-videos/sync', {})
+    .then(function(j){ VID.sig = ''; after(vidSyncText(j)); })
+    .catch(function(er){ say(er.message, true); })
+    .then(function(){ t.disabled = false; t.innerHTML = label; });
+}
+/* Обложка с TikTok могла протухнуть (адрес подписан на время): прячем
+   картинку, остаётся значок, а при следующей перерисовке берём свежий
+   адрес с сервера. error и toggle не всплывают — ловим на погружении. */
+document.addEventListener('error', function(e){
+  var im = e.target;
+  if(im && im.tagName === 'IMG' && im.classList.contains('vimg')){ im.classList.add('broken'); delete VID.covers[im.getAttribute('data-vid')]; }
+}, true);
+document.addEventListener('toggle', function(e){
+  var d = e.target;
+  if(d && d.classList && d.classList.contains('vdays')) VID.open[d.getAttribute('data-vid')] = d.open;
+}, true);
 
 /* ── Пользователи ── */
 var U = { q:'', f:'', rows:[], total:0, offset:0, seq:0 };
@@ -946,6 +1266,9 @@ var LOG_RU = {
   'kyc-approve':'Личность подтверждена', 'kyc-reject':'Проверка личности отклонена', 'settle':'Спор решён',
   'card-hide':'Карточка снята с витрины', 'card-show':'Карточка возвращена в каталог', 'channel-unlink':'Канал отвязан',
   'user-block':'Пользователь заблокирован', 'user-unblock':'Пользователь разблокирован',
+  /* имена действий по видео заданий — в духе остальных («что-сделано»);
+     незнакомое имя журнал всё равно покажет как есть */
+  'video-count':'Видео засчитано', 'video-decline':'Видео не засчитано', 'video-sync':'Данные видео обновлены вручную',
 };
 VIEWS.log = function(){
   return api('GET', '/api/admin/log?limit=300').then(function(j){
@@ -1117,6 +1440,9 @@ document.addEventListener('click', function(e){
   if(ds.wdtab !== undefined){ WD_TAB = ds.wdtab; load(true); return; }
   if(ds.kyctab !== undefined){ KYC_TAB = ds.kyctab; load(true); return; }
   if(ds.errdays){ ERR_DAYS = Number(ds.errdays) || 7; load(true); return; }
+  if(ds.vidtab !== undefined){ VID.tab = ds.vidtab; load(true); return; }
+  if(ds.act === 'vidsync'){ vidSync(t); return; }
+  if(ds.viddo){ vidDecide(t).catch(function(er){ say(er.message, true); t.disabled = false; after(); }); return; }
   if(ds.ufilter !== undefined){ U.f = ds.ufilter; Array.prototype.forEach.call(document.querySelectorAll('[data-ufilter]'), function(c){ c.classList.toggle('on', c === t); });
     usersFetch(true).then(paintUsers).catch(function(er){ say(er.message, true); }); return; }
   if(ds.cfilter !== undefined){ C.f = ds.cfilter; Array.prototype.forEach.call(document.querySelectorAll('[data-cfilter]'), function(c){ c.classList.toggle('on', c === t); }); paintCards(); return; }
