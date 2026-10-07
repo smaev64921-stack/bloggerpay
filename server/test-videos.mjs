@@ -605,8 +605,8 @@ try {
   ok(plain.status === 400 && plain.body.code === 'bad_url', 'bad_url: только https', plain.body);
   const vk = await bind(A, 'main', 'https://vk.com/video-1_2');
   ok(vk.status === 400 && vk.body.code === 'bad_url', 'bad_url: не TikTok и не YouTube', vk.body);
-  const ag = await bind(A, 'main', link('blogera', ID.A1), false);
-  ok(ag.status === 400 && ag.body.code === 'agree' && /реклама из задания/.test(ag.body.error), 'agree: без галочки нельзя', ag.body);
+  const ag = await bind(A, 'нет-такого', link('blogera', ID.A1), false);
+  ok(ag.status === 404 && ag.body.code === 'no_camp', 'галочки «есть реклама» больше нет — без неё сервер не отказывает', ag.body);
   const nc = await bind(A, 'нет-такого', link('blogera', ID.A1));
   ok(nc.status === 404 && nc.body.code === 'no_camp' && nc.body.error === 'Задание не найдено', 'no_camp', nc.body);
   const cl = await bind(A, 'paused', link('blogera', ID.A1));

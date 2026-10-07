@@ -93197,8 +93197,6 @@ html body .vb-card:focus,html body .vb-card:focus-visible,html body .vb-dd-menu:
 .vb-warn svg{flex:none;width:20px;height:20px;color:#fbbf24;margin-top:1px}
 .vb-warn b{display:block;font-size:13.5px;font-weight:800;color:#fde2b3;line-height:1.35}
 .vb-warn span{display:block;font-size:12.5px;line-height:1.45;color:#d9c39b;margin-top:3px}
-.vb-agree{display:flex;align-items:flex-start;gap:11px;margin-top:12px;padding:4px 0;min-height:36px;cursor:pointer;font-size:14px;line-height:1.4;color:#d6dbe5;-webkit-tap-highlight-color:transparent}
-.vb-agree input{width:22px;height:22px;margin:0;flex:none;accent-color:#2f6ce0}
 .vb-btns{display:flex;gap:8px;margin-top:16px}
 .vb-btns .vb-go{margin-top:0;flex:1;min-width:0}
 .vb-btns .vb-go.ghost{flex:0 0 36%}
@@ -94063,7 +94061,6 @@ window.bpVbOpen = function(campId, opts){
     return;
   }
   openSheet(s, formHtml(c, opts.url || ''), 'Загрузка видео');
-  if(opts.agree){ var ag = $('vbAgree'); if(ag) ag.checked = true; }
   if(B.all) pickInitial(opts.prefer);
   paintAcc(); validate();
   fetchAcc(opts.prefer);
@@ -94110,7 +94107,6 @@ function formHtml(c, url){
     + '<div id="vbFail"></div>'
     + '<div class="vb-warn">' + WARN + '<div><b>Видео должно быть с рекламной интеграцией этого задания</b>'
     + '<span>«' + esc(nameOf(c)) + '». Рекламодатель проверит ролик: реклама, маркировка erid и условия задания.</span></div></div>'
-    + '<label class="vb-agree"><input type="checkbox" id="vbAgree"><span>В видео есть реклама из этого задания</span></label>'
     + '<div class="vb-btns"><button type="button" class="vb-go ghost" data-vb="close">Закрыть</button>'
     + '<button type="button" class="vb-go" id="vbGo" data-vb="send" disabled><span class="lbl">Отправить</span></button></div>'
     + (isMixed(c) && typeof window.__bpVbOrigSubmit === 'function' ? '<div class="vb-alt">Публикация не в TikTok и не в YouTube? <button type="button" class="vb-linkbtn" data-vb="old">Сдать по ссылке</button></div>' : '');
@@ -94143,7 +94139,7 @@ function hintBox(text, kind, act, lbl){
 }
 function validate(){
   if(!B) return;
-  var c = camp(B.campId), inp = $('vbUrl'), go = $('vbGo'), ag = $('vbAgree'), fld = $('vbFld'); if(!inp || !go) return;
+  var c = camp(B.campId), inp = $('vbUrl'), go = $('vbGo'), fld = $('vbFld'); if(!inp || !go) return;
   /* идёт проверка — подпись полная здесь, в кнопке только «Проверяем…» */
   if(B.busy){ var ba = selAcc(); hintBox('Проверяем видео на аккаунте' + (ba ? ' ' + accName(ba) : '') + '…', 'info', '', ''); return; }
   var al = allowed(c), li = linkInfo(inp.value), a = selAcc(), list = accs();
@@ -94188,7 +94184,7 @@ function validate(){
   var ph = a ? (a.platform === 'youtube' ? 'youtube.com/shorts/…' : 'tiktok.com/@ник/video/…') : 'Вставьте ссылку';
   if(inp.placeholder !== ph) inp.placeholder = ph;
   if(!B.busy){
-    var dis = !!((B.loading && !B.all) || !li || !li.url || kind === 'bad' || !a || !a.ready || !(ag && ag.checked));
+    var dis = !!((B.loading && !B.all) || !li || !li.url || kind === 'bad' || !a || !a.ready);
     if(go.disabled !== dis) go.disabled = dis;
   }
 }
@@ -94298,8 +94294,8 @@ function selectAcc(key){
    иначе браузер его заблокирует; после подтверждения окно загрузки
    вернётся само (bpAbcAfterVerify) */
 function connect(p, cid){
-  var inp = $('vbUrl'), ag = $('vbAgree');
-  var rs = { c:cid || (B && B.campId), u:inp ? inp.value : '', p:p, at:Date.now(), prev:((B && B.all) || []).map(accKey), ag:!!(ag && ag.checked) };
+  var inp = $('vbUrl');
+  var rs = { c:cid || (B && B.campId), u:inp ? inp.value : '', p:p, at:Date.now(), prev:((B && B.all) || []).map(accKey) };
   if(rs.c){ try{ sessionStorage.setItem('bpvbResume', JSON.stringify(rs)); }catch(e){} }
   closeMenu(true); closeSheet($('bpVbSheet'));
   try{ if(typeof window.bpVerifyOwn === 'function') window.bpVerifyOwn(p); else if(typeof goTo === 'function') goTo('profile'); }catch(err){ E(err); }
@@ -94313,7 +94309,7 @@ function connect(p, cid){
       var rs = JSON.parse(sessionStorage.getItem('bpvbResume') || 'null');
       if(rs && rs.c && Date.now() - num(rs.at) < 15 * 60000 && VIDP.indexOf(pk(pid)) >= 0){
         sessionStorage.removeItem('bpvbResume');
-        setTimeout(function(){ window.bpVbOpen(rs.c, { url:rs.u, agree:rs.ag, prefer:{ p:pk(pid), prev:rs.prev || [] } }); }, 450);
+        setTimeout(function(){ window.bpVbOpen(rs.c, { url:rs.u, prefer:{ p:pk(pid), prev:rs.prev || [] } }); }, 450);
       }
     }catch(e){ E(e); }
     return r;
@@ -94453,7 +94449,6 @@ document.addEventListener('input', function(e){
   if(!B || !e.target) return;
   if(e.target.id === 'vbUrl'){ B.touched = true; clearFail(); validate(); }
 }, false);
-document.addEventListener('change', function(e){ if(B && e.target && e.target.id === 'vbAgree') validate(); }, false);
 /* окно aria-modal: Tab ходит по кругу внутри карточки и не уводит фокус
    на страницу под окном (меню аккаунтов закрывает себя само — menuKey) */
 function trapTab(e){

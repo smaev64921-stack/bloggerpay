@@ -4504,7 +4504,8 @@ const routes = {
        это не «не ваш ролик», а промах в окне: говорим прямо, что не так. */
     const want = body.platform == null || body.platform === '' ? '' : vidPlatNorm(body.platform);
     if ((want === 'tiktok' || want === 'youtube') && want !== p) return vidFail('wrong_link', { p, other: want });
-    if (body.agree !== true) return vidFail('agree');
+    /* Галочку «в видео есть реклама» владелец убрал (07.10): блок с
+       предупреждением в окне остался, интеграцию проверяет рекламодатель. */
     const campId = String(body.campId == null ? '' : body.campId).slice(0, 80);
     const ci = campId ? vidCamp(campId) : null;
     if (!ci) return vidFail('no_camp');
