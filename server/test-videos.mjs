@@ -1,10 +1,12 @@
-/* «Загрузить видео» — механика v2 (контракт — server/VIDEO-SPEC.md, раздел 10).
+/* «Загрузить видео» — механика v3 (контракт — server/VIDEO-SPEC.md, раздел 11).
 
-   Блогер загружает ролик со своего подтверждённого TikTok или YouTube,
-   сервер сам берёт цифры у площадки и резервирует под ролик оценку из
-   бюджета; рекламодатель проверяет интеграцию, и засчитанный ролик
-   оплачивается СРАЗУ — по свежему замеру, один раз. Владелец решает
-   спорное. Лидерборд и участники задания — /api/tasks/board.
+   Блогер загружает ролик со своего подтверждённого TikTok или YouTube
+   сразу после публикации — с любым числом просмотров, хоть с нулём.
+   Сервер сам берёт цифры у площадки и резервирует под ролик оценку из
+   бюджета; рекламодатель проверяет интеграцию; засчитанный ролик 30 суток
+   считается: раз в сутки свежий замер и прибавка (начислено − выплачено)
+   до максимума за ролик. Владелец решает спорное. Лидерборд и участники
+   задания — /api/tasks/board.
 
    Настоящие площадки не нужны: поднимаем поддельный TikTok (8111) и
    поддельный Google (8112) и подставляем их в TT_* и YT_API_BASE /
@@ -16,6 +18,12 @@
 
    Основной сервер (8110) — без YT_API_KEY: YouTube спрашивается доступом
    канала и обновляет его по refresh. Второй сервер (8113) — с ключом.
+   Третий (8114) — второй процесс на ТОЙ ЖЕ базе, что и основной: на нём
+   проверяем перенос строк v2 при запуске и гонку двух процессов за одну
+   прибавку (ключ операции на накопленную сумму).
+
+   «Сутки» не ждём: строку «старим» прямо в базе (stats_at, last_try_at,
+   track_ends_at, notif_at) — деньги и статусы двигает только сервер.
 
    Каналы подтверждаем тем же путём, что и в жизни: start → возврат с
    площадки → confirm по пропуску (как в test-return.mjs).
@@ -37,12 +45,15 @@ const PORT = 8110;
 const FAKE = 8111;
 const FAKEG = 8112;
 const PORTK = 8113;
+const PORT2 = 8114;
 const BASE = 'http://127.0.0.1:' + PORT;
 const BASEK = 'http://127.0.0.1:' + PORTK;
+const BASE2 = 'http://127.0.0.1:' + PORT2;
 const TT = 'http://127.0.0.1:' + FAKE;
 const GG = 'http://127.0.0.1:' + FAKEG;
 const KEY = 'video-test-admin-key';   /* в заголовке — только латиница */
 const YT_KEY = 'yt-test-key';
+const DAY = 864e5;
 
 let passed = 0, failed = 0;
 function ok(c, name, extra) {
@@ -62,7 +73,7 @@ const ACC = {
   'code-X': { open_id: 'chan-X', username: 'blogerx', name: 'Блогер Икс', followers: 100, access: 'tok-X', refresh: 'ref-X', expires: 1 },
   /* D — условия, резерв, накрутка, гонка. */
   'code-D': { open_id: 'chan-D', username: 'blogerd', name: 'Блогер Д', followers: 1000, access: 'tok-D', refresh: 'ref-D', expires: 86400 },
-  /* E — у него доступ к TikTok потом умрёт (замер при зачёте не удастся). */
+  /* E — сбои площадки и доступа при замерах. */
   'code-E': { open_id: 'chan-E', username: 'blogere', name: 'Блогер Е', followers: 1000, access: 'tok-E', refresh: 'ref-E', expires: 86400 },
   /* F — два TikTok-аккаунта у одного человека (выбор аккаунта). */
   'code-F1': { open_id: 'chan-F1', username: 'blogerf1', name: 'Блогер Ф один', followers: 1000, access: 'tok-F1', refresh: 'ref-F1', expires: 86400 },
@@ -72,13 +83,16 @@ const ACC = {
   'code-H': { open_id: 'chan-H', username: 'blogerh', name: 'Блогер Аш', followers: 1000, access: 'tok-H', refresh: 'ref-H', expires: 86400 },
   /* Y — у него и YouTube, и TikTok. */
   'code-Y': { open_id: 'chan-Y', username: 'blogery', name: 'Блогер Игрек', followers: 1000, access: 'tok-Y', refresh: 'ref-Y', expires: 86400 },
-  /* U — отвяжет канал, пока сервер ждёт площадку. P — оплаченный ролик и умерший доступ. */
+  /* U — отвяжет канал, пока сервер ждёт площадку. P — закрытый подсчётом ролик и умерший доступ. */
   'code-U': { open_id: 'chan-U', username: 'bloggeru', name: 'Блогер У', followers: 1000, access: 'tok-U', refresh: 'ref-U', expires: 86400 },
   'code-P': { open_id: 'chan-P', username: 'bloggerp', name: 'Блогер П', followers: 1000, access: 'tok-P', refresh: 'ref-P', expires: 86400 },
+  /* N — механика v3: загрузка с нуля, рост по дням. R — у него отзовут доступ. */
+  'code-N': { open_id: 'chan-N', username: 'blogern', name: 'Блогер Эн', followers: 1000, access: 'tok-N', refresh: 'ref-N', expires: 86400 },
+  'code-R': { open_id: 'chan-R', username: 'blogerr', name: 'Блогер Эр', followers: 1000, access: 'tok-R', refresh: 'ref-R', expires: 86400 },
 };
 const TOKENS = { 'tok-A1': 'chan-A', 'tok-A2': 'chan-A', 'tok-B': 'chan-B', 'tok-S': 'chan-S', 'tok-X': 'chan-X',
   'tok-D': 'chan-D', 'tok-E': 'chan-E', 'tok-F1': 'chan-F1', 'tok-F2': 'chan-F2', 'tok-G': 'chan-G', 'tok-H': 'chan-H',
-  'tok-Y': 'chan-Y', 'tok-U': 'chan-U', 'tok-P': 'chan-P' };
+  'tok-Y': 'chan-Y', 'tok-U': 'chan-U', 'tok-P': 'chan-P', 'tok-N': 'chan-N', 'tok-R': 'chan-R' };
 const REFRESH = { 'ref-A': { access_token: 'tok-A2', refresh_token: 'ref-A', expires_in: 86400 } };
 const accByOpen = (o) => Object.values(ACC).find((a) => a.open_id === o);
 
@@ -100,12 +114,18 @@ const ID = {
   D8: '7412345678901234588', D9: '7412345678901234589',
   A15: '7412345678901234609', A16: '7412345678901234610',
   U1: '7412345678901234671', P1: '7412345678901234681',
+  N0: '7412345678901234701', N1: '7412345678901234702', N2: '7412345678901234703', N3: '7412345678901234704',
+  N4: '7412345678901234705', N5: '7412345678901234706', N6: '7412345678901234707', N7: '7412345678901234708',
+  N9: '7412345678901234710', N10: '7412345678901234711', N11: '7412345678901234712', N12: '7412345678901234713',
+  R1: '7412345678901234721', R2: '7412345678901234722',
 };
 const V = new Map();
 function vid(id, owner, o) {
   V.set(id, Object.assign({ owner, create_time: nowS() - 60, duration: 40, views: 1000, likes: 100,
     comments: 5, shares: 3, title: 'Ролик ' + id.slice(-3) }, o || {}));
 }
+/* Цифры ролика «на площадке» — как будто прошли сутки. */
+const setV = (id, views, likes) => Object.assign(V.get(id), { views, likes: likes == null ? Math.round(views / 10) : likes });
 vid(ID.A1, 'chan-A', { views: 1500, likes: 150, comments: 10, shares: 5 });
 vid(ID.A2, 'chan-A');
 vid(ID.A3, 'chan-A');
@@ -120,10 +140,11 @@ vid(ID.B1, 'chan-B', { views: 3000, likes: 300 });
 vid(ID.B2, 'chan-B', { views: 100000, likes: 100, comments: 0, shares: 0 });
 vid(ID.B3, 'chan-B', { views: 2000, likes: 200 });
 vid(ID.B4, 'chan-B');
-/* Обычные старые ролики Б и Д — из них сервер считает базу канала. */
+/* Обычные старые ролики Б, Д и Эн — из них сервер считает базу канала. */
 for (let i = 0; i < 6; i++) {
   vid('74000000000000001' + i + '0', 'chan-B', { create_time: nowS() - (40 + i) * 86400, views: 450 + i * 20, likes: 45, comments: 3, shares: 1 });
   vid('74000000000000002' + i + '0', 'chan-D', { create_time: nowS() - (40 + i) * 86400, views: 450 + i * 20, likes: 45, comments: 3, shares: 1 });
+  vid('74000000000000003' + i + '0', 'chan-N', { create_time: nowS() - (40 + i) * 86400, views: 450 + i * 20, likes: 45, comments: 3, shares: 1 });
 }
 vid(ID.A6, 'chan-A');
 vid(ID.A7, 'chan-A');
@@ -160,6 +181,13 @@ vid(ID.A15, 'chan-A');
 vid(ID.A16, 'chan-A');
 vid(ID.U1, 'chan-U');
 vid(ID.P1, 'chan-P', { views: 2000, likes: 200 });
+/* Ролики Эн и Эр: пока каналы подтверждаются, у них обычные цифры (база
+   канала считается по ним), перед загрузкой их «только что опубликовали» —
+   ноль просмотров. */
+for (const k of ['N0', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6', 'N7', 'N9', 'N10', 'N11', 'N12']) vid(ID[k], 'chan-N');
+vid(ID.R1, 'chan-R');
+vid(ID.R2, 'chan-R');
+const fresh0 = (id) => Object.assign(V.get(id), { views: 0, likes: 0, comments: 0, shares: 0 });
 /* Ролики, на которых площадка «задумывается» — для проверки гонки. */
 const SLOW = new Set();
 /* Ролики, на которых площадка падает (500) — сбой площадки, а не доступа. */
@@ -245,9 +273,11 @@ const fake = createServer((req, res) => {
       try { ids = (JSON.parse(raw).filters || {}).video_ids || []; } catch (e) { ids = []; }
       fakeLog.push('Q ' + ids.join(','));
       if (ids.includes(ID.BOOM) || ids.some((id) => DOWN.has(id))) { res.statusCode = 500; res.setHeader('Content-Type', 'text/plain'); res.end('упали'); return; }
-      const list = ids.filter((id) => V.has(id) && V.get(id).owner === owner).map((id) => asTT(id, V.get(id)));
-      if (ids.some((id) => SLOW.has(id))) { setTimeout(() => sendVideos(res, list, { has_more: false, cursor: 0 }), 1500); return; }
-      sendVideos(res, list, { has_more: false, cursor: 0 });
+      /* Ответ собираем, когда площадка «додумала»: цифры — на тот момент. */
+      const answer = () => sendVideos(res, ids.filter((id) => V.has(id) && V.get(id).owner === owner).map((id) => asTT(id, V.get(id))),
+        { has_more: false, cursor: 0 });
+      if (ids.some((id) => SLOW.has(id))) { setTimeout(answer, 1500); return; }
+      answer();
       return;
     }
     if (u.pathname === '/oembed') {
@@ -423,9 +453,12 @@ const srvK = spawn(process.execPath, ['server.js'], {
   env: { ...process.env, ...common, PORT: String(PORTK), DB_PATH: DBK, PUBLIC_URL: BASEK, YT_API_KEY: YT_KEY, BOT_TOKEN: '' },
   stdio: process.env.BP_DEBUG ? 'inherit' : 'ignore',
 });
+/* Третий — второй процесс на базе основного; поднимаем позже, когда в
+   базе уже лежат «строки v2» для переноса. */
+let srv2 = null;
 /* Прямой доступ к базе — только чтобы «состарить» строку (сутки, трое
-   суток): ждать их по-настоящему проверка не может. Деньги и статусы
-   двигает только сервер. */
+   суток, 30 дней) и заглянуть в журнал: ждать по-настоящему проверка не
+   может. Деньги и статусы двигает только сервер. */
 let dbw = null;
 const dbx = () => { if (!dbw) { dbw = new DatabaseSync(DBP); dbw.exec('PRAGMA busy_timeout = 5000'); } return dbw; };
 const row = (id) => dbx().prepare('SELECT * FROM task_videos WHERE id = ?').get(id);
@@ -434,9 +467,14 @@ const setRow = (id, sets) => {
   dbx().prepare('UPDATE task_videos SET ' + keys.map((k) => k + ' = ?').join(', ') + ' WHERE id = ?')
     .run(...keys.map((k) => sets[k]), id);
 };
+/* «Прошли сутки»: последний замер и последняя попытка — 21 час назад. */
+const ageRow = (id) => setRow(id, { stats_at: Date.now() - 21 * 3600e3, last_try_at: Date.now() - 21 * 3600e3 });
+/* Сколько раз проведена операция с этим ключом (выплата прибавки). */
+const opsOf = (key) => Number(dbx().prepare('SELECT COUNT(*) AS n FROM ops WHERE op_key = ?').get(key).n);
 function stop() {
   try { srv.kill(); } catch (e) { /* уже мёртв */ }
   try { srvK.kill(); } catch (e) { /* уже мёртв */ }
+  try { if (srv2) srv2.kill(); } catch (e) { /* уже мёртв */ }
   for (const s of [fake, gfake]) {
     try { if (s.closeAllConnections) s.closeAllConnections(); s.close(); } catch (e) { /* закрыт */ }
   }
@@ -510,15 +548,58 @@ const bind = (u, campKey, url, agree = true, extra, more) =>
 const bindAs = (u, campKey, url, more) => bind(u, campKey, url, true, undefined, more);
 const review = (id, adv, okv, reason) => api('POST', '/api/tasks/video/review', okv ? { id, ok: true } : { id, ok: false, reason }, adv.token);
 const getVid = (id, token, extra) => api('GET', '/api/tasks/video?id=' + id, null, token, extra);
+const refresh = (id, u, base) => apiAt(base || BASE, 'POST', '/api/tasks/video/refresh', { id }, u.token);
 const bal = async (u) => (await apiAt(u.base || BASE, 'GET', '/api/balance', null, u.token)).body;
+/* force — все засчитанные и все в работе сразу (кнопка владельца). */
 const sync = () => adm('POST', '/api/admin/task-videos/sync', { force: true });
+/* Обычный круг — как по таймеру: только те, кому подошли сутки. */
+const syncDay = () => adm('POST', '/api/admin/task-videos/sync', {});
 const board = (u, campKey, qs) => api('GET', '/api/tasks/board?campId=' + encodeURIComponent(camps[campKey] || campKey) + (qs || ''), null, u.token);
 
 try {
   await new Promise((r) => fake.listen(FAKE, '127.0.0.1', r));
   await new Promise((r) => gfake.listen(FAKEG, '127.0.0.1', r));
   if (!await waitUp(BASE) || !await waitUp(BASEK)) { console.log('сервер не поднялся'); stop(); process.exit(1); }
-  console.log('\n«Загрузить видео» v2: TikTok и YouTube, резерв, выплата в момент зачёта, лидерборд\n');
+  console.log('\n«Загрузить видео» v3: загрузка с нуля, начисления по мере роста 30 дней, TikTok и YouTube, лидерборд\n');
+
+  /* ── Перенос строк v2 при запуске (п. 10 механики v3) ──
+     Кладём в базу строки «как их оставила v2» и поднимаем второй процесс
+     на той же базе: перенос идёт при запуске сервера. */
+  console.log('— перенос строк v2');
+  const L0 = Date.now();
+  const legacy = dbx().prepare(`INSERT INTO task_videos (camp_id, owner_id, blogger_id, platform, external_id, video_id,
+      status, views, submit_views, paid_views, paid, paid_at, earned, approved_at, pay_hold, hold_kind, pay_why,
+      created_at, updated_at) VALUES ('legacy', 999, 998, 'tiktok', 'chan-legacy', ?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
+  const lid = (vidId, st, o) => Number(legacy.run(vidId, st, o.views || 0, o.submit == null ? null : o.submit,
+    o.paidViews == null ? null : o.paidViews, o.paid || 0, o.paidAt || null, o.earned || 0, o.approved || null,
+    o.hold ? 1 : 0, o.kind || null, o.why || null, L0 - 40 * DAY, L0 - DAY).lastInsertRowid);
+  const lActive = lid('L-active', 'active', { views: 3000, submit: 1000, approved: L0 - 10 * DAY });
+  const lMeasure = lid('L-measure', 'active', { views: 2000, submit: 1500, approved: L0 - 2 * DAY, hold: 1, kind: 'measure',
+    why: 'Нет свежего замера: TikTok не отдал цифры ролика — повторим через полчаса' });
+  const lNoApprove = lid('L-noapprove', 'active', { views: 500 });
+  const lPaid = lid('L-paid', 'paid', { views: 6000, submit: 1000, paidViews: 5000, paid: 500, paidAt: L0 - 5 * DAY, earned: 500, approved: L0 - 5 * DAY });
+  const lReview = lid('L-review', 'review', { views: 700, submit: 700 });
+  const lMoney = lid('L-money', 'active', { views: 9000, submit: 9000, paidViews: 9000, paid: 300, paidAt: L0 - 3 * DAY, earned: 900,
+    approved: L0 - 3 * DAY, hold: 1, kind: 'money', why: 'В заморозке кампании не хватило денег: недоплачено 600 ₽' });
+  srv2 = spawn(process.execPath, ['server.js'], {
+    cwd: here,
+    env: { ...process.env, ...common, PORT: String(PORT2), DB_PATH: DBP, PUBLIC_URL: BASE2, YT_API_KEY: '', BOT_TOKEN: '' },
+    stdio: process.env.BP_DEBUG ? 'inherit' : 'ignore',
+  });
+  ok(await waitUp(BASE2), 'второй процесс на той же базе поднялся (перенос прошёл при запуске)');
+  const la = row(lActive), lm = row(lMeasure), ln = row(lNoApprove), lp = row(lPaid), lr = row(lReview), lmo = row(lMoney);
+  ok(la.status === 'active' && la.track_ends_at === la.approved_at + 30 * DAY && la.top_views === 3000,
+    'засчитанная строка v2 получила срок подсчёта: зачёт + 30 суток; наибольшие просмотры — из известных', la);
+  ok(ln.track_ends_at >= L0 + 30 * DAY - 60e3 && ln.track_ends_at <= Date.now() + 30 * DAY,
+    'засчитанная без даты зачёта — срок от момента переноса', ln.track_ends_at);
+  ok(lm.pay_hold === 0 && lm.hold_kind === null && lm.pay_why === null && lm.track_ends_at === lm.approved_at + 30 * DAY,
+    'пауза «нет свежего замера» (measure) снята — в v3 сбой площадки ничего не держит', lm);
+  ok(lmo.pay_hold === 1 && lmo.hold_kind === 'money' && lmo.notif_at === lmo.paid_at && lmo.notif_paid === 300,
+    'пауза по деньгам осталась; кому уже платили — сводка считается отправленной', lmo);
+  ok(lp.status === 'paid' && lp.paid === 500 && lp.paid_views === 5000 && lp.track_ends_at === null && lp.top_views === 6000
+    && lp.notif_at === lp.paid_at, 'оплаченная строка v2 так и осталась оплаченной', lp);
+  ok(lr.status === 'review' && lr.track_ends_at === null && lr.top_views === 700, 'ролик на проверке получит срок в момент зачёта', lr);
+  dbx().prepare("DELETE FROM task_videos WHERE camp_id = 'legacy'").run();
 
   /* ── Люди, каналы, офферы ── */
   const ADV = await reg('reklama', 'advertiser');
@@ -542,6 +623,8 @@ try {
   const U = await reg('bloggeru', 'blogger');
   const PP = await reg('bloggerp', 'blogger');
   const Q = await reg('bloggerq', 'blogger');
+  const N = await reg('blogern', 'blogger', { display: 'Нина Эн' });
+  const R = await reg('blogerr', 'blogger');
   ok(await linkTikTok(A, 'code-A'), 'А подтвердил TikTok обычным путём');
   ok(await linkTikTok(B, 'code-B'), 'Б подтвердил TikTok');
   ok(await linkTikTok(S, 'code-S'), 'С подтвердил TikTok (без права на ролики)');
@@ -555,7 +638,9 @@ try {
   ok(await linkYouTube(W, 'ycode-W'), 'Дабл подтвердил YouTube (refresh Google не дал)');
   ok(await linkTikTok(U, 'code-U') && await linkTikTok(PP, 'code-P'), 'У и П подтвердили TikTok');
   ok(await linkYouTube(Q, 'ycode-Q'), 'Кью подтвердил YouTube (Google потом не обменяет доступ)');
+  ok(await linkTikTok(N, 'code-N') && await linkTikTok(R, 'code-R'), 'Эн и Эр подтвердили TikTok');
   await sleep(1100);          /* первый разбор канала идёт в стороне; короткие доступы протухают */
+  for (const k of ['N0', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6', 'N7', 'N9', 'N10', 'N11', 'N12', 'R1', 'R2']) fresh0(ID[k]);
 
   const top = await api('POST', '/api/topup', { amount: 200000, opKey: 'topup-' + tag }, ADV.token);
   ok(top.status === 200, 'рекламодатель пополнил баланс', top.body);
@@ -588,11 +673,21 @@ try {
     'YouTube-оффер с минимальной длиной 30 сек');
   ok(await camp('brd', Object.assign({}, base, { name: 'Лидерборд', platforms: '' }), 10000, ADV), 'оффер для лидерборда');
   ok(await camp('capc', Object.assign({}, base, { name: 'Остаток бюджета', maxPayout: 0 }), 300, ADV), 'оффер: 300 ₽ в заморозке, без потолка за ролик');
+  ok(await camp('capx', Object.assign({}, base, { name: 'Потолок 200', maxPayout: 200 }), 1000, ADV), 'оффер с потолком 200 ₽ за ролик');
   /* Срок датой без времени — как пишет шторка «Условия задания» (<input type=date>). */
   const mskDay = (d) => new Date(Date.now() + 3 * 3600e3 + d * 864e5).toISOString().slice(0, 10);
   ok(await camp('dlt', Object.assign({}, base, { name: 'Срок сегодня', deadline: mskDay(0) }), 1000, ADV), 'оффер: срок — сегодняшняя дата без времени');
   ok(await camp('dly', Object.assign({}, base, { name: 'Срок вчера', createdAt: new Date(Date.now() - 3 * 864e5).toISOString(),
     deadline: mskDay(-1) }), 1000, ADV), 'оффер: срок — вчерашняя дата без времени');
+  /* Офферы механики v3 (ставка 100 ₽ за 1000 просмотров, если не сказано иное). */
+  const tt = Object.assign({}, base, { platforms: 'tiktok' });
+  ok(await camp('notif', Object.assign({}, tt, { name: 'Сводка', minViews: 1000 }), 20000, ADV), 'v3: оффер «Сводка» — порог 1 000 просмотров');
+  ok(await camp('grow', Object.assign({}, tt, { name: 'Рост', minViews: 1000 }), 20000, ADV), 'v3: оффер «Рост» — порог 1 000, потолок 3 000 ₽');
+  ok(await camp('gcap', Object.assign({}, tt, { name: 'Потолок 500', maxPayout: 500 }), 5000, ADV), 'v3: оффер с потолком 500 ₽ за ролик');
+  ok(await camp('gfix', Object.assign({}, tt, { name: 'Фикс с порогом', payMode: 'fixed', fixedPrice: 800, minViews: 2000 }), 5000, ADV),
+    'v3: фикс 800 ₽ с порогом 2 000 просмотров');
+  ok(await camp('gbig', Object.assign({}, tt, { name: 'Без потолка', rate: 10, maxPayout: 0 }), 20000, ADV), 'v3: 10 ₽ за 1000, без потолка');
+  ok(await camp('gpoor', Object.assign({}, tt, { name: 'Тонкий бюджет' }), 300, ADV), 'v3: оффер с заморозкой 300 ₽');
 
   /* ── Ошибки загрузки ── */
   console.log('\n— ошибки загрузки');
@@ -676,10 +771,12 @@ try {
   ok(dlt.status === 200, 'срок «сегодня» датой без времени: ролик, вышедший сегодня, принят (конец дня по Москве)', dlt.body);
   const dly = await bind(A, 'dly', link('blogera', ID.A16));
   ok(dly.status === 409 && dly.body.code === 'too_late', 'срок «вчера» датой без времени: сегодняшний ролик — too_late', dly.body);
+  /* v3: мало просмотров — не отказ. Порог задания решает только, когда пойдут деньги. */
   const few = await bind(A, 'minv', link('blogera', ID.A12));
-  ok(few.status === 409 && few.body.code === 'few_views' && few.body.views === 1000 && few.body.minViews === 5000
-    && few.body.error === 'У видео 1 000 просмотров, а в задании минимум 5 000 — загрузите, когда наберёт',
-  'few_views: числа с разрядами и поля views/minViews', few.body);
+  const fv = few.body.video || {};
+  ok(few.status === 200 && fv.status === 'review' && fv.views === 1000 && fv.earned === 0 && fv.reserved === 0
+    && fv.minViews === 5000 && fv.viewsToMin === 4000 && few.body.code === undefined,
+  'v3: 1 000 просмотров при минимуме 5 000 — принято (few_views больше нет): начислено 0, резерв 0, до порога 4 000', few.body);
   const boom = await bind(A, 'main', link('blogera', ID.BOOM));
   ok(boom.status === 502 && boom.body.code === 'tiktok', 'tiktok: площадка упала — 502', boom.body);
   const ip = '10.200.0.1';
@@ -699,16 +796,18 @@ try {
 
   /* Ролик стоит больше, чем свободно: принят, но резерв и выплата — не больше остатка. */
   const c8 = await bind(D, 'capc', link('blogerd', ID.D8));
-  ok(c8.status === 200 && c8.body.video.reserved === 300 && c8.body.video.earned === 300 && c8.body.video.budgetCap === 300,
-    'ролик на 400 ₽ при свободных 300 ₽: резерв и оценка — 300, budgetCap 300', c8.body.video);
+  ok(c8.status === 200 && c8.body.video.reserved === 300 && c8.body.video.earned === 300 && c8.body.video.budgetCap === 300
+    && c8.body.video.maxPay === 300,
+  'ролик на 400 ₽ при свободных 300 ₽: резерв и оценка — 300, budgetCap 300, максимум за ролик 300', c8.body.video);
   const cb = (await board(ADV, 'capc')).body;
   ok(cb.reserved === 300 && cb.left === 0 && cb.reserved <= cb.budget, '«В резерве» не больше бюджета, «Свободно» 0', cb);
   const c9 = await bind(D, 'capc', link('blogerd', ID.D9));
   ok(c9.status === 409 && c9.body.code === 'budget', 'следующий ролик — budget', c9.body);
   V.get(ID.D8).views = 5000;
   const rc8 = await review(c8.body.video.id, ADV, true);
-  ok(rc8.body.settle === 'paid' && rc8.body.video.status === 'paid' && rc8.body.video.paid === 300 && !rc8.body.video.payHold,
-    'при зачёте выплачено 300 ₽ целиком, без «недоплаты» владельцу', rc8.body.video);
+  ok(rc8.body.settle === 'paid' && rc8.body.video.status === 'paid' && rc8.body.video.paid === 300 && !rc8.body.video.payHold
+    && rc8.body.video.capReached === true,
+  'при зачёте начислено 300 ₽ — это максимум за ролик, подсчёт сразу закончен, без «недоплаты» владельцу', rc8.body.video);
 
   /* ── Удачная загрузка ── */
   console.log('\n— загрузка');
@@ -721,8 +820,11 @@ try {
   ok(vA1.url === 'https://www.tiktok.com/@blogera/video/' + ID.A1 && vA1.handle === 'blogera', 'постоянная ссылка без меток', vA1.url);
   ok(vA1.campId === camps.main && vA1.bloggerId === A.id && vA1.ownerId === ADV.id, 'оффер, блогер и автор записаны', vA1);
   ok(vA1.submitViews === 1500 && vA1.paidViews === null && vA1.earned === 150 && vA1.reserved === 150 && vA1.paid === 0,
-    'v2: просмотры при загрузке, оценка 150 ₽ и резерв 150 ₽', vA1);
-  ok(vA1.risk === null && Array.isArray(vA1.riskWhy) && vA1.riskWhy.length === 0 && vA1.riskLevel === 'ok',
+    'просмотры при загрузке, оценка 150 ₽ и резерв 150 ₽', vA1);
+  ok(vA1.trackEndsAt === null && vA1.daysLeft === null && vA1.trackDays === 30 && vA1.maxPay === 3000 && vA1.minViews === 0
+    && vA1.viewsToMin === 0 && vA1.capReached === false && vA1.payMode === 'views' && vA1.rate === 100 && vA1.countViews === 1500,
+  'v3-поля: срока ещё нет (считать начнём с зачёта), 30 дней, максимум 3 000 ₽, без порога', vA1);
+  ok(vA1.risk === null && Array.isArray(vA1.riskWhy) && vA1.riskWhy.length === 0 && vA1.riskLevel === 'ok' && vA1.holdKind === null,
     'блогеру — только уровень оценки, без причин', vA1);
   ok(typeof vA1.cover === 'string' && vA1.cover.includes(ID.A1), 'обложка из ответа площадки', vA1.cover);
   ok(fakeLog.includes('REFRESH ref-A'), 'протухший доступ А обменян по refresh');
@@ -762,8 +864,8 @@ try {
   const asAdmin = await api('GET', '/api/tasks/video?id=' + vA1.id, null, null, { admin: true });
   ok(asAdmin.status === 200 && asAdmin.body.video.riskWhy.length > 0, 'владелец площадки видит ролик по ключу', asAdmin.body);
 
-  /* ── Проверка рекламодателем: засчитано = оплачено сразу ── */
-  console.log('\n— зачёт и выплата');
+  /* ── Проверка рекламодателем: засчитано = первое начисление сразу + 30 дней подсчёта ── */
+  console.log('\n— зачёт и первое начисление');
   const selfRev = await review(vA1.id, A, true);
   ok(selfRev.status === 403, 'блогер сам себе не засчитывает', selfRev.body);
   const strRev = await review(vA1.id, B, true);
@@ -773,35 +875,44 @@ try {
   const qMark0 = fakeLog.length;
   const rev = await review(vA1.id, ADV, true);
   const rv = rev.body.video || {};
-  ok(rev.status === 200 && rev.body.settle === 'paid' && rv.status === 'paid' && rv.approvedAt > 0,
-    '«всё верно» → видео засчитано и сразу оплачено', rev.body);
+  ok(rev.status === 200 && rev.body.settle === 'active' && rv.status === 'active' && rv.approvedAt > 0,
+    '«всё верно» → видео засчитано, подсчёт пошёл (settle active)', rev.body);
   ok(fakeLog.slice(qMark0).some((l) => l === 'Q ' + ID.A1), 'в момент зачёта — свежий замер у площадки');
-  ok(rv.paidViews === 20000 && rv.views === 20000 && rv.earned === 2000 && rv.paid === 2000 && rv.paidAt > 0 && rv.reserved === 0,
-    'выплата по свежему замеру: 20 000 × 100 / 1000 = 2000, резерв снят', rv);
+  ok(rv.paidViews === 20000 && rv.views === 20000 && rv.earned === 2000 && rv.paid === 2000 && rv.paidAt > 0 && rv.reserved === 0
+    && rev.body.paid === 2000 && rev.body.total === 2000,
+  'первое начисление сразу по свежему замеру: 20 000 × 100 / 1000 = 2000, резерв снят', rv);
+  ok(rv.trackEndsAt === rv.approvedAt + 30 * DAY && rv.daysLeft === 30 && rv.capReached === false,
+    'срок подсчёта — 30 суток от зачёта, осталось 30 дней', rv);
   const a1 = await bal(A), adv1 = await bal(ADV);
   ok(a1.available - a0.available === 2000, 'деньги сразу на балансе блогера', { a0, a1 });
   ok(adv0.hold - adv1.hold === 2000 && adv1.available === adv0.available, 'у рекламодателя ушло 2000 из заморозки, свободные не тронуты', { adv0, adv1 });
   await sleep(300);
-  ok(dmsTo(A, /Видео засчитано — 2 000 ₽ на балансе/).length === 1, 'блогеру: «Видео засчитано — 2 000 ₽ на балансе»', dmsTo(A).map((m) => m.text));
+  ok(dmsTo(A, /Видео засчитано — 2 000 ₽ на балансе/).length === 1
+    && /ещё 30 дней/.test(dmsTo(A, /Видео засчитано — 2 000 ₽ на балансе/)[0].text),
+  'блогеру: «Видео засчитано — 2 000 ₽ на балансе», дальше сайт считает ещё 30 дней', dmsTo(A).map((m) => m.text));
   const rev2 = await review(vA1.id, ADV, false, 'передумал совсем');
   ok(rev2.status === 409, 'второй раз не проверить', rev2.body);
-  const decPaid = await adm('POST', '/api/admin/task-videos/decide', { id: vA1.id, decision: 'count' });
-  ok(decPaid.status === 409, 'по оплаченному ролику решение не нужно', decPaid.body);
+  const decAct = await adm('POST', '/api/admin/task-videos/decide', { id: vA1.id, decision: 'count' });
+  ok(decAct.status === 409 && decAct.body.code === 'state' && /подсчёт просмотров идёт сам/.test(decAct.body.error),
+    'засчитанное без паузы «засчитывать» владельцу нечего', decAct.body);
   ok((await bal(A)).available === a1.available, 'повтор зачёта не платит второй раз');
   const ops = await api('GET', '/api/ops/mine', null, ADV.token);
-  const vop = (ops.body.rows || []).find((r) => r.opKey === 'sys:vidpay:' + vA1.id);
+  const vop = (ops.body.rows || []).find((r) => r.opKey === 'sys:vidpay:' + vA1.id + ':2000');
   ok(vop && vop.paid === 2000 && vop.to === A.id && vop.dealId === 'camp:' + camps.main,
-    'выплата видна рекламодателю как обычная выплата из кампании', ops.body.rows);
+    'прибавка видна рекламодателю как выплата из кампании; ключ — на накопленную сумму sys:vidpay:<id>:2000', ops.body.rows);
+  const vsum = (ops.body.videos || []).find((r) => r.video === vA1.id);
+  ok(vsum && vsum.paid === 2000 && vsum.to === A.id && vsum.dealId === 'camp:' + camps.main,
+    'и итог по ролику одной строкой (videos): выплачено всего 2 000 ₽', ops.body.videos);
   const led = await api('GET', '/api/ledger', null, A.token);
   ok((led.body.rows || []).filter((r) => r.kind === 'payout' && r.ref === 'camp:' + camps.main).length === 1,
     'в журнале А одна выплата по кампании', led.body.rows);
 
-  /* Просмотров стало меньше, чем при загрузке — платим по большему. */
+  /* Просмотров стало меньше, чем при загрузке — считаем по наибольшим. */
   const b7 = await bind(A, 'main', link('blogera', ID.A7));
   V.get(ID.A7).views = 800;
   const r7 = await review(b7.body.video.id, ADV, true);
-  ok(r7.body.video.status === 'paid' && r7.body.video.paidViews === 1000 && r7.body.video.paid === 100,
-    'просмотров при зачёте 800, при загрузке 1000 — оплачено по 1000', r7.body.video);
+  ok(r7.body.video.status === 'active' && r7.body.video.paidViews === 1000 && r7.body.video.paid === 100 && r7.body.video.countViews === 1000,
+    'просмотров при зачёте 800, при загрузке 1000 — начислено по 1000', r7.body.video);
 
   /* Ролик удалили до зачёта — removed, денег нет, резерв вернулся. */
   const b8 = await bind(A, 'main', link('blogera', ID.A8));
@@ -815,7 +926,7 @@ try {
   ok((await bal(A)).available === aB8 && brd0.body.reserved - brd1.body.reserved === 100,
     'деньги не ушли, резерв 100 ₽ вернулся в бюджет', { before: brd0.body.reserved, after: brd1.body.reserved });
 
-  /* Два «всё верно» одновременно — платится один раз. */
+  /* Два «всё верно» одновременно — начисляется один раз. */
   const f1 = await bindAs(F, 'rsv', link('blogerf1', ID.F1b));
   const fBal0 = (await bal(F)).available;
   const [p1, p2] = await Promise.all([review(f1.body.video.id, ADV, true), review(f1.body.video.id, ADV, true)]);
@@ -846,32 +957,53 @@ try {
   const re2 = await bind(A, 'main', link('blogera', ID.A2));
   ok(re2.status === 200, 'отвязанный ролик снова свободен', re2.body);
   const ub4 = await api('POST', '/api/tasks/video/unbind', { id: vA1.id }, A.token);
-  ok(ub4.status === 409, 'оплаченный ролик не отвязать', ub4.body);
+  ok(ub4.status === 409, 'засчитанный ролик не отвязать', ub4.body);
 
   /* ── Обновление по кнопке ── */
-  const rf = await api('POST', '/api/tasks/video/refresh', { id: re2.body.video.id }, A.token);
-  ok(rf.status === 200 && rf.body.fresh === false, 'обновление не чаще раза в 10 минут', rf.body);
+  const rf = await refresh(re2.body.video.id, A);
+  ok(rf.status === 200 && rf.body.fresh === false, 'на проверке: обновление не чаще раза в 10 минут', rf.body);
   /* K: порог — по последней попытке, а не по удачному замеру. */
   const rid2 = re2.body.video.id;
   setRow(rid2, { stats_at: Date.now() - 3600e3, last_try_at: Date.now() - 60e3 });
-  const rfTry = await api('POST', '/api/tasks/video/refresh', { id: rid2 }, A.token);
+  const rfTry = await refresh(rid2, A);
   ok(rfTry.status === 200 && rfTry.body.fresh === false, 'K: замер старый, но попытка была минуту назад — площадку не дёргаем', rfTry.body);
   setRow(rid2, { stats_at: Date.now() - 3600e3, last_try_at: Date.now() - 3600e3 });
   const t0 = Date.now();
-  const rfOk = await api('POST', '/api/tasks/video/refresh', { id: rid2 }, A.token);
+  const rfOk = await refresh(rid2, A);
   ok(rfOk.status === 200 && rfOk.body.fresh === true && row(rid2).last_try_at >= t0, 'K/F: обновление прошло, попытка записана в last_try_at', rfOk.body);
-  const rfStr = await api('POST', '/api/tasks/video/refresh', { id: re2.body.video.id }, B.token);
+  const rfStr = await refresh(re2.body.video.id, B);
   ok(rfStr.status === 404, 'чужой ролик не обновить', rfStr.body);
-  /* Оплаченный: цифры обновляются только для показа, деньги — нет. */
+  /* Засчитанный: «Обновить» — это замер и прибавка, но не чаще раза в 20 часов. */
   Object.assign(V.get(ID.A1), { views: 26000, likes: 2600 });
+  const aR0 = (await bal(A)).available;
   setRow(vA1.id, { stats_at: Date.now() - 3600e3, last_try_at: Date.now() - 3600e3 });
-  const rfPaid = await api('POST', '/api/tasks/video/refresh', { id: vA1.id }, A.token);
-  ok(rfPaid.status === 200 && rfPaid.body.fresh === true && rfPaid.body.video.views === 26000 && rfPaid.body.video.paid === 2000
-    && rfPaid.body.video.paidViews === 20000 && rfPaid.body.video.status === 'paid',
-  'оплаченный ролик: просмотры растут для показа, выплата не меняется', rfPaid.body.video);
-  setRow(vA1.id, { posted_at: Date.now() - 31 * 864e5, stats_at: Date.now() - 3600e3, last_try_at: Date.now() - 3600e3 });
-  const rfOld = await api('POST', '/api/tasks/video/refresh', { id: vA1.id }, A.token);
-  ok(rfOld.status === 409, 'через 30 суток после публикации цифры больше не обновляются', rfOld.body);
+  const rfGate = await refresh(vA1.id, A);
+  ok(rfGate.status === 200 && rfGate.body.fresh === false && rfGate.body.video.paid === 2000,
+    'засчитанный: замер был час назад — «Обновить» не чаще раза в 20 часов', rfGate.body);
+  ageRow(vA1.id);
+  const rfAct = await refresh(vA1.id, A);
+  ok(rfAct.status === 200 && rfAct.body.fresh === true && rfAct.body.credited === 600 && rfAct.body.video.paid === 2600
+    && rfAct.body.video.earned === 2600 && rfAct.body.video.status === 'active' && (await bal(A)).available - aR0 === 600,
+  'через сутки «Обновить» — свежий замер и прибавка: 26 000 просмотров → +600 ₽', rfAct.body);
+  Object.assign(V.get(ID.A1), { views: 40000, likes: 4000 });
+  ageRow(vA1.id);
+  const rfCap = await refresh(vA1.id, A);
+  ok(rfCap.body.video.status === 'paid' && rfCap.body.video.paid === 3000 && rfCap.body.video.capReached === true
+    && (await bal(A)).available - aR0 === 1000,
+  '40 000 просмотров: начислено упёрлось в максимум 3 000 ₽ (+400) — подсчёт закончен', rfCap.body.video);
+  await sleep(300);
+  ok(dmsTo(A, /Подсчёт закончен — всего 3 000 ₽/).some((m) => /последняя прибавка \+400 ₽/.test(m.text) && /максимум за видео/.test(m.text)),
+    'блогеру: «Подсчёт закончен — всего 3 000 ₽», последняя прибавка и что это максимум', dmsTo(A).map((m) => m.text));
+  /* Закрытый подсчётом: цифры обновляются только для показа — до конца срока. */
+  Object.assign(V.get(ID.A1), { views: 50000, likes: 5000 });
+  setRow(vA1.id, { stats_at: Date.now() - 3600e3, last_try_at: Date.now() - 3600e3 });
+  const rfPaid = await refresh(vA1.id, A);
+  ok(rfPaid.status === 200 && rfPaid.body.fresh === true && rfPaid.body.video.views === 50000 && rfPaid.body.video.paid === 3000
+    && rfPaid.body.video.status === 'paid' && (await bal(A)).available - aR0 === 1000,
+  'подсчёт закончен: просмотры растут для показа, деньги — нет', rfPaid.body.video);
+  setRow(vA1.id, { track_ends_at: Date.now() - 1000, stats_at: Date.now() - 3600e3, last_try_at: Date.now() - 3600e3 });
+  const rfOld = await refresh(vA1.id, A);
+  ok(rfOld.status === 409, 'после конца срока подсчёта цифры больше не обновляются', rfOld.body);
 
   /* ── Владелец площадки ── */
   console.log('\n— решение владельца');
@@ -887,7 +1019,9 @@ try {
   ok(ov.status === 200 && ov.body['видео_на_решении'] >= 1, 'в сводке есть видео_на_решении', ov.body['видео_на_решении']);
   const tabs = await Promise.all(['review', 'paid', 'active'].map((s) => adm('GET', '/api/admin/task-videos?status=' + s)));
   ok(tabs.every((t) => t.status === 200) && (tabs[0].body.videos || []).every((v) => v.status === 'review')
-    && (tabs[1].body.videos || []).some((v) => v.id === vA1.id), 'вкладки пульта: на проверке, выплачены, ждут выплаты');
+    && (tabs[1].body.videos || []).some((v) => v.id === vA1.id) && (tabs[2].body.videos || []).every((v) => v.status === 'active')
+    && (tabs[2].body.videos || []).some((v) => v.id === b7.body.video.id),
+  'вкладки пульта: на проверке, подсчёт закончен, считаем просмотры');
   const b3 = await bind(A, 'main', link('blogera', ID.A3));
   await review(b3.body.video.id, ADV, false, 'Не та интеграция');
   const notAdm = await api('POST', '/api/admin/task-videos/decide', { id: b3.body.video.id, decision: 'decline' }, A.token);
@@ -905,14 +1039,14 @@ try {
   await sleep(300);
   const bDm0 = dmsTo(B, /Видео засчитано/).length;
   const cnt = await adm('POST', '/api/admin/task-videos/decide', { id: vB1.id, decision: 'count', note: 'Бренд есть на 0:12' });
-  ok(cnt.status === 200 && cnt.body.settle === 'paid' && cnt.body.video.status === 'paid' && cnt.body.video.paid === 500
-    && cnt.body.video.paidViews === 5000 && cnt.body.video.decision === 'count',
-  '«засчитать» возвращённый → оплачен сразу по свежему замеру: 500', cnt.body);
+  ok(cnt.status === 200 && cnt.body.settle === 'active' && cnt.body.video.status === 'active' && cnt.body.video.paid === 500
+    && cnt.body.video.paidViews === 5000 && cnt.body.video.decision === 'count' && cnt.body.video.trackEndsAt > Date.now() + 29 * DAY,
+  '«засчитать» возвращённый → зачёт: свежий замер, первое начисление 500 и 30 дней подсчёта', cnt.body);
   ok((await bal(B)).available - bB0 === 500, 'Б получил 500');
   await sleep(300);
   const bDm = dmsTo(B, /Видео засчитано/).slice(bDm0).map((m) => m.text);
   ok(bDm.length === 1 && /500 ₽ на балансе/.test(bDm[0]) && /Администратор засчитал видео — Бренд есть на 0:12/.test(bDm[0]),
-    'решение владельца: блогеру ОДНО уведомление — о выплате, с решением в том же тексте', bDm);
+    'решение владельца: блогеру ОДНО уведомление — о деньгах, с решением в том же тексте', bDm);
   const log = await adm('GET', '/api/admin/log');
   ok(JSON.stringify(log.body).includes('video-decline') && JSON.stringify(log.body).includes('video-count'), 'решения легли в журнал владельца');
 
@@ -920,7 +1054,7 @@ try {
   console.log('\n— накрутка');
   const bb2 = await bind(B, 'main', link('blogerb', ID.B2));
   const vB2 = bb2.body.video || {};
-  ok(bb2.status === 200 && vB2.riskLevel === 'bad' && vB2.riskHold === true, 'подозрительный ролик: уровень bad, выплата на паузе', vB2);
+  ok(bb2.status === 200 && vB2.riskLevel === 'bad' && vB2.riskHold === true, 'подозрительный ролик: уровень bad, начисления на паузе', vB2);
   ok(vB2.risk === null && vB2.riskWhy.length === 0, 'блогеру причины не раскрыты', vB2);
   const advB2 = await getVid(vB2.id, ADV.token);
   ok(advB2.body.video.riskWhy.length >= 2 && advB2.body.video.risk >= 76, 'рекламодателю — причины и балл', advB2.body.video);
@@ -930,11 +1064,11 @@ try {
   ok((rk.body.videos || []).some((v) => v.id === vB2.id), 'и в разделе «накрутка»');
   const rB2 = await review(vB2.id, ADV, true);
   ok(rB2.status === 200 && rB2.body.settle === 'held' && rB2.body.video.status === 'active' && rB2.body.video.paid === 0
-    && rB2.body.video.riskHold === true, 'накрутка: засчитано, но выплата ждёт владельца', rB2.body);
+    && rB2.body.video.riskHold === true, 'накрутка: засчитано, но начисления ждут владельца', rB2.body);
   await sleep(300);
-  ok(dmsTo(B, /проверит просмотры/).length === 1, 'блогеру: перед выплатой администратор проверит просмотры', dmsTo(B).map((m) => m.text));
+  ok(dmsTo(B, /проверит просмотры/).length === 1, 'блогеру: перед начислением администратор проверит просмотры', dmsTo(B).map((m) => m.text));
 
-  /* Спор держит выплату так же, как и накрутка. Спор — по выплатам А из
+  /* Спор держит начисления так же, как и накрутка. Спор — по выплатам А из
      ДРУГОГО оффера: он держит все выплаты А по этой заморозке. */
   const b5 = await bind(A, 'short', link('blogera', ID.A5));
   const vA5 = b5.body.video || {};
@@ -942,7 +1076,7 @@ try {
   ok(dsp.status === 200, 'рекламодатель открыл спор по выплате А', dsp.body);
   const rA5 = await review(vA5.id, ADV, true);
   ok(rA5.body.settle === 'held' && rA5.body.video.status === 'active' && rA5.body.video.disputeHeld === true && rA5.body.video.paid === 0,
-    'спор держит выплату засчитанного ролика', rA5.body);
+    'спор держит начисления засчитанного ролика', rA5.body);
 
   /* Фикс-оффер с заморозкой меньше цены: ролик принят, но резерв и выплата —
      не больше свободного остатка (500 из 800). */
@@ -950,18 +1084,20 @@ try {
   ok(bf.status === 200 && bf.body.video.reserved === 500 && bf.body.video.earned === 500 && bf.body.video.budgetCap === 500,
     'Б загрузил ролик к фикс-офферу за 800 ₽ при заморозке 500 ₽: резерв 500, предел 500', bf.body);
   /* Строка «до исправления» (без предела в снимке условий, резерв по полной
-     цене) — по ней проверяем недоплату: заработано больше, чем есть. */
+     цене) — по ней проверяем недоплату: начислено больше, чем есть. */
   setRow(bf.body.video.id, { terms: JSON.stringify({ payMode: 'fixed', rate: 100, fixedPrice: 800, cap: 3000, minViews: 0 }), reserved: 800 });
   const rF = await review(bf.body.video.id, ADV, true);
   const pFix = (await getVid(bf.body.video.id, B.token)).body.video;
-  ok(rF.body.settle === 'held' && pFix.status === 'active' && pFix.paid === 500 && pFix.earned === 800 && pFix.payHold === true && pFix.holdReason === '',
-    'старая строка: заработано 800 ₽ (не срезано заморозкой), выплачено 500 ₽, остаток на паузе; блогеру без причины', pFix);
+  ok(rF.body.settle === 'held' && pFix.status === 'active' && pFix.paid === 500 && pFix.earned === 800 && pFix.payHold === true
+    && pFix.holdReason === '' && pFix.holdKind === 'money',
+  'старая строка: начислено 800 ₽ (не срезано заморозкой), выплачено 500 ₽, остаток на паузе; блогеру — вид паузы без причины', pFix);
   const pFixAdv = (await getVid(bf.body.video.id, ADV.token)).body.video;
-  ok(pFixAdv.holdReason === 'В заморозке кампании не хватило денег: недоплачено 300 ₽', 'рекламодателю — причина паузы', pFixAdv.holdReason);
+  ok(pFixAdv.holdReason === 'В заморозке кампании не хватило денег: недоплачено 300 ₽' && pFixAdv.holdKind === 'money',
+    'рекламодателю — причина и вид паузы (money)', pFixAdv);
   await sleep(300);
   const fixDm = dmsTo(B, /Выплата за видео/).map((m) => m.text).join('\n');
-  ok(/заработано 800 ₽, начислено 500 ₽/.test(fixDm) && /Остальные 300 ₽ задерживается/.test(fixDm) && !/выплаты нет/.test(fixDm),
-    'блогеру правда — сколько заработал, сколько начислено, что остаток задерживается', fixDm);
+  ok(/начислено по просмотрам 800 ₽, выплачено 500 ₽/.test(fixDm) && /Остальные 300 ₽ задерживаются/.test(fixDm) && !/выплаты нет/.test(fixDm),
+    'блогеру правда — сколько начислено, сколько выплачено, что остаток задерживается', fixDm);
   const qFix = await adm('GET', '/api/admin/task-videos?status=queue');
   ok((qFix.body.videos || []).some((v) => v.id === bf.body.video.id && v.payHold && /недоплачено 300/.test(v.holdReason)),
     'недоплата — в очереди владельца');
@@ -978,13 +1114,13 @@ try {
   ok(noKeySync.status === 403, 'круг по кнопке — только владельцу');
   const aS0 = await bal(A), bS0 = await bal(B), advS0 = await bal(ADV);
   const r1 = await sync();
-  ok(r1.status === 200 && r1.body.ok, 'круг прошёл', r1.body);
+  ok(r1.status === 200 && r1.body.ok && typeof r1.body.counted === 'number' && typeof r1.body.credited === 'number', 'круг прошёл', r1.body);
   const pB2 = (await getVid(vB2.id, B.token)).body.video;
-  ok(pB2.status === 'active' && pB2.paid === 0 && pB2.riskHold === true, 'накрутка держит выплату и в круге', pB2);
+  ok(pB2.status === 'active' && pB2.paid === 0 && pB2.riskHold === true, 'накрутка держит начисления и в круге', pB2);
   const pA5 = (await getVid(vA5.id, A.token)).body.video;
-  ok(pA5.status === 'active' && pA5.paid === 0 && pA5.disputeHeld === true, 'спор держит выплату и в круге', pA5);
+  ok(pA5.status === 'active' && pA5.paid === 0 && pA5.disputeHeld === true, 'спор держит начисления и в круге', pA5);
   const qDsp = await adm('GET', '/api/admin/task-videos?status=queue');
-  ok((qDsp.body.videos || []).some((v) => v.id === vA5.id && v.disputeHeld === true), 'M: выплата, которую держит спор, — в очереди владельца');
+  ok((qDsp.body.videos || []).some((v) => v.id === vA5.id && v.disputeHeld === true), 'M: начисления, которые держит спор, — в очереди владельца');
   const ovD = await adm('GET', '/api/admin/overview');
   ok(ovD.body['видео_на_решении'] === (qDsp.body.videos || []).length, 'M: значок совпадает с очередью',
     { badge: ovD.body['видео_на_решении'], queue: (qDsp.body.videos || []).length });
@@ -992,7 +1128,7 @@ try {
   ok(pA4.status === 'review', 'пропал один раз — ещё не удалён', pA4);
   const aS1 = await bal(A), bS1 = await bal(B), advS1 = await bal(ADV);
   ok(aS1.available === aS0.available && bS1.available === bS0.available && advS1.hold === advS0.hold,
-    'круг без новых зачётов денег не двигает', { aS0, aS1 });
+    'круг, когда просмотры не росли, денег не двигает', { aS0, aS1 });
 
   const r2 = await sync();
   ok(r2.status === 200, 'второй круг прошёл', r2.body);
@@ -1004,30 +1140,30 @@ try {
   ok(gA4.status === 'removed' && gA4.reserved === 0, 'пропал дважды с промежутком в сутки — removed, резерв снят', gA4);
 
   const forged = await api('POST', '/api/deals/release',
-    { dealId: 'camp:' + camps.main, toUserId: A.id, amount: 1, opKey: 'sys:vidpay:999999' }, ADV.token);
+    { dealId: 'camp:' + camps.main, toUserId: A.id, amount: 1, opKey: 'sys:vidpay:999999:1' }, ADV.token);
   ok(forged.status === 400, 'ключ sys:vidpay:* из приложения не занять', forged.body);
   const rfMain = await api('POST', '/api/deals/refund', { dealId: 'camp:' + camps.main, opKey: 'refund-main-' + tag }, ADV.token);
   ok(rfMain.status === 409 && rfMain.body.code === 'videos_live'
-    && rfMain.body.error === 'По заданию есть видео на проверке — вернуть бюджет можно после решения по ним',
-  'бюджет задания с видео на проверке не вернуть (и не завершить)', rfMain.body);
+    && rfMain.body.error === 'По заданию есть видео на проверке или в подсчёте просмотров — вернуть бюджет можно, когда подсчёт закончится',
+  'бюджет задания с видео на проверке и в подсчёте не вернуть (и не завершить)', rfMain.body);
 
-  /* Владелец снял подозрение — выплата сразу, по цифрам на момент решения. */
+  /* Владелец снял подозрение — начисление сразу, по цифрам на момент решения. */
   const bB2 = (await bal(B)).available;
   const free = await adm('POST', '/api/admin/task-videos/decide', { id: vB2.id, decision: 'count', note: 'Проверил вручную' });
   ok(free.status === 200 && free.body.video.riskHold === false, '«засчитать» снимает паузу', free.body);
   ok(free.body.settle === 'paid' && free.body.video.status === 'paid' && free.body.video.paid === 3000 && free.body.video.paidViews === 100000,
-    'и платит сразу: 100 000 просмотров упёрлись в потолок 3000', free.body.video);
+    'и начисляет сразу: 100 000 просмотров упёрлись в потолок 3000 — подсчёт закончен', free.body.video);
   await sync();
   ok((await bal(B)).available - bB2 === 3000, 'Б получил 3000 ровно один раз', (await bal(B)).available - bB2);
   const stillB2 = (await getVid(vB2.id, B.token)).body.video;
   ok(stillB2.riskHold === false && stillB2.status === 'paid', 'после решения ролик сам себя не замораживает', stillB2);
 
-  /* Спор снят — следующий круг платит. */
+  /* Спор снят — следующий круг начисляет. */
   const cls = await api('POST', '/api/deals/dispute/close', { dealId: 'camp:' + camps.short, payeeId: A.id }, ADV.token);
   ok(cls.status === 200 && cls.body.closed === 1, 'спор снят', cls.body);
   await sync();
   const pA5b = (await getVid(vA5.id, A.token)).body.video;
-  ok(pA5b.status === 'paid' && pA5b.paid === 400, 'после спора ролик оплачен кругом: 4000 × 100 / 1000 = 400', pA5b);
+  ok(pA5b.status === 'active' && pA5b.paid === 400, 'после спора начислено кругом: 4000 × 100 / 1000 = 400, подсчёт продолжается', pA5b);
 
   /* ── Отвязка канала ── */
   console.log('\n— отзыв канала');
@@ -1037,24 +1173,33 @@ try {
   ok(unl.status === 200, 'Б отвязал свой TikTok', unl.body);
   const rB4 = (await getVid(bb4.body.video.id, B.token)).body.video;
   ok(rB4.status === 'revoked' && rB4.reserved === 0, 'ролик с отвязанного канала → revoked, резерв снят', rB4);
+  const keepB2 = (await getVid(vB2.id, B.token)).body.video;
+  ok(keepB2.status === 'paid', 'закрытые подсчётом ролики отзыв не трогает', keepB2);
   const keepB1 = (await getVid(vB1.id, B.token)).body.video;
-  ok(keepB1.status === 'paid', 'оплаченные ролики отзыв не трогает', keepB1);
+  ok(keepB1.status === 'active' && keepB1.paid === 500, 'засчитанный ролик (active) отвязка канала не снимает', keepB1);
   const keepFix = (await getVid(bf.body.video.id, B.token)).body.video;
-  ok(keepFix.status === 'active' && keepFix.paid === 500, 'засчитанный ролик (active) отвязка канала не снимает', keepFix);
+  ok(keepFix.status === 'active' && keepFix.paid === 500, 'и ролик с паузой по деньгам — тоже', keepFix);
   await sleep(300);
   ok(dmsTo(B, /Видео снято с проверки/).some((m) => /вы отключили TikTok-канал/.test(m.text) && /выплаты по нему не будет/.test(m.text)),
     'блогеру честно — снято, потому что он отключил канал', dmsTo(B).map((m) => m.text));
   ok(dmsTo(ADV, /Видео снято с проверки/).length >= 1, 'рекламодателю — что проверять не нужно');
   const bBefore = await bal(B);
   const cRev = await adm('POST', '/api/admin/task-videos/decide', { id: bb4.body.video.id, decision: 'count', note: 'Проверил сам' });
-  ok(cRev.status === 200 && cRev.body.settle === 'paid' && cRev.body.video.paid === 100,
-    '«засчитать» снятый ролик → оплата по замороженным цифрам (1000 × 100 / 1000)', cRev.body);
+  ok(cRev.status === 200 && cRev.body.settle === 'paid' && cRev.body.video.paid === 100 && cRev.body.video.status === 'paid',
+    '«засчитать» снятый ролик → начисление по замороженным цифрам (1000 × 100 / 1000), считать дальше нечем — подсчёт закрыт', cRev.body);
   ok(row(bb4.body.video.id).frozen === 1, 'ролик помечен замороженным');
   ok((await bal(B)).available - bBefore.available === 100, 'Б получил 100');
   const after = await bind(B, 'main', link('blogerb', ID.B4));
   ok(after.status === 409 && after.body.code === 'no_channel', 'без канала новых загрузок нет', after.body);
   await sync();
   ok(row(bf.body.video.id).status === 'active', 'круг без канала засчитанный ролик не снимает');
+  const hB1 = (await getVid(vB1.id, ADV.token)).body.video;
+  ok(hB1.status === 'active' && hB1.payHold === true && hB1.holdKind === 'access' && /TikTok-канал блогера отвязан/.test(hB1.holdReason)
+    && (await bal(B)).available - bBefore.available === 100,
+  'засчитанный без канала: начисления стоят — пауза «нет доступа», владельцу причина', hB1);
+  await sleep(300);
+  ok(dmsTo(B, /Начисления за видео стоят/).some((m) => /отключён/.test(m.text) && /подсчёт продолжится/.test(m.text)),
+    'блогеру — что канал отключён и что подключить заново', dmsTo(B).map((m) => m.text));
 
   /* ── Площадки оффера ── */
   console.log('\n— площадки оффера');
@@ -1094,13 +1239,13 @@ try {
   ok(rw.status === 200, 'рекламодатель переписал ставку в ноль после загрузки');
   V.get(ID.D1).views = 6000;
   const rD1 = await review(vD1.id, ADV, true);
-  ok(rD1.body.video.status === 'paid' && rD1.body.video.earned === 600 && rD1.body.video.paid === 600,
-    'выплата по снимку: 6000 × 100 / 1000 = 600', rD1.body.video);
+  ok(rD1.body.video.status === 'active' && rD1.body.video.earned === 600 && rD1.body.video.paid === 600,
+    'начисление по снимку: 6000 × 100 / 1000 = 600', rD1.body.video);
   /* Строка «как до снимков»: условия возьмутся из конверта один раз. */
   const d5 = await bind(D, 'terms', link('blogerd', ID.D5));
   setRow(d5.body.video.id, { terms: null });
   const rD5 = await review(d5.body.video.id, ADV, true);
-  ok(rD5.body.video.status === 'paid' && rD5.body.video.paid === 500, 'старая строка посчитана по конверту: 5000 × 100 / 1000 = 500', rD5.body.video);
+  ok(rD5.body.video.status === 'active' && rD5.body.video.paid === 500, 'старая строка посчитана по конверту: 5000 × 100 / 1000 = 500', rD5.body.video);
   ok(JSON.parse(row(d5.body.video.id).terms || 'null').rate === 100, 'и снимок тут же записан');
 
   /* ── Резерв бюджета ── */
@@ -1109,15 +1254,15 @@ try {
   const vD2 = d2.body.video || {};
   ok(d2.status === 200 && vD2.reserved === 300, 'Д загрузил ролик: резерв — оценка 300 ₽', d2.body);
   const rl1 = await api('POST', '/api/deals/release', { dealId: 'camp:' + camps.resv, toUserId: C.id, amount: 800, opKey: 'rel1-' + tag }, ADV.token);
-  ok(rl1.status === 409 && rl1.body.code === 'videos_reserved' && rl1.body.reserved === 300 && rl1.body.free === 700,
-    'вручную нельзя выплатить зарезервированное под видео', rl1.body);
-  const rl2 = await api('POST', '/api/deals/release', { dealId: 'camp:' + camps.resv, toUserId: C.id, amount: 700, opKey: 'rel2-' + tag }, ADV.token);
-  ok(rl2.status === 200 && rl2.body.paid === 700, 'свободную часть — можно', rl2.body);
+  ok(rl1.status === 409 && rl1.body.code === 'videos_reserved' && rl1.body.reserved === 800 && rl1.body.free === 200,
+    'вручную бюджет держится под ролик до максимума за него (800 ₽), а не по нынешней оценке', rl1.body);
+  const rl2 = await api('POST', '/api/deals/release', { dealId: 'camp:' + camps.resv, toUserId: C.id, amount: 200, opKey: 'rel2-' + tag }, ADV.token);
+  ok(rl2.status === 200 && rl2.body.paid === 200, 'свободную часть — можно', rl2.body);
   const rfR = await api('POST', '/api/deals/refund', { dealId: 'camp:' + camps.resv, opKey: 'rfr-' + tag }, ADV.token);
   ok(rfR.status === 409 && rfR.body.code === 'videos_live', 'вернуть бюджет нельзя, пока видео на проверке', rfR.body);
   /* Оператор всё же вернул бюджет — в заморозке пусто. */
   const rfAdm = await api('POST', '/api/deals/refund', { dealId: 'camp:' + camps.resv, opKey: 'rfa-' + tag }, ADV.token, { admin: true });
-  ok(rfAdm.status === 200 && rfAdm.body.refunded === 300, 'оператор вернул остаток бюджета', rfAdm.body);
+  ok(rfAdm.status === 200 && rfAdm.body.refunded === 800, 'оператор вернул остаток бюджета', rfAdm.body);
   const dBal0 = await bal(D);
   const rD2 = await review(vD2.id, ADV, true);
   const pD2 = (await getVid(vD2.id, ADV.token)).body.video;
@@ -1126,12 +1271,12 @@ try {
   'денег нет — ролик не закрыт нулём, а ждёт владельца', pD2);
   await sleep(300);
   const d2Dm = dmsTo(D, /задерживается/).map((m) => m.text);
-  ok(d2Dm.length === 1 && /заработано 300 ₽/.test(d2Dm[0]) && !dmsTo(D, /выплаты нет/).length,
-    'блогеру не «выплаты нет», а «заработано 300 ₽, задерживается»', dmsTo(D).map((m) => m.text));
+  ok(d2Dm.length === 1 && /начислено по просмотрам 300 ₽/.test(d2Dm[0]) && !dmsTo(D, /выплаты нет/).length,
+    'блогеру не «выплаты нет», а «начислено 300 ₽, задерживается»', dmsTo(D).map((m) => m.text));
   await sync();
   await sleep(300);
   ok(dmsTo(D, /задерживается/).length === 1 && (await bal(D)).available === dBal0.available,
-    'ролик на паузе круг не перебирает и не пишет снова');
+    'ролик на паузе круг не платит и не пишет снова');
 
   /* Резервы снимаются при отказе и отвязке. */
   const fa = await bindAs(F, 'rsv', link('blogerf1', ID.F1a), { platform: 'tiktok', account: 'chan-F1' });
@@ -1164,6 +1309,9 @@ try {
   const cD3 = await adm('POST', '/api/admin/task-videos/decide', { id: vD3.id, decision: 'count', note: 'цифры честные' });
   ok(cD3.status === 200 && cD3.body.video.riskHold === false && cD3.body.video.status === 'review' && row(vD3.id).decided_views === 100000,
     'решение запомнило 100 000 просмотров, ролик ждёт рекламодателя', cD3.body);
+  await sleep(300);
+  ok(dmsTo(D, /Решение по видео/).some((m) => /Видео ждёт проверки рекламодателя/.test(m.text)),
+    'блогеру — решение, а не «засчитано»: видео ещё ждёт рекламодателя', dmsTo(D).map((m) => m.text));
   Object.assign(V.get(ID.D3), { views: 150000, likes: 150 });
   await sync();
   ok(row(vD3.id).risk_hold === 0 && row(vD3.id).risk_level === 'bad', 'до двукратного роста решение держит');
@@ -1177,7 +1325,7 @@ try {
   const cD4 = await adm('POST', '/api/admin/task-videos/decide', { id: vD4.id, decision: 'count' });
   ok(cD4.status === 200 && cD4.body.settle === 'held' && cD4.body.video.status === 'active' && cD4.body.video.riskHold === true
     && cD4.body.video.paid === 0 && row(vD4.id).decided_views === null,
-  '«засчитать» возвращённый — не решение о накрутке: свежий замер плохой, выплата ждёт', cD4.body);
+  '«засчитать» возвращённый — не решение о накрутке: свежий замер плохой, начисления ждут', cD4.body);
 
   /* ── G: строку закрыли, пока ждали площадку ── */
   console.log('\n— гонка с площадкой');
@@ -1186,7 +1334,7 @@ try {
   setRow(vD6.id, { stats_at: Date.now() - 3600e3, last_try_at: Date.now() - 3600e3 });
   SLOW.add(ID.D6);
   V.get(ID.D6).views = 77777;
-  const slowRf = api('POST', '/api/tasks/video/refresh', { id: vD6.id }, D.token);
+  const slowRf = refresh(vD6.id, D);
   await sleep(400);
   const decG = await adm('POST', '/api/admin/task-videos/decide', { id: vD6.id, decision: 'decline', note: 'не по ТЗ' });
   ok(decG.status === 200 && decG.body.video.status === 'declined', 'владелец закрыл ролик, пока площадка думала', decG.body);
@@ -1206,7 +1354,8 @@ try {
   const rAuto = await sync();
   ok(rAuto.body.autoAccepted === 1, 'круг засчитал один ролик сам', rAuto.body);
   const pD7 = (await getVid(vD7.id, D.token)).body.video;
-  ok(pD7.decision === 'auto' && pD7.approvedAt > 0 && pD7.status === 'paid' && pD7.paid === 100, 'автозачёт — и сразу выплата: 100', pD7);
+  ok(pD7.decision === 'auto' && pD7.approvedAt > 0 && pD7.status === 'active' && pD7.paid === 100 && pD7.daysLeft === 30,
+    'автозачёт — и сразу первое начисление: 100, дальше 30 дней подсчёта', pD7);
   ok((await bal(D)).available - dA0 === 100, 'Д получил 100');
   await sleep(300);
   const autoTxt = 'Рекламодатель не ответил за 3 дня — видео засчитано автоматически';
@@ -1215,86 +1364,91 @@ try {
   ok(dDm.length === 1 && /100 ₽ на балансе/.test(dDm[0]) && dDm[0].includes(autoTxt),
     'автозачёт: блогеру ОДНО уведомление — «засчитано, 100 ₽ на балансе» с причиной автозачёта', dDm);
 
-  /* ── Свежий замер не удался ── */
-  console.log('\n— замер при зачёте не удался');
+  /* ── Сбой площадки при замере: ничего нового не начисляем ── */
+  console.log('\n— сбой площадки');
   const e1 = await bind(E, 'main', link('blogere', ID.E1));
   const e2 = await bind(E, 'main', link('blogere', ID.E2));
   const e3 = await bind(E, 'main', link('blogere', ID.E3));
   ok(e1.status === 200 && e2.status === 200 && e3.status === 200, 'Е загрузил три ролика');
   const vE1 = e1.body.video, vE2 = e2.body.video, vE3 = e3.body.video;
-  /* Сбой ПЛОЩАДКИ (TikTok отвечает 500): по последним цифрам — можно. */
-  DOWN.add(ID.E1); DOWN.add(ID.E2);
+  DOWN.add(ID.E1);
   const eBal0 = (await bal(E)).available;
   const rE1 = await review(vE1.id, ADV, true);
-  ok(rE1.body.settle === 'paid' && rE1.body.video.paid === 100 && !rE1.body.video.payNote,
-    'площадка упала, последнему замеру меньше суток — оплачено по нему', rE1.body.video);
-  setRow(vE2.id, { stats_at: Date.now() - 25 * 3600e3 });
-  const rE2 = await review(vE2.id, ADV, true);
-  const hE2 = (await getVid(vE2.id, ADV.token)).body.video;
-  ok(rE2.body.settle === 'held' && hE2.status === 'active' && hE2.payHold && hE2.paid === 0
-    && hE2.holdReason === 'Нет свежего замера: TikTok не отдал цифры ролика — повторим через полчаса' && row(vE2.id).pay_tries === 1,
-  'площадка упала, последнему больше суток — выплата ждёт повтора', hE2);
-  ok((await getVid(vE2.id, E.token)).body.video.holdReason === '', 'блогеру без служебной причины');
-  const qE = await adm('GET', '/api/admin/task-videos?status=queue');
-  ok(!(qE.body.videos || []).some((v) => v.id === vE2.id), 'пауза «нет замера» владельцу не нужна — её повторит круг');
-  const qm = fakeLog.length;
+  ok(rE1.body.settle === 'wait' && rE1.body.video.status === 'active' && rE1.body.video.paid === 0 && row(vE1.id).pay_tries === 1
+    && !rE1.body.video.payHold,
+  'площадка упала при зачёте — засчитано, но ничего не начислено «по старым цифрам», без паузы', rE1.body);
+  await sleep(300);
+  ok(dmsTo(E, /Видео засчитано — считаем просмотры/).some((m) => /не отдал цифры/.test(m.text)),
+    'блогеру: засчитано, цифры проверим на следующем круге', dmsTo(E).map((m) => m.text));
+  V.get(ID.E1).views = 2000;
   await sync();
-  ok(row(vE2.id).pay_tries === 1 && !fakeLog.slice(qm).some((l) => l.startsWith('Q ') && l.includes(ID.E2)),
-    'повтор не чаще раза в 20 минут: круг сразу после — без запроса');
-  setRow(vE2.id, { last_try_at: Date.now() - 30 * 60e3 });
+  ok(row(vE1.id).paid === 0 && row(vE1.id).pay_tries === 2 && row(vE1.id).views === 1000 && (await bal(E)).available === eBal0,
+    'площадка всё ещё падает — прибавки нет, цифры прежние', row(vE1.id));
+  DOWN.delete(ID.E1);
   await sync();
-  ok(row(vE2.id).pay_tries === 2 && row(vE2.id).status === 'active', 'вторая неудача — ещё ждём');
-  setRow(vE2.id, { last_try_at: Date.now() - 30 * 60e3 });
+  const pE1 = (await getVid(vE1.id, E.token)).body.video;
+  ok(pE1.status === 'active' && pE1.paid === 200 && pE1.paidViews === 2000 && row(vE1.id).pay_tries === 0
+    && (await bal(E)).available - eBal0 === 200,
+  'площадка ожила — начислено по свежему замеру: 2000 → 200', pE1);
+  /* Срок вышел, а финальный замер не удаётся: после трёх неудач подряд
+     подсчёт закрывается по последнему удачному замеру — новое не начисляется. */
+  await review(vE2.id, ADV, true);
+  ok(row(vE2.id).paid === 100 && row(vE2.id).status === 'active', 'Е2 засчитан: 100');
+  V.get(ID.E2).views = 3000;
+  DOWN.add(ID.E2);
+  setRow(vE2.id, { track_ends_at: Date.now() - 1000 });
+  const eBal1 = (await bal(E)).available;
+  await sync();
+  await sync();
+  ok(row(vE2.id).status === 'active' && row(vE2.id).pay_tries === 2, 'срок вышел, площадка падает — две попытки, ждём');
   await sync();
   const pE2 = (await getVid(vE2.id, ADV.token)).body.video;
-  ok(pE2.status === 'paid' && pE2.paid === 100 && /^Оплачено по последнему замеру/.test(pE2.payNote) && !pE2.payHold,
-    'третья неудача площадки — оплачено по последнему замеру, с пометкой для владельца', pE2);
+  ok(pE2.status === 'paid' && pE2.paid === 100 && /^Подсчёт закрыт по последнему замеру/.test(pE2.payNote) && !pE2.payHold
+    && (await bal(E)).available === eBal1,
+  'третья неудача после конца срока — подсчёт закрыт по последнему замеру, без новых начислений, пометка владельцу', pE2);
   ok((await getVid(vE2.id, E.token)).body.video.payNote === '', 'блогеру пометка не отдаётся');
-  ok((await bal(E)).available - eBal0 === 200, 'Е получил 100 + 100');
-  await sleep(300);
-  ok(dmsTo(E, /Выплата за видео задерживается/).length === 1, 'о задержке блогеру — один раз', dmsTo(E).map((m) => m.text));
-  DOWN.delete(ID.E1); DOWN.delete(ID.E2);
-  /* Площадка снова отвечает — платим по свежему замеру. */
-  setRow(vE3.id, { stats_at: Date.now() - 25 * 3600e3 });
+  DOWN.delete(ID.E2);
+  /* Засчитан при сбое, площадка ожила — начислено по свежему. */
   DOWN.add(ID.E3);
   await review(vE3.id, ADV, true);
-  ok(row(vE3.id).pay_hold === 1 && row(vE3.id).hold_kind === 'measure', 'третий ролик ждёт замера');
+  ok(row(vE3.id).paid === 0 && row(vE3.id).status === 'active' && !row(vE3.id).pay_hold, 'третий ролик засчитан при сбое — ждёт круга');
   DOWN.delete(ID.E3);
   V.get(ID.E3).views = 3000;
-  setRow(vE3.id, { last_try_at: Date.now() - 30 * 60e3 });
   await sync();
   const pE3 = (await getVid(vE3.id, ADV.token)).body.video;
-  ok(pE3.status === 'paid' && pE3.paid === 300 && pE3.paidViews === 3000 && !pE3.payNote, 'площадка ожила — оплачено по свежему замеру: 300', pE3);
+  ok(pE3.status === 'active' && pE3.paid === 300 && pE3.paidViews === 3000 && !pE3.payNote, 'площадка ожила — начислено по свежему замеру: 300', pE3);
 
-  /* Сбой ДОСТУПА (блогер отозвал доступ к TikTok и удалил ролик): ни сразу,
-     ни после трёх кругов «по последним цифрам» не платим — пауза к владельцу. */
+  /* Сбой ДОСТУПА (блогер отозвал доступ к TikTok и удалил ролик): по старым
+     цифрам не начисляем ни сразу, ни после трёх кругов — пауза к владельцу. */
   const e5 = await bind(E, 'main', link('blogere', ID.E5));
   const e7 = await bind(E, 'main', link('blogere', ID.E7));
   ok(e5.status === 200 && e7.status === 200, 'Е загрузил ещё два ролика');
   const vE5 = e5.body.video, vE7 = e7.body.video;
   delete TOKENS['tok-E'];
   V.delete(ID.E5);
-  const eBal1 = (await bal(E)).available;
+  const eBal2 = (await bal(E)).available;
   const rE5 = await review(vE5.id, ADV, true);
   const hE5 = (await getVid(vE5.id, ADV.token)).body.video;
-  ok(rE5.body.settle === 'held' && hE5.status === 'active' && hE5.payHold === true && hE5.paid === 0
+  ok(rE5.body.settle === 'held' && hE5.status === 'active' && hE5.payHold === true && hE5.paid === 0 && hE5.holdKind === 'access'
     && /^Нет доступа к TikTok блогера/.test(hE5.holdReason) && row(vE5.id).hold_kind === 'access',
-  'доступ отозван, цифрам меньше суток — НЕ оплачено, пауза «нет доступа»', hE5);
-  ok((await bal(E)).available === eBal1, 'деньги не ушли');
+  'доступ отозван — НЕ начислено, пауза «нет доступа»', hE5);
+  ok((await bal(E)).available === eBal2, 'деньги не ушли');
   const qA = await adm('GET', '/api/admin/task-videos?status=queue');
   ok((qA.body.videos || []).some((v) => v.id === vE5.id && v.payHold), 'пауза «нет доступа» — в очереди владельца');
   await sleep(300);
-  ok(dmsTo(E, /Переподключите TikTok/).length === 1 && /выплата за засчитанные ждёт/.test(dmsTo(E, /Переподключите TikTok/)[0].text)
+  ok(dmsTo(E, /Переподключите TikTok/).length === 1 && /начисления за засчитанные стоят/.test(dmsTo(E, /Переподключите TikTok/)[0].text)
     && !/по последним цифрам/.test(dmsTo(E, /Переподключите TikTok/)[0].text),
-  'блогеру — «переподключите», без обещания платить по последним цифрам', dmsTo(E).map((m) => m.text));
+  'блогеру — «переподключите», начисления стоят', dmsTo(E).map((m) => m.text));
+  ok(dmsTo(E, /Видео засчитано — нужен доступ к TikTok/).length === 1, 'и о самом зачёте — что начисления ждут доступа');
   for (let i = 0; i < 3; i++) { setRow(vE5.id, { last_try_at: Date.now() - 4 * 3600e3 }); await sync(); }
-  ok(row(vE5.id).status === 'active' && row(vE5.id).paid === 0 && (await bal(E)).available === eBal1,
-    'три круга подряд — всё ещё не оплачено (раньше платилось «по последнему замеру»)', row(vE5.id));
-  /* Владелец сам решил «засчитать» — платим по цифрам на момент решения. */
+  ok(row(vE5.id).status === 'active' && row(vE5.id).paid === 0 && (await bal(E)).available === eBal2,
+    'три круга подряд — всё ещё не начислено', row(vE5.id));
+  /* Владелец сам решил «засчитать» — начисление по цифрам на момент решения, и подсчёт закрыт. */
   const rE7 = await review(vE7.id, ADV, true);
   ok(rE7.body.settle === 'held' && row(vE7.id).hold_kind === 'access', 'второй ролик тоже ждёт');
   const cE7 = await adm('POST', '/api/admin/task-videos/decide', { id: vE7.id, decision: 'count', note: 'Ролик на месте, проверил' });
-  ok(cE7.status === 200 && cE7.body.settle === 'paid' && cE7.body.video.paid === 100, 'владелец засчитал — оплачено по цифрам на момент решения', cE7.body);
+  ok(cE7.status === 200 && cE7.body.settle === 'paid' && cE7.body.video.paid === 100 && row(vE7.id).frozen === 1,
+    'владелец засчитал паузу «нет доступа» — начислено по цифрам на момент решения, подсчёт закрыт', cE7.body);
   /* Блогер вернул доступ — круг пробует снова (не чаще раза в 3 часа): удалённый ролик → removed. */
   TOKENS['tok-E'] = 'chan-E';
   setRow(vE5.id, { last_try_at: Date.now() - 30 * 60e3 });
@@ -1304,31 +1458,34 @@ try {
     'пауза «нет доступа» повторяется не чаще раза в 3 часа');
   setRow(vE5.id, { last_try_at: Date.now() - 4 * 3600e3 });
   await sync();
-  ok(row(vE5.id).status === 'removed' && row(vE5.id).paid === 0 && (await bal(E)).available - eBal1 === 100,
-    'доступ вернулся, а ролика нет — removed без выплаты (за Е7 пришли 100 по решению владельца)', row(vE5.id));
+  ok(row(vE5.id).status === 'active' && row(vE5.id).miss === 1, 'доступ вернулся, ролика нет — первый промах, ролик пока не снят', row(vE5.id));
+  setRow(vE5.id, { last_try_at: Date.now() - 4 * 3600e3, last_miss_at: Date.now() - 21 * 3600e3 });
+  await sync();
+  ok(row(vE5.id).status === 'removed' && row(vE5.id).paid === 0 && (await bal(E)).available - eBal2 === 100,
+    'доступ вернулся, а ролика нет — removed без денег (за Е7 пришли 100 по решению владельца)', row(vE5.id));
 
-  /* Канал отвязан, пока засчитанный ролик ждал замера (площадка падала) — не платим. */
+  /* Канал отвязан, пока засчитанный ролик ждал замера (площадка падала) — не начисляем. */
   const e6 = await bind(E, 'main', link('blogere', ID.E6));
   const vE6 = e6.body.video;
   DOWN.add(ID.E6);
-  setRow(vE6.id, { stats_at: Date.now() - 25 * 3600e3 });
   await review(vE6.id, ADV, true);
-  ok(row(vE6.id).hold_kind === 'measure', 'Е6 засчитан, ждёт замера (площадка падает)');
+  ok(row(vE6.id).status === 'active' && row(vE6.id).paid === 0 && row(vE6.id).pay_tries === 1, 'Е6 засчитан при сбое площадки, ждёт круга');
   /* Владелец отвязал канал — снят только ролик на проверке. */
   const e4 = await bind(E, 'main', link('blogere', ID.E4));
   const aul = await adm('POST', '/api/admin/verify/unlink', { platform: 'tiktok', externalId: 'chan-E' });
   ok(aul.status === 200, 'владелец отвязал канал Е', aul.body);
-  ok(row(e4.body.video.id).status === 'revoked' && row(vE2.id).status === 'paid', 'снят только ролик на проверке, оплаченные остались');
+  ok(row(e4.body.video.id).status === 'revoked' && row(vE2.id).status === 'paid' && row(vE1.id).status === 'active',
+    'снят только ролик на проверке, засчитанные и закрытые остались');
   await sleep(300);
   ok(dmsTo(E, /Видео снято с проверки/).some((m) => /администратор отключил TikTok-канал/.test(m.text)), 'блогеру сказано, кто отключил');
   DOWN.delete(ID.E6);
-  const eBal2 = (await bal(E)).available;
-  for (let i = 0; i < 3; i++) { setRow(vE6.id, { last_try_at: Date.now() - 30 * 60e3 }); await sync(); }
-  ok(row(vE6.id).status === 'active' && row(vE6.id).hold_kind === 'access' && (await bal(E)).available === eBal2
+  const eBal3 = (await bal(E)).available;
+  for (let i = 0; i < 3; i++) { setRow(vE6.id, { last_try_at: Date.now() - 4 * 3600e3 }); await sync(); }
+  ok(row(vE6.id).status === 'active' && row(vE6.id).hold_kind === 'access' && (await bal(E)).available === eBal3
     && /TikTok-канал блогера отвязан/.test(row(vE6.id).pay_why),
-  'канал отвязан — засчитанный ролик не оплачен «по последним цифрам», ждёт владельца', row(vE6.id));
+  'канал отвязан — засчитанный ролик не начисляется «по последним цифрам», ждёт владельца', row(vE6.id));
   await sleep(300);
-  ok(dmsTo(E, /Выплата за видео задерживается/).some((m) => /отключён/.test(m.text)), 'блогеру — что канал отключён и что делать');
+  ok(dmsTo(E, /Начисления за видео стоят/).some((m) => /отключён/.test(m.text)), 'блогеру — что канал отключён и что делать');
 
   /* Отвязал канал, пока сервер ждал площадку: ролик на отвязанный канал не пишется. */
   SLOW.add(ID.U1);
@@ -1341,16 +1498,16 @@ try {
     && !dbx().prepare('SELECT id FROM task_videos WHERE video_id = ?').get(ID.U1),
   'канал отвязан, пока ждали TikTok, — no_channel, строка не записана', uRes.body);
 
-  /* Оплаченный ролик, доступ умер: обновление «для показа» молчит. */
-  const pp1 = await bind(PP, 'main', link('bloggerp', ID.P1));
+  /* Закрытый подсчётом ролик, доступ умер: обновление «для показа» молчит. */
+  const pp1 = await bind(PP, 'capx', link('bloggerp', ID.P1));
   const rpp1 = await review(pp1.body.video.id, ADV, true);
-  ok(rpp1.body.settle === 'paid', 'П: ролик оплачен');
+  ok(rpp1.body.settle === 'paid' && rpp1.body.video.paid === 200, 'П: максимум за ролик (200 ₽) взят при зачёте — подсчёт закончен');
   delete TOKENS['tok-P'];
   setRow(pp1.body.video.id, { stats_at: Date.now() - 25 * 3600e3, last_try_at: Date.now() - 25 * 3600e3 });
   await sync();
   await sleep(300);
   ok(row(pp1.body.video.id).last_try_at > Date.now() - 60e3 && !dmsTo(PP, /Переподключите/).length,
-    'оплаченный ролик с мёртвым доступом: попытка записана, «переподключите … по последним цифрам» не шлём', dmsTo(PP).map((m) => m.text));
+    'закрытый подсчётом ролик с мёртвым доступом: попытка записана, «переподключите» не шлём', dmsTo(PP).map((m) => m.text));
 
   /* ── YouTube: доступ канала, refresh, разбор ссылок ── */
   console.log('\n— YouTube (доступ канала)');
@@ -1421,9 +1578,9 @@ try {
   YV.get(YT.Y1).views = 5000;
   const gq = gLog.length;
   const rY1 = await review(vY1.id, ADV, true);
-  ok(rY1.body.settle === 'paid' && rY1.body.video.paid === 500 && rY1.body.video.paidViews === 5000
+  ok(rY1.body.settle === 'active' && rY1.body.video.paid === 500 && rY1.body.video.paidViews === 5000
     && gLog.slice(gq).some((l) => l.startsWith('VTOK') && l.includes(YT.Y1)),
-  'YouTube: зачёт — свежий замер доступом канала и выплата 500', rY1.body.video);
+  'YouTube: зачёт — свежий замер доступом канала и первое начисление 500', rY1.body.video);
   ok((await bal(Y)).available - yBal0 === 500, 'Игрек получил 500');
   /* Ролик закрыли до зачёта — для задания его больше нет. */
   YV.get(YT.Y2).privacy = 'private';
@@ -1527,6 +1684,378 @@ try {
   const jG3 = await api('POST', '/api/tasks/join', { campId: camps.brd }, G.token);
   ok(jG3.status === 200 && jG3.body.already === false && (await board(G, 'brd')).body.members === 3, 'вернулся в задание тем же /join');
 
+  /* ══ Механика v3: загрузка с нуля, начисления по мере роста ══════════ */
+  console.log('\n— v3: загрузка с 0 просмотров и сводка');
+  const n0 = await bind(N, 'notif', link('blogern', ID.N0));
+  const vN0 = n0.body.video || {};
+  ok(n0.status === 200 && vN0.status === 'review' && vN0.views === 0 && vN0.earned === 0 && vN0.reserved === 0
+    && vN0.minViews === 1000 && vN0.viewsToMin === 1000 && vN0.maxPay === 3000 && vN0.riskHold === false && vN0.trackEndsAt === null,
+  'ролик с НУЛЁМ просмотров принят сразу после публикации: начислено 0, резерв 0, до порога 1 000', n0.body);
+  const nBal0 = (await bal(N)).available;
+  setV(ID.N0, 500);
+  await sleep(300);
+  const nDm = () => dmsTo(N, /«Сводка»/).map((m) => m.text);
+  const nDm0 = nDm().length;
+  const rN0 = await review(vN0.id, ADV, true);
+  const aN0 = rN0.body.video || {};
+  ok(rN0.body.settle === 'active' && aN0.status === 'active' && aN0.paid === 0 && aN0.earned === 0 && aN0.reserved === 0
+    && aN0.trackEndsAt === aN0.approvedAt + 30 * DAY && aN0.daysLeft === 30 && aN0.viewsToMin === 500,
+  'засчитан ниже порога: считаем просмотры 30 дней, денег пока нет, до порога 500', aN0);
+  await sleep(300);
+  ok(nDm().length - nDm0 === 1 && /Видео засчитано — считаем просмотры/.test(nDm()[nDm().length - 1])
+    && /начисления начнутся с 1 000 просмотров \(сейчас 500\)/.test(nDm()[nDm().length - 1]) && /ещё 30 дней/.test(nDm()[nDm().length - 1]),
+  'блогеру: засчитано, начисления начнутся с 1 000 просмотров, сайт считает ещё 30 дней', nDm());
+  ok((await bal(N)).available === nBal0, 'ниже порога денег нет');
+  /* Сутки 2: 1 500 просмотров — первое начисление. */
+  setV(ID.N0, 1500);
+  ageRow(vN0.id);
+  const d2s = await syncDay();
+  const g2 = (await getVid(vN0.id, N.token)).body.video;
+  ok(d2s.status === 200 && g2.paid === 150 && g2.earned === 150 && g2.paidViews === 1500 && g2.reserved === 0
+    && (await bal(N)).available - nBal0 === 150,
+  'сутки 2: обычный круг снял 1 500 просмотров — первое начисление +150 ₽', g2);
+  await sleep(300);
+  ok(nDm().length - nDm0 === 2 && /Видео засчитано — 150 ₽ на балансе/.test(nDm()[nDm().length - 1]),
+    'блогеру: «Видео засчитано — 150 ₽ на балансе»', nDm());
+  /* Тот же день: круг ролик не трогает; принудительный — замеряет, но второй раз не платит. */
+  const qn = fakeLog.length;
+  await syncDay();
+  ok(!fakeLog.slice(qn).some((l) => l === 'Q ' + ID.N0), 'тот же день: обычный круг площадку по ролику не спрашивает');
+  await sync();
+  ok((await bal(N)).available - nBal0 === 150 && opsOf('sys:vidpay:' + vN0.id + ':150') === 1,
+    'повтор круга с теми же цифрами не платит дважды (одна операция на ключ :150)');
+  /* Сутки 3: 4 000 — прибавка +250, но письма нет: сводка не чаще раза в сутки. */
+  setV(ID.N0, 4000);
+  ageRow(vN0.id);
+  await syncDay();
+  await sleep(300);
+  ok(row(vN0.id).paid === 400 && (await bal(N)).available - nBal0 === 400 && nDm().length - nDm0 === 2,
+    'сутки 3: 4 000 → начислено 400, прибавка +250 пришла, а письма нет — после прошлого меньше суток', row(vN0.id).paid);
+  /* Сутки 4: 7 000 — прибавка +300, письмо-сводка сразу за обе прибавки. */
+  setV(ID.N0, 7000);
+  ageRow(vN0.id);
+  setRow(vN0.id, { notif_at: Date.now() - 21 * 3600e3 });
+  await syncDay();
+  await sleep(300);
+  const sum4 = nDm()[nDm().length - 1];
+  ok(row(vN0.id).paid === 700 && nDm().length - nDm0 === 3 && /^\+550 ₽ за просмотры: «Сводка»/.test(sum4)
+    && /Всего по видео начислено 700 ₽ за 7 000 просмотров/.test(sum4) && /Считаем ещё \d+ (день|дня|дней)/.test(sum4),
+  'сутки 4: 7 000 → +300; сводка «+550 ₽ за просмотры» за двое суток, всего 700 ₽', sum4);
+  /* Просмотры просели — начисленное не уменьшается. */
+  setV(ID.N0, 6000);
+  ageRow(vN0.id);
+  await syncDay();
+  const g5 = (await getVid(vN0.id, N.token)).body.video;
+  ok(g5.views === 6000 && g5.countViews === 7000 && g5.earned === 700 && g5.paid === 700 && (await bal(N)).available - nBal0 === 700,
+    'площадка срезала просмотры до 6 000 — считаем по наибольшим 7 000, начисленное не уменьшилось', g5);
+  /* Одновременно: обычный круг, два «Обновить» и ещё круг — прибавка одна. */
+  setV(ID.N0, 9000);
+  ageRow(vN0.id);
+  const race = await Promise.all([syncDay(), refresh(vN0.id, N), refresh(vN0.id, N), syncDay()]);
+  ok(race.every((r) => r.status === 200 || r.status === 409) && row(vN0.id).paid === 900 && (await bal(N)).available - nBal0 === 900
+    && opsOf('sys:vidpay:' + vN0.id + ':900') === 1,
+  'круг и два «Обновить» одновременно: +200 ровно один раз', race.map((r) => r.status));
+  /* Процесс, прочитавший строку до чужой выплаты, приходит с тем же
+     накопленным итогом — ключ :900 уже занят, второй раз не платится. */
+  setRow(vN0.id, { paid: 700 });
+  ageRow(vN0.id);
+  const stale = await refresh(vN0.id, N);
+  ok(stale.status === 200 && (await bal(N)).available - nBal0 === 900 && opsOf('sys:vidpay:' + vN0.id + ':900') === 1,
+    'устаревший снимок «выплачено 700» → тот же ключ :900 → «уже проведено», денег второй раз нет', stale.body);
+  setRow(vN0.id, { paid: 900 });
+
+  console.log('\n— v3: максимум за ролик, 30 дней, фикс');
+  /* Потолок 500 ₽: взят — подсчёт закончен, дальше только показ. */
+  const g1v = await bind(N, 'gcap', link('blogern', ID.N1));
+  setV(ID.N1, 2000);
+  const rN1 = await review(g1v.body.video.id, ADV, true);
+  ok(rN1.body.settle === 'active' && rN1.body.video.paid === 200 && rN1.body.video.maxPay === 500 && rN1.body.video.capReached === false,
+    'потолок 500 ₽: при зачёте 2 000 → +200, считаем дальше', rN1.body.video);
+  const rfCap1 = await api('POST', '/api/deals/refund', { dealId: 'camp:' + camps.gcap, opKey: 'rfcap1-' + tag }, ADV.token);
+  ok(rfCap1.status === 409 && rfCap1.body.code === 'videos_live', 'пока ролик в подсчёте, бюджет задания не вернуть', rfCap1.body);
+  const nC0 = (await bal(N)).available;
+  setV(ID.N1, 8000);
+  ageRow(g1v.body.video.id);
+  await syncDay();
+  const gN1 = (await getVid(g1v.body.video.id, N.token)).body.video;
+  ok(gN1.status === 'paid' && gN1.paid === 500 && gN1.earned === 500 && gN1.capReached === true && (await bal(N)).available - nC0 === 300,
+    '8 000 просмотров → 800 упёрлось в потолок: +300, всего 500 — подсчёт закончен (paid)', gN1);
+  await sleep(300);
+  ok(dmsTo(N, /Подсчёт закончен — всего 500 ₽/).some((m) => /«Потолок 500»/.test(m.text) && /последняя прибавка \+300 ₽/.test(m.text)
+    && /максимум за видео/.test(m.text)), 'блогеру: «Подсчёт закончен — всего 500 ₽»', dmsTo(N).map((m) => m.text));
+  setV(ID.N1, 20000);
+  await sync();
+  const gN1b = (await getVid(g1v.body.video.id, N.token)).body.video;
+  ok(gN1b.views === 20000 && gN1b.paid === 500 && (await bal(N)).available - nC0 === 300,
+    'после потолка цифры обновляются только для показа: 20 000 просмотров, денег больше нет', gN1b);
+  const rfCap2 = await api('POST', '/api/deals/refund', { dealId: 'camp:' + camps.gcap, opKey: 'rfcap2-' + tag }, ADV.token);
+  ok(rfCap2.status === 200 && rfCap2.body.refunded === 4500, 'подсчёт закончен — остаток бюджета (4 500 ₽) вернуть можно', rfCap2.body);
+  /* 30 дней от зачёта: финальный замер, последняя прибавка, конец подсчёта. */
+  const g2v = await bind(N, 'grow', link('blogern', ID.N2));
+  setV(ID.N2, 1200);
+  const rN2 = await review(g2v.body.video.id, ADV, true);
+  ok(rN2.body.video.paid === 120 && rN2.body.video.daysLeft === 30, '«Рост»: зачёт при 1 200 → +120, осталось 30 дней', rN2.body.video);
+  const nD0 = (await bal(N)).available;
+  setV(ID.N2, 2500);
+  setRow(g2v.body.video.id, { track_ends_at: Date.now() - 1000, last_try_at: Date.now() - 25 * 60e3 });
+  await syncDay();
+  const gN2 = (await getVid(g2v.body.video.id, N.token)).body.video;
+  ok(gN2.status === 'paid' && gN2.paid === 250 && gN2.paidViews === 2500 && row(g2v.body.video.id).frozen === 1
+    && (await bal(N)).available - nD0 === 130,
+  '30 дней прошли: круг сразу снял финальный замер — последняя прибавка +130, всего 250, подсчёт закончен', gN2);
+  await sleep(300);
+  ok(dmsTo(N, /Подсчёт закончен — всего 250 ₽/).some((m) => /«Рост»/.test(m.text) && /последняя прибавка \+130 ₽/.test(m.text)),
+    'блогеру: «Подсчёт закончен — всего 250 ₽» с последней прибавкой', dmsTo(N).map((m) => m.text));
+  setV(ID.N2, 9000);
+  await sync();
+  ok(row(g2v.body.video.id).views === 2500 && (await bal(N)).available - nD0 === 130, 'после 30 дней ролик не опрашивается и денег больше нет');
+  const rfN2 = await refresh(g2v.body.video.id, N);
+  ok(rfN2.status === 409, '«Обновить» после конца срока — 409', rfN2.body);
+  /* Фикс с порогом: 800 ₽, когда ролик наберёт 2 000. */
+  const g3v = await bind(N, 'gfix', link('blogern', ID.N3));
+  ok(g3v.status === 200 && g3v.body.video.payMode === 'fixed' && g3v.body.video.fixedPrice === 800 && g3v.body.video.maxPay === 800
+    && g3v.body.video.reserved === 0 && g3v.body.video.viewsToMin === 2000, 'фикс 800 ₽ с порогом 2 000: загружен с нуля, резерв 0', g3v.body.video);
+  setV(ID.N3, 500);
+  const nF0 = (await bal(N)).available;
+  const rN3 = await review(g3v.body.video.id, ADV, true);
+  ok(rN3.body.settle === 'active' && rN3.body.video.paid === 0, 'фикс: засчитан при 500 — ниже порога, денег нет');
+  setV(ID.N3, 1900);
+  ageRow(g3v.body.video.id);
+  await syncDay();
+  ok(row(g3v.body.video.id).paid === 0 && row(g3v.body.video.id).status === 'active', 'фикс: 1 900 — всё ещё ниже порога');
+  setV(ID.N3, 2600);
+  ageRow(g3v.body.video.id);
+  await syncDay();
+  const gN3 = (await getVid(g3v.body.video.id, N.token)).body.video;
+  ok(gN3.status === 'paid' && gN3.paid === 800 && gN3.capReached === true && (await bal(N)).available - nF0 === 800,
+    'фикс: порог взят — выплачено 800 ₽ разом, подсчёт закончен', gN3);
+  await sleep(300);
+  ok(dmsTo(N, /Видео засчитано — 800 ₽ на балансе/).some((m) => /«Фикс с порогом»/.test(m.text) && /Это максимум за видео — подсчёт закончен/.test(m.text)),
+    'блогеру одно письмо: 800 ₽ на балансе, это максимум — подсчёт закончен', dmsTo(N).map((m) => m.text));
+
+  console.log('\n— v3: накрутка, отказ, удаление, сбой, доступ, деньги');
+  /* Накрутка на росте: прибавки стоят; «засчитать» — продолжаются с текущих цифр. */
+  const n4 = await bind(N, 'gbig', link('blogern', ID.N4));
+  setV(ID.N4, 2000);
+  await review(n4.body.video.id, ADV, true);
+  ok(row(n4.body.video.id).paid === 20, '«Без потолка» (10 ₽ за 1000): зачёт при 2 000 → +20');
+  const nR0 = (await bal(N)).available;
+  Object.assign(V.get(ID.N4), { views: 100000, likes: 100, comments: 0, shares: 0 });
+  ageRow(n4.body.video.id);
+  await syncDay();
+  const hN4 = (await getVid(n4.body.video.id, ADV.token)).body.video;
+  ok(hN4.status === 'active' && hN4.riskHold === true && hN4.paid === 20 && hN4.earned === 1000 && hN4.reserved === 980
+    && (await bal(N)).available === nR0,
+  'скачок до 100 000 без лайков — накрутка: прибавка не выплачена; резерв = оценка 1 000 − выплачено 20', hN4);
+  ok(((await adm('GET', '/api/admin/task-videos?status=queue')).body.videos || []).some((v) => v.id === n4.body.video.id && v.riskHold),
+    'ролик с накруткой — в очереди владельца');
+  await sleep(300);
+  const nDmR = dmsTo(N, /«Без потолка»/).length;
+  const cN4 = await adm('POST', '/api/admin/task-videos/decide', { id: n4.body.video.id, decision: 'count', note: 'проверил, рост честный' });
+  ok(cN4.status === 200 && cN4.body.settle === 'active' && cN4.body.video.paid === 1000 && cN4.body.video.riskHold === false
+    && (await bal(N)).available - nR0 === 980 && row(n4.body.video.id).decided_views === 100000,
+  '«засчитать» — начисления продолжились с текущих цифр: +980, всего 1 000', cN4.body);
+  await sleep(300);
+  ok(dmsTo(N, /«Без потолка»/).length - nDmR === 1
+    && /^\+980 ₽ за просмотры: «Без потолка»/.test(dmsTo(N, /«Без потолка»/).pop().text)
+    && /Администратор засчитал видео — проверил, рост честный/.test(dmsTo(N, /«Без потолка»/).pop().text),
+  'блогеру сразу одно письмо: +980 ₽ с решением администратора', dmsTo(N, /«Без потолка»/).map((m) => m.text));
+  const drain = await api('POST', '/api/deals/release', { dealId: 'camp:' + camps.gbig, toUserId: C.id, amount: 1000, opKey: 'drain-' + tag }, ADV.token);
+  ok(drain.status === 409 && drain.body.code === 'videos_live',
+    'ролик в подсчёте, потолка нет — вывести бюджет ручной выплатой (хоть второму аккаунту) нельзя', drain.body);
+  Object.assign(V.get(ID.N4), { views: 150000, likes: 150 });
+  ageRow(n4.body.video.id);
+  await syncDay();
+  ok(row(n4.body.video.id).paid === 1500 && row(n4.body.video.id).risk_hold === 0 && (await bal(N)).available - nR0 === 1480,
+    'дальше рост в пределах решения (≤ ×2) — прибавка +500 без новой паузы', row(n4.body.video.id));
+  /* Накрутку площадка вычистила раньше решения — «засчитать» платит по
+     нынешним цифрам, а не по пику ботов. */
+  const n12 = await bind(N, 'gbig', link('blogern', ID.N12));
+  setV(ID.N12, 2000);
+  await review(n12.body.video.id, ADV, true);
+  Object.assign(V.get(ID.N12), { views: 100000, likes: 100, comments: 0, shares: 0 });
+  ageRow(n12.body.video.id);
+  await syncDay();
+  Object.assign(V.get(ID.N12), { views: 3000, likes: 300, comments: 15, shares: 4 });
+  ageRow(n12.body.video.id);
+  await syncDay();
+  ok(row(n12.body.video.id).risk_hold === 1 && row(n12.body.video.id).top_views === 100000 && row(n12.body.video.id).paid === 20,
+    'скачок до 100 000 — пауза; площадка вычистила до 3 000, пауза ждёт владельца', row(n12.body.video.id));
+  const nK0 = (await bal(N)).available;
+  const cN12 = await adm('POST', '/api/admin/task-videos/decide', { id: n12.body.video.id, decision: 'count', note: 'цифры уже чистые' });
+  ok(cN12.status === 200 && cN12.body.video.paid === 30 && (await bal(N)).available - nK0 === 10
+    && row(n12.body.video.id).top_views === 3000 && row(n12.body.video.id).earned === 30,
+  '«засчитать» после чистки — по нынешним 3 000 просмотров: +10 ₽, а не по пику 100 000', { v: cN12.body.video, row: row(n12.body.video.id) });
+  /* «Не засчитывать» засчитанный: дальше не начисляется, выплаченное остаётся. */
+  const n5 = await bind(N, 'grow', link('blogern', ID.N5));
+  setV(ID.N5, 1500);
+  await review(n5.body.video.id, ADV, true);
+  const nX0 = (await bal(N)).available;
+  const dN5 = await adm('POST', '/api/admin/task-videos/decide', { id: n5.body.video.id, decision: 'decline', note: 'реклама удалена из ролика' });
+  ok(dN5.status === 200 && dN5.body.video.status === 'declined' && dN5.body.video.paid === 150 && dN5.body.video.reserved === 0
+    && (await bal(N)).available === nX0,
+  '«не засчитывать» засчитанный — declined, выплаченные 150 ₽ остаются у блогера', dN5.body.video);
+  await sleep(300);
+  ok(dmsTo(N, /Видео не засчитано/).some((m) => /«Рост»/.test(m.text) && /выплаченные 150 ₽ остаются у вас/.test(m.text)),
+    'блогеру: начисления остановлены, выплаченное остаётся', dmsTo(N).map((m) => m.text));
+  setV(ID.N5, 9000);
+  await sync();
+  ok(row(n5.body.video.id).paid === 150 && (await bal(N)).available === nX0, 'после отказа рост просмотров денег не приносит');
+  /* Удалён после начислений — removed, выплаченное остаётся. */
+  const n6 = await bind(N, 'grow', link('blogern', ID.N6));
+  setV(ID.N6, 2000);
+  await review(n6.body.video.id, ADV, true);
+  const nY0 = (await bal(N)).available;
+  const n6v = V.get(ID.N6);
+  V.delete(ID.N6);
+  ageRow(n6.body.video.id);
+  await syncDay();
+  ok(row(n6.body.video.id).status === 'active' && row(n6.body.video.id).miss === 1 && (await bal(N)).available === nY0,
+    'площадка один раз не отдала засчитанный ролик — он не снят, ничего нового не начислено', row(n6.body.video.id));
+  setRow(n6.body.video.id, { last_try_at: Date.now() - 25 * 60e3 });
+  await syncDay();
+  ok(row(n6.body.video.id).status === 'active' && row(n6.body.video.id).miss === 1, 'второй промах в тот же день не считается');
+  V.set(ID.N6, n6v);
+  ageRow(n6.body.video.id);
+  await syncDay();
+  ok(row(n6.body.video.id).status === 'active' && row(n6.body.video.id).miss === 0, 'ролик снова виден — промах сброшен');
+  V.delete(ID.N6);
+  ageRow(n6.body.video.id);
+  await syncDay();
+  setRow(n6.body.video.id, { last_miss_at: Date.now() - 21 * 3600e3 });
+  ageRow(n6.body.video.id);
+  await syncDay();
+  const gN6 = (await getVid(n6.body.video.id, N.token)).body.video;
+  ok(gN6.status === 'removed' && gN6.paid === 200 && gN6.reserved === 0 && (await bal(N)).available === nY0,
+    'ролика нет два замера подряд с промежутком в сутки — removed, выплаченные 200 ₽ остаются, дальше не начисляется', gN6);
+  await sleep(300);
+  ok(dmsTo(N, /Видео больше не видно/).some((m) => /«Рост»/.test(m.text) && /Выплаченные 200 ₽ остаются у вас/.test(m.text)),
+    'блогеру: ролик не видно, начисления остановлены, выплаченное остаётся', dmsTo(N).map((m) => m.text));
+  /* Сбой площадки: прибавки нет, следующий круг — не раньше чем через 20 минут. */
+  const n7 = await bind(N, 'grow', link('blogern', ID.N7));
+  setV(ID.N7, 1500);
+  await review(n7.body.video.id, ADV, true);
+  const nZ0 = (await bal(N)).available;
+  setV(ID.N7, 3000);
+  DOWN.add(ID.N7);
+  ageRow(n7.body.video.id);
+  await syncDay();
+  ok(row(n7.body.video.id).paid === 150 && row(n7.body.video.id).views === 1500 && row(n7.body.video.id).pay_tries === 1
+    && !row(n7.body.video.id).pay_hold && (await bal(N)).available === nZ0,
+  'площадка упала на суточном замере — прибавки нет, паузы нет', row(n7.body.video.id));
+  const qz = fakeLog.length;
+  await syncDay();
+  ok(!fakeLog.slice(qz).some((l) => l.startsWith('Q ') && l.includes(ID.N7)), 'следующий обычный круг сразу — площадку не дёргает (повтор через 20 мин)');
+  DOWN.delete(ID.N7);
+  setRow(n7.body.video.id, { last_try_at: Date.now() - 25 * 60e3 });
+  await syncDay();
+  ok(row(n7.body.video.id).paid === 300 && (await bal(N)).available - nZ0 === 150, 'через 20 минут площадка ответила — +150 по свежему замеру');
+  /* Доступ отозван: начисления стоят (пауза access), вернул — продолжились. */
+  const rr1 = await bind(R, 'grow', link('blogerr', ID.R1));
+  setV(ID.R1, 1500);
+  await review(rr1.body.video.id, ADV, true);
+  const rB0 = (await bal(R)).available;
+  delete TOKENS['tok-R'];
+  setV(ID.R1, 4000);
+  ageRow(rr1.body.video.id);
+  await syncDay();
+  const hR1 = (await getVid(rr1.body.video.id, ADV.token)).body.video;
+  ok(hR1.status === 'active' && hR1.payHold === true && hR1.holdKind === 'access' && /^Нет доступа к TikTok блогера/.test(hR1.holdReason)
+    && hR1.paid === 150 && (await bal(R)).available === rB0,
+  'Эр отозвал доступ — пауза «нет доступа», прибавка не выплачена', hR1);
+  await sleep(300);
+  ok(dmsTo(R, /Переподключите TikTok/).length === 1, 'блогеру — «переподключите TikTok»');
+  const qr = fakeLog.length;
+  ageRow(rr1.body.video.id);
+  setRow(rr1.body.video.id, { last_try_at: Date.now() - 60e3 });
+  await syncDay();
+  ok(!fakeLog.slice(qr).some((l) => l.startsWith('Q ') && l.includes(ID.R1)), 'пауза «нет доступа» — повтор не чаще раза в 3 часа');
+  const rfR1 = await refresh(rr1.body.video.id, R);
+  ok(rfR1.status === 200 && rfR1.body.fresh === false, 'на паузе «нет доступа» «Обновить» не чаще раза в 10 минут', rfR1.body);
+  setRow(rr1.body.video.id, { last_try_at: Date.now() - 11 * 60e3 });
+  const rfR2 = await refresh(rr1.body.video.id, R);
+  ok(rfR2.status === 409 && rfR2.body.code === 'token' && /переподключите/.test(rfR2.body.error) && row(rr1.body.video.id).paid === 150,
+    '«Обновить», пока доступа нет, — внятная причина (token), денег нет', rfR2.body);
+  TOKENS['tok-R'] = 'chan-R';
+  setRow(rr1.body.video.id, { last_try_at: Date.now() - 11 * 60e3 });
+  const rfR3 = await refresh(rr1.body.video.id, R);
+  const gR1 = (await getVid(rr1.body.video.id, ADV.token)).body.video;
+  ok(rfR3.status === 200 && rfR3.body.credited === 250 && gR1.payHold === false && gR1.paid === 400 && (await bal(R)).available - rB0 === 250,
+    'переподключил и нажал «Обновить» — пауза снята сразу, подсчёт продолжился: +250', { r: rfR3.body, gR1 });
+  const rr2 = await bind(R, 'grow', link('blogerr', ID.R2));
+  setV(ID.R2, 1500);
+  await review(rr2.body.video.id, ADV, true);
+  delete TOKENS['tok-R'];
+  ageRow(rr2.body.video.id);
+  await syncDay();
+  ok(row(rr2.body.video.id).hold_kind === 'access', 'второй ролик Эр: доступ снова отозван — пауза «нет доступа»');
+  TOKENS['tok-R'] = 'chan-R';
+  setV(ID.R2, 3000);
+  setRow(rr2.body.video.id, { last_try_at: Date.now() - 4 * 3600e3 });
+  await syncDay();
+  ok(row(rr2.body.video.id).pay_hold === 0 && row(rr2.body.video.id).paid === 300,
+    'и без кнопки: через 3 часа круг сам пробует снова — доступ вернулся, подсчёт продолжился', row(rr2.body.video.id));
+  /* Бюджет кончился: заплатили, что было, остаток — владельцу. */
+  const n9 = await bind(N, 'gpoor', link('blogern', ID.N9));
+  setV(ID.N9, 2000);
+  await review(n9.body.video.id, ADV, true);
+  const nP0 = (await bal(N)).available;
+  setV(ID.N9, 5000);
+  ageRow(n9.body.video.id);
+  await sleep(300);
+  const nDmP = dmsTo(N, /Выплата за видео задерживается/).length;
+  await syncDay();
+  const hN9 = (await getVid(n9.body.video.id, ADV.token)).body.video;
+  ok(hN9.status === 'active' && hN9.paid === 300 && hN9.earned === 500 && hN9.payHold === true && hN9.holdKind === 'money'
+    && hN9.holdReason === 'В заморозке кампании не хватило денег: недоплачено 200 ₽' && (await bal(N)).available - nP0 === 100,
+  'бюджет 300 ₽ кончился: начислено 500, выплачено 300 (прибавка +100 из остатка), 200 ₽ — пауза по деньгам', hN9);
+  await sleep(300);
+  ok(dmsTo(N, /Выплата за видео задерживается/).length - nDmP === 1
+    && /начислено по просмотрам 500 ₽, выплачено 300 ₽\. Остальные 200 ₽ задерживаются/.test(dmsTo(N, /Выплата за видео задерживается/).pop().text),
+  'блогеру правда: начислено 500, выплачено 300, остальные 200 задерживаются', dmsTo(N, /задерживается/).map((m) => m.text));
+  ok(((await adm('GET', '/api/admin/task-videos?status=queue')).body.videos || []).some((v) => v.id === n9.body.video.id && v.holdKind === 'money'),
+    'недоплата — в очереди владельца');
+  const n11 = await bind(N, 'gpoor', link('blogern', ID.N11));
+  ok(n11.status === 409 && n11.body.code === 'camp_closed', 'заморозка исчерпана — новые видео в задание не принимаются', n11.body);
+  setV(ID.N9, 8000);
+  ageRow(n9.body.video.id);
+  await syncDay();
+  await sleep(300);
+  ok(row(n9.body.video.id).paid === 300 && dmsTo(N, /Выплата за видео задерживается/).length - nDmP === 1,
+    'на паузе по деньгам круг не платит и не пишет снова');
+  /* Резерв = оценка по текущим просмотрам − выплаченное. */
+  const n10 = await bind(N, 'grow', link('blogern', ID.N10));
+  const gr0 = (await board(ADV, 'grow')).body;
+  setV(ID.N10, 2500);
+  setRow(n10.body.video.id, { stats_at: Date.now() - 3600e3, last_try_at: Date.now() - 3600e3 });
+  const rf10 = await refresh(n10.body.video.id, N);
+  const gr1 = (await board(ADV, 'grow')).body;
+  ok(n10.body.video.reserved === 0 && rf10.body.video.reserved === 250 && rf10.body.video.earned === 250 && gr1.reserved - gr0.reserved === 250,
+    'на проверке: загружен с нуля — резерв 0; набрал 2 500 — резерв 250 ₽ (оценка)', { before: gr0.reserved, after: gr1.reserved });
+  await review(n10.body.video.id, ADV, true);
+  const gr2 = (await board(ADV, 'grow')).body;
+  ok(row(n10.body.video.id).paid === 250 && gr1.reserved - gr2.reserved === 250, 'засчитан и выплачен — резерв ролика 0 (оценка − выплачено)');
+  /* Лидерборд: заработок — выплачено всего, вместе с удалённым и незасчитанным. */
+  const sums = dbx().prepare(`SELECT COALESCE(SUM(paid), 0) AS s,
+      SUM(CASE WHEN status IN ('review','rejected','active','paid') THEN 1 ELSE 0 END) AS n
+    FROM task_videos WHERE camp_id = ? AND blogger_id = ?`).get(camps.grow, N.id);
+  const bN = (await board(N, 'grow')).body;
+  ok(bN.me.earned === sums.s && bN.me.videos === sums.n && sums.s >= 150 + 200 && row(n5.body.video.id).status === 'declined'
+    && row(n6.body.video.id).status === 'removed',
+  'лидерборд «Рост»: заработано = выплачено всего (с удалённым и незасчитанным), видео — только живые', { me: bN.me, sums });
+
+  /* Второй процесс на той же базе: оба считают одну прибавку одновременно. */
+  console.log('\n— v3: два процесса — одна прибавка');
+  setV(ID.N0, 12000);
+  ageRow(vN0.id);
+  SLOW.add(ID.N0);
+  const nM0 = (await bal(N)).available;
+  const both = await Promise.all([refresh(vN0.id, N, BASE), refresh(vN0.id, N, BASE2)]);
+  SLOW.delete(ID.N0);
+  ok(both.every((r) => r.status === 200) && row(vN0.id).paid === 1200 && (await bal(N)).available - nM0 === 300
+    && opsOf('sys:vidpay:' + vN0.id + ':1200') === 1,
+  'два процесса замерили 12 000 одновременно: +300 ровно один раз (ключ на накопленную сумму :1200)', both.map((r) => r.body));
+
   /* ── Сервер с ключом YouTube API ── */
   console.log('\n— YouTube по ключу API');
   const ADVK = await regAt(BASEK, 'reklamak', 'advertiser');
@@ -1547,8 +2076,8 @@ try {
   YV.get(YT.K1).views = 6000;
   const kBal0 = (await bal(K)).available;
   const rk1 = await apiAt(BASEK, 'POST', '/api/tasks/video/review', { id: k1.body.video.id, ok: true }, ADVK.token);
-  ok(rk1.body.settle === 'paid' && rk1.body.video.paid === 600 && (await bal(K)).available - kBal0 === 600,
-    'зачёт по ключу: свежий замер 6000 → выплата 600', rk1.body);
+  ok(rk1.body.settle === 'active' && rk1.body.video.paid === 600 && (await bal(K)).available - kBal0 === 600,
+    'зачёт по ключу: свежий замер 6000 → первое начисление 600', rk1.body);
   const gq0 = gLog.length;
   const many = [];
   for (let i = 0; i < 30; i++) many.push(await bindAt(BASEK, K, 'kc', ylink(YT.NONE)));

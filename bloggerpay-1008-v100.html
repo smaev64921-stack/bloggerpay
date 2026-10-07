@@ -40834,7 +40834,9 @@ else setTimeout(boot, 0);
               row('Вступил', dt(j.at));
               row('Дедлайн', c.deadline ? dt(c.deadline) : (gone ? '' : 'до конца бюджета'));
               var minV = num(c.minViews) || num(c.viewsMin);
-              row('Минимум просмотров', minV ? minV.toLocaleString('ru') : '');
+              /* видеозадание (v3): загружают с любым числом просмотров, это порог начислений */
+              row(!gone && typeof window.bpVbIsVidTask === 'function' && window.bpVbIsVidTask(j.campId) ? 'Порог начислений' : 'Минимум просмотров',
+                minV ? minV.toLocaleString('ru') : '');
               var cap = num(c.maxPayout) || num(c.payMax);
               row('Потолок за ролик', cap ? money(cap) : '');
               if(st === 'submitted' && j.submittedAt) row('Отправлено', dt(j.submittedAt));
@@ -76569,16 +76571,44 @@ function pull(force){
     /* записи, восстановленные с сервера по старой нумерации раундов, —
        пересобираем заново из кассы (свои записи этого телефона не трогаем) */
     a = a.filter(function(r){ return !(r && r.server && !r.video && r.kind === 'camp_payout'); });
+    /* Выплаты за видео: сервер отдаёт итог по каждому ролику (videos —
+       выплачено всего). v3 платит до ~30 прибавок на ролик, и по строкам
+       операций журнал упирался в предел — расход оффера занижался, а сверка
+       bp-vbind тянула журнал заново на каждой загрузке. Записи за видео
+       пересобираем из итогов: одна запись на ролик. */
+    var vsum = j && Array.isArray(j.videos) ? j.videos : null;
+    if(vsum){
+      var oldV = {}, newV = {};
+      a.forEach(function(r){ if(r && r.server && r.video) oldV[r.key] = Number(r.amount); });
+      a = a.filter(function(r){ return !(r && r.server && r.video); });
+      vsum.forEach(function(x){
+        var mc = /^camp:(.+)$/.exec(String((x && x.dealId) || ''));
+        if(!mc || !(Number(x.paid) > 0) || !(Number(x.video) > 0)) return;
+        var vk = 'camp_payout:' + mc[1] + ':srv' + String(x.to || '') + ':v' + String(Number(x.video));
+        if(newV[vk] != null) return;
+        newV[vk] = Number(x.paid);
+        a.push({ key: vk, kind: 'camp_payout', campId: mc[1], userId: 'srv' + String(x.to || ''), round: 0,
+                 amount: Number(x.paid), at: Number(x.at) || Date.now(),
+                 server: 1, video: Number(x.video), reason: 'Выплата за видео (касса)' });
+      });
+      var ko = Object.keys(oldV), kn = Object.keys(newV);
+      if(ko.length !== kn.length || kn.some(function(k){ return oldV[k] !== newV[k]; })) added++;
+    }
     var have = {};
     a.forEach(function(r){ if(r && r.key) have[r.key] = 1; });
     rows.forEach(function(r){
-      /* Выплата за загруженное видео (bp-vbind): её проводит сам сервер в
-         момент зачёта, ключ sys:vidpay:<номер ролика>, оффер — в dealId.
-         Без этой записи «свободно в бюджете» не уменьшалось бы. */
-      var mv = /^sys:vidpay:(\d+)$/.exec(String(r.opKey || ''));
+      /* Выплата за загруженное видео (bp-vbind): её проводит сам сервер,
+         оффер — в dealId. v2 — один раз при зачёте, ключ sys:vidpay:<номер>
+         (доплата — sys:vidpay:<номер>-<выплачено до>); v3 (07.10) — 30 дней
+         прибавками по мере роста просмотров, ключ на накопленную сумму
+         sys:vidpay:<номер>:<выплачено после>. Каждая прибавка — своя запись.
+         Без этих записей «свободно в бюджете» не уменьшалось бы. */
+      var mv = /^sys:vidpay:(\d+)(?:([:-])(\d+))?$/.exec(String(r.opKey || ''));
       var md = /^camp:(.+)$/.exec(String(r.dealId || ''));
+      /* итоги по роликам уже пришли (videos) — отдельные прибавки не нужны */
+      if(mv && vsum) return;
       if(mv && md && Number(r.paid) > 0){
-        var vk = 'camp_payout:' + md[1] + ':srv' + String(r.to || '') + ':v' + mv[1];
+        var vk = 'camp_payout:' + md[1] + ':srv' + String(r.to || '') + ':v' + mv[1] + (mv[3] ? mv[2] + mv[3] : '');
         if(!have[vk]){
           a.push({ key: vk, kind: 'camp_payout', campId: md[1], userId: 'srv' + String(r.to || ''), round: 0,
                    amount: Number(r.paid), at: Date.parse(String(r.at || '').replace(' ', 'T') + 'Z') || Date.now(),
@@ -93017,6 +93047,12 @@ setTimeout(function(){ paintNav(); paintUser(); }, 1500);
      с «⇅ Сортировка» (по сумме выплаты ⇄ по просмотрам, board &sort=);
      «Участники» таблицей с круглыми «Профиль» и «Чат»; вступившему —
      плавающая синяя таблетка «⊕ Загрузить видео» по центру.
+   • 07.10, v3 (VIDEO-SPEC раздел 11): загрузка сразу после публикации,
+     даже с 0 просмотров; после зачёта 30 дней сайт сам раз в сутки
+     обновляет просмотры и доначисляет прибавки до максимума. Статусы:
+     «На проверке» → «Считаем просмотры» → «Подсчёт завершён»; «Мои
+     видео»: Засчитанные / На проверке / Отклонённые; прибавки в
+     уведомлениях — не чаще раза в сутки на ролик.
    Имена классов обходят общие правила [class*="-list"], [class*="-sum"],
    [class*="-plus"], [class*="-earned"], [class*="-x"][role].
    Откат: удалить style#bp-vbind-css и script#bp-vbind.               */
@@ -93065,10 +93101,12 @@ html body #pg-tasks .tk-card.hx .tk-mine::before{content:'';width:6px;height:6px
 .vb-p-mid{flex:1;min-width:0}
 .vb-p-mid b{display:block;font-size:14px;font-weight:700;color:#eef2f8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vb-p-mid i{display:block;font-style:normal;font-size:12.5px;color:#98a2b3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.vb-p-cnt{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
-.vb-p-cnt span{display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:999px;box-sizing:border-box;
-  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);font-size:12px;font-weight:600;color:#aab3c2;white-space:nowrap}
-.vb-p-cnt b{color:#fff;font-weight:800;font-variant-numeric:tabular-nums}
+/* три плитки в ряд: число сверху, подпись снизу (v3: «начислено» всегда) */
+.vb-p-cnt{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:11px}
+.vb-p-cnt span{display:flex;flex-direction:column;min-width:0;padding:7px 10px 6px;border-radius:12px;box-sizing:border-box;
+  background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);font-size:11.5px;font-weight:600;color:#8e98ab;line-height:1.3;white-space:nowrap}
+.vb-p-cnt b{font-size:15px;color:#fff;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis}
+.vb-p-mid .vb-pill{margin-top:6px}
 .vb-more{font-size:12px;color:#7f8aa0;margin-top:8px}
 
 /* ── общие кусочки ── */
@@ -93369,6 +93407,24 @@ html body #bpTaskSheet .tk-sheet-body > .vb-pane:not(.on){display:none!important
 .vb-vc-pay span{font-size:12.5px;color:#98a2b3;line-height:1.35}
 .vb-vc-pay b{font-size:16px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap}
 .vb-vc-pay b.ok{color:#7ff0bd}
+/* v3: «Начислено N ₽ · ещё X дн.» и полоса к максимуму (или к порогу) */
+.vb-acc{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)}
+.vb-acc-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.vb-acc-h span{font-size:12.5px;color:#98a2b3;line-height:1.35;min-width:0}
+.vb-acc-h b{font-size:16px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap}
+.vb-acc-h b.ok{color:#7ff0bd}
+.vb-acc-h b.z{color:#8e98ab}
+.vb-money b small{font-size:13px;font-weight:700;color:#a9b8d4}
+.vb-acc-bar{height:6px;margin-top:9px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.07)}
+.vb-acc-bar i{display:block;height:100%;min-width:6px;border-radius:99px;background:#3ddc84;transition:width .4s cubic-bezier(.22,1,.36,1)}
+.vb-acc-bar.thr i{background:rgba(91,147,245,.75)}
+.vb-acc-f{display:flex;justify-content:space-between;gap:10px;margin-top:7px;font-size:12px;line-height:1.4;color:#8e98ab}
+.vb-acc-f span:last-child:not(:first-child){font-weight:700;color:#c4cbd8;font-variant-numeric:tabular-nums;white-space:nowrap}
+.vb-acc-f b{color:#e6eaf2;font-weight:800}
+/* окно успеха: что будет дальше */
+.vb-next{display:flex;gap:10px;margin-top:12px;padding:12px 13px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+.vb-next svg{flex:none;width:18px;height:18px;color:#8fb6ff;margin-top:1px}
+.vb-next span{font-size:13px;line-height:1.5;color:#c4cbd8}
 .vb-line{font-size:13px;line-height:1.5;color:#a3adbf;margin-top:10px}
 .vb-line b{color:#fff}
 .vb-line.warn{color:#fcd38d}
@@ -93535,7 +93591,7 @@ html body #cdvBody .vb-acts button.bad,html body .vb-acts button.bad{background:
   .vb-btns .vb-go.ghost{flex-basis:38%}
 }
 @media (prefers-reduced-motion:reduce){
-  .vb-sheet,.vb-card,.vb-dd-menu,.vb-seg-th,.vb-chev,.vb-tab,.vb-go,.vb-p-go,.vb-sort,.vb-rb,.vb-tbl,html body #bpTaskSheet.vb-fab .tk-sheet-foot .tk-btn-main.vb-up{transition:none!important}
+  .vb-sheet,.vb-card,.vb-dd-menu,.vb-seg-th,.vb-chev,.vb-tab,.vb-go,.vb-p-go,.vb-sort,.vb-rb,.vb-tbl,.vb-acc-bar i,html body #bpTaskSheet.vb-fab .tk-sheet-foot .tk-btn-main.vb-up{transition:none!important}
   .vb-pane.in,.vb-vl.on.in,.vb-fail.in{animation:none!important}
   .vb-spin{animation-duration:2s}
   .vb-sk,.vb-sk-row{animation:none}
@@ -93749,13 +93805,23 @@ function staleBoards(a, b){
   Object.keys(camps).forEach(function(cid){
     dropBoard(cid);
     if(sheetBody(cid)) loadBoard(cid, true).then(function(){ augment(cid); });
+    /* v3: прибавки приходят кругом сервера — у открытой карточки своего
+       оффера «Выплачено блогерам» и счётчики догоняют ролик сразу, а не
+       через минуту */
+    else if(advOpen(cid)) loadBoard(cid, true).then(function(){ mountAdv(true); paintLists(); });
   });
 }
-/* знакомый ролик стал «оплачен» — деньги сдвинулись на сервере: баланс в
-   шапке берём сразу, а не при следующей сверке (уведомление уже говорит
-   «N ₽ на балансе») */
+function advOpen(cid){
+  try{
+    var ov = $('campDetailOverlay');
+    return !!(ov && ov.classList.contains('open') && typeof _cdActiveCampId !== 'undefined' && _cdActiveCampId != null && String(_cdActiveCampId) === String(cid));
+  }catch(e){ return false; }
+}
+/* у знакомого ролика выросло «выплачено» (v3 — каждая прибавка за
+   просмотры) — деньги сдвинулись на сервере: баланс в шапке берём сразу,
+   а не при следующей сверке (уведомление уже говорит «N ₽ на балансе») */
 function moneyMoved(a, b){
-  var hit = Object.keys(b).some(function(k){ return (k in a) && b[k].split('|')[1] === 'paid' && a[k].split('|')[1] !== 'paid'; });
+  var hit = Object.keys(b).some(function(k){ return (k in a) && num(b[k].split('|')[2]) > num(a[k].split('|')[2]); });
   if(hit){ try{ if(window.bpMoney && typeof window.bpMoney.sync === 'function') window.bpMoney.sync(); }catch(e){ E(e); } }
 }
 function paidLocal(campId){
@@ -93764,10 +93830,12 @@ function paidLocal(campId){
     if(r && r.video && String(r.key || '').indexOf('camp_payout:' + campId + ':') === 0) n += num(r.amount); }); }catch(e){}
   return n;
 }
-/* сервер уже оплатил видео, а журнал приложения ещё не знает — подтянуть */
+/* сервер уже заплатил за видео, а журнал приложения ещё не знает —
+   подтянуть (v3: платит и active — прибавками, и удалённый/не засчитанный
+   ролик сохраняет выплаченное) */
 function syncLedger(list){
   var by = {};
-  (list || []).forEach(function(v){ if(v && v.status === 'paid' && num(v.paid) > 0) by[v.campId] = (by[v.campId] || 0) + num(v.paid); });
+  (list || []).forEach(function(v){ if(v && num(v.paid) > 0) by[v.campId] = (by[v.campId] || 0) + num(v.paid); });
   var need = Object.keys(by).some(function(cid){ var c = camp(cid); return c && isOwner(c) && paidLocal(cid) < by[cid]; });
   if(need && typeof window.bpCampLedgerPull === 'function'){ try{ window.bpCampLedgerPull(); }catch(e){ E(e); } }
 }
@@ -93924,19 +93992,23 @@ function moreMembers(cid){
 /* ═══ КАК РОЛИК ВЫГЛЯДИТ ═══ */
 function vplat(v){ var p = pk(v && v.platform); return VIDP.indexOf(p) >= 0 ? p : 'tiktok'; }
 function handleTxt(v){ var h = String((v && v.handle) || '').replace(/^@/, '').trim(); return h ? (/^[\w.-]+$/.test(h) ? '@' + h : h) : ''; }
-/* g — раздел «Мои видео»: ok — одобренные, wait — на проверке, bad — отклонённые */
+/* v3 (07.10, VIDEO-SPEC раздел 11): review «На проверке» → зачёт → active
+   «Считаем просмотры» (30 дней сайт сам раз в сутки обновляет цифры и
+   доначисляет прибавки) → paid «Подсчёт завершён».
+   g — раздел «Мои видео»: ok — засчитанные (active и paid), wait — на
+   проверке (review, rejected и любые удержания), bad — отклонённые */
 function stOf(v){
   switch(v.status){
-    case 'paid':     return { t:'Выплачено', c:'ok', g:'ok' };
+    case 'paid':     return { t:'Подсчёт завершён', c:'ok', g:'ok' };
     case 'declined': return { t:'Не засчитано', c:'bad', g:'bad' };
     case 'removed':  return { t:'Удалено с площадки', c:'bad', g:'bad' };
     case 'revoked':  return { t:'Нет доступа к аккаунту', c:'bad', g:'bad' };
   }
   if(v.disputeHeld) return { t:'Ждёт решения спора', c:'warn', g:'wait' };
   if(v.riskHold) return { t:'Проверяем просмотры', c:'warn', g:'wait' };
-  if(v.payHold) return { t:'Выплата задерживается', c:'warn', g:'wait' };
+  if(v.payHold) return { t:'Начисления на паузе', c:'warn', g:'wait' };
   if(v.status === 'rejected') return { t:'Решает BloggerPay', c:'warn', g:'wait' };
-  if(v.status === 'active') return { t:'Засчитано', c:'ok', g:'wait' };
+  if(v.status === 'active') return { t:'Считаем просмотры', c:'ok', g:'ok' };
   return { t:'На проверке', c:'wait', g:'wait' };
 }
 function terms(c){
@@ -93949,12 +94021,82 @@ function calc(views, c){
   var e = Math.floor(views * t.rate / 1000);
   return t.cap ? Math.min(t.cap, e) : e;
 }
-/* сумма сейчас: оплачено — сколько пришло; иначе резерв с сервера, а без
-   него — по условиям задания (сервер всё равно считает сам) */
+/* сумма по текущим цифрам: earned с сервера (v3 — начислено по текущим
+   просмотрам, у review — оценка), без него — резерв или условия задания */
 function nowAmt(v, c){
   if(v.status === 'paid') return num(v.paid);
-  if(v.reserved != null) return num(v.reserved);
-  return c ? calc(num(v.views), c) : num(v.earned);
+  if(v.earned != null) return Math.max(num(v.earned), num(v.paid));
+  if(v.reserved != null) return num(v.reserved) + num(v.paid);
+  return c ? calc(num(v.views), c) : 0;
+}
+/* ── v3: 30 дней начислений по мере роста просмотров ──
+   поля сервера: paid (выплачено всего), earned (по текущим цифрам),
+   paidViews, trackEndsAt, daysLeft, maxPay, capReached, minViews (порог из
+   снимка условий), viewsToMin, countViews, rate, holdKind (вид паузы:
+   money / access; причину — holdReason — блогер не получает);
+   старый сервер без них — берём условия оффера и момент зачёта */
+var TRACK_DAYS = 30;
+function tms(x){
+  if(x == null || x === '') return 0;
+  var n = Number(x); if(isFinite(n) && n > 0) return n < 1e12 ? n * 1000 : n;
+  var d = Date.parse(String(x)); return isFinite(d) ? d : 0;
+}
+function fin(x){ return x != null && x !== '' && isFinite(Number(x)); }
+function minOf(v, c){ return v && fin(v.minViews) ? num(v.minViews) : terms(c).min; }
+/* просмотры, по которым считают: наибольшие из замеров (countViews), —
+   начисленное не уменьшается, даже если площадка показала меньше */
+function cntViews(v){ return Math.max(num(v && v.countViews), num(v && v.views)); }
+/* максимум за ролик (maxPay с сервера, null — потолка нет); без него — фикс
+   или потолок оффера, не больше остатка бюджета при загрузке (budgetCap) */
+function maxOf(v, c){
+  if(v && 'maxPay' in v) return num(v.maxPay);
+  var t = terms(c), m = t.fixed || t.cap, lim = num(v && v.budgetCap);
+  if(lim > 0) m = m > 0 ? Math.min(m, lim) : lim;
+  return m;
+}
+function daysLeftOf(v){
+  if(v && v.daysLeft != null && isFinite(Number(v.daysLeft))) return Math.max(0, Math.round(Number(v.daysLeft)));
+  var e = tms(v && v.trackEndsAt); if(!e){ var a = tms(v && v.approvedAt); if(a) e = a + TRACK_DAYS * 864e5; }
+  return e ? Math.max(0, Math.ceil((e - Date.now()) / 864e5)) : TRACK_DAYS;
+}
+function daysTxt(v){ var d = daysLeftOf(v); return d >= 1 ? 'ещё ' + d + ' дн.' : 'последний день'; }
+function viewsW(n){ return plural(n, 'просмотр', 'просмотра', 'просмотров'); }
+/* ниже порога начислений: сколько не хватает (0 — порог взят или его нет) */
+function needOf(v, c){
+  if(num(v.paid) > 0) return 0;
+  if(fin(v.viewsToMin)) return Math.max(0, num(v.viewsToMin));
+  var mn = minOf(v, c), vw = cntViews(v); return mn > 0 && vw < mn ? mn - vw : 0;
+}
+/* «До начислений: ещё K просмотров (нужно M)»; с 0 просмотров K = M —
+   тогда коротко «нужно M просмотров» */
+function needTxt(v, c, bold){
+  var need = needOf(v, c), mn = minOf(v, c); if(!need) return '';
+  if(!(cntViews(v) > 0) || need >= mn) return 'До начислений: нужно ' + (bold ? '<b>' + fmt(mn) + '</b>' : fmt(mn)) + ' ' + viewsW(mn);
+  return 'До начислений: ещё ' + (bold ? '<b>' + fmt(need) + '</b>' : fmt(need)) + ' ' + viewsW(need) + ' (нужно ' + fmt(mn) + ')';
+}
+/* подсчёт закончен, а денег нет: порог не набран (или по условиям выплаты нет) */
+function zeroTxt(v, c){
+  var mn = minOf(v, c);
+  return mn > 0 && cntViews(v) < mn ? 'Порог ' + fmt(mn) + ' ' + viewsW(mn) + ' не набран — выплаты нет' : 'По условиям задания выплаты нет';
+}
+/* «Начислено N ₽ · ещё X дн.» + полоса к максимуму; ниже порога —
+   «До начислений: ещё K просмотров (нужно M)» и полоса к порогу */
+function accHtml(v, c){
+  var paid = num(v.paid), mn = minOf(v, c), mx = maxOf(v, c), need = needOf(v, c), rate = fin(v.rate) ? num(v.rate) : terms(c).rate;
+  var when = v.capReached || (mx > 0 && paid >= mx) ? 'максимум набран' : daysTxt(v);
+  var h = '<div class="vb-acc"><div class="vb-acc-h"><span>Начислено · ' + when + '</span><b class="' + (paid > 0 ? 'ok' : 'z') + '">' + rub(paid) + '</b></div>';
+  if(need && mn > 0){
+    var cv = Math.max(0, mn - need), p = Math.min(100, cv / mn * 100);
+    h += '<div class="vb-acc-bar thr" role="img" aria-label="' + fmt(cv) + ' из ' + fmt(mn) + ' просмотров"><i style="width:' + p.toFixed(1) + '%"></i></div>'
+      + '<div class="vb-acc-f"><span>' + needTxt(v, c, true) + '</span></div>';
+  } else if(mx > 0){
+    var q = Math.min(100, paid / mx * 100);
+    h += '<div class="vb-acc-bar" role="img" aria-label="Начислено ' + rub(paid) + ' из ' + rub(mx) + '"><i style="width:' + q.toFixed(1) + '%"></i></div>'
+      + '<div class="vb-acc-f"><span>Максимум за видео ' + rub(mx) + '</span><span>' + pctTxt(q) + '</span></div>';
+  } else if(rate){
+    h += '<div class="vb-acc-f"><span>' + rub(rate) + ' за 1 000 просмотров, без потолка</span></div>';
+  }
+  return h + '</div>';
 }
 function thumb(v){
   var p = vplat(v), cv = safeImg(v.cover);
@@ -94105,8 +94247,8 @@ function retryAcc(){
 function formHtml(c, url){
   var minV = terms(c).min;
   return hd('Загрузка видео')
-    + '<div class="vb-info">' + INFO + '<div><p>Отправляйте видео, когда готовы зафиксировать просмотры: выплата считается по просмотрам в момент проверки и приходит на баланс сразу после неё. Просмотры после выплаты в зачёт не идут.</p>'
-    + (minV ? '<p>Минимум для выплаты — <b>' + fmt(minV) + ' ' + plural(minV, 'просмотр', 'просмотра', 'просмотров') + '</b></p>' : '') + '</div></div>'
+    + '<div class="vb-info">' + INFO + '<div><p>Загружайте видео сразу после публикации — даже с 0 просмотров. Сайт каждый день обновляет просмотры и сам начисляет деньги на баланс 30 дней.</p>'
+    + (minV ? '<p>Начисления начнутся с <b>' + fmt(minV) + ' ' + viewsW(minV) + '</b></p>' : '') + '</div></div>'
     + '<div class="vb-fld"><span class="vb-fld-k" id="vbAccK">Аккаунт</span>'
     + '<button type="button" class="vb-dd-btn" id="vbDd" data-vb="menu" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="vbAccK vbDd"></button></div>'
     + '<label class="vb-fld" id="vbFld"><span class="vb-fld-k">Ссылка на видео</span><span class="vb-fld-row">'
@@ -94302,9 +94444,9 @@ function selectAcc(key){
 /* подключить аккаунт: окно площадки открывается в этом же нажатии,
    иначе браузер его заблокирует; после подтверждения окно загрузки
    вернётся само (bpAbcAfterVerify) */
-function connect(p, cid){
+function connect(p, cid, fix){
   var inp = $('vbUrl');
-  var rs = { c:cid || (B && B.campId), u:inp ? inp.value : '', p:p, at:Date.now(), prev:((B && B.all) || []).map(accKey) };
+  var rs = { c:cid || (B && B.campId), u:inp ? inp.value : '', p:p, at:Date.now(), prev:((B && B.all) || []).map(accKey), fix:fix ? 1 : 0 };
   if(rs.c){ try{ sessionStorage.setItem('bpvbResume', JSON.stringify(rs)); }catch(e){} }
   closeMenu(true); closeSheet($('bpVbSheet'));
   try{ if(typeof window.bpVerifyOwn === 'function') window.bpVerifyOwn(p); else if(typeof goTo === 'function') goTo('profile'); }catch(err){ E(err); }
@@ -94318,12 +94460,29 @@ function connect(p, cid){
       var rs = JSON.parse(sessionStorage.getItem('bpvbResume') || 'null');
       if(rs && rs.c && Date.now() - num(rs.at) < 15 * 60000 && VIDP.indexOf(pk(pid)) >= 0){
         sessionStorage.removeItem('bpvbResume');
-        setTimeout(function(){ window.bpVbOpen(rs.c, { url:rs.u, prefer:{ p:pk(pid), prev:rs.prev || [] } }); }, 450);
+        if(!rs.fix) setTimeout(function(){ window.bpVbOpen(rs.c, { url:rs.u, prefer:{ p:pk(pid), prev:rs.prev || [] } }); }, 450);
       }
     }catch(e){ E(e); }
+    try{ if(VIDP.indexOf(pk(pid)) >= 0) kickHeld(pk(pid)); }catch(e){ E(e); }
     return r;
   };
 })();
+/* канал переподключён: засчитанные ролики этой площадки на паузе «нет
+   доступа» — «Обновить» сразу (сервер снимет паузу и продолжит подсчёт),
+   а не ждать круга (раз в 3 часа) */
+function kickHeld(p){
+  if(!srvOk()) return;
+  load(true).then(function(){
+    var sid = mySrv();
+    var list = V.list.filter(function(v){ return v && v.status === 'active' && v.payHold && v.holdKind === 'access' && vplat(v) === p && (sid == null || Number(v.bloggerId) === sid); });
+    if(!list.length) return;
+    var chain = Promise.resolve();
+    list.slice(0, 10).forEach(function(v){
+      chain = chain.then(function(){ return api('POST', '/api/tasks/video/refresh', { id:v.id }).then(function(j){ if(j && j.video) upsert(j.video); }, function(){}); });
+    });
+    return chain.then(function(){ V.at = 0; return load(true); });
+  }).catch(E);
+}
 
 function send(){
   if(!B || B.busy) return;
@@ -94347,7 +94506,7 @@ function send(){
     B.busy = false;
     paintDone(v, a);
     afterUpload(String(v.campId || cur.campId));
-    try{ if(typeof window.bpNotify === 'function') window.bpNotify('task', 'Видео отправлено на проверку', '«' + nameOf(c) + '»: рекламодатель проверит интеграцию', {}); }catch(e){}
+    try{ if(typeof window.bpNotify === 'function') window.bpNotify('task', 'Видео отправлено на проверку', '«' + nameOf(c) + '»: рекламодатель проверит рекламу до 72 ч, потом 30 дней начисляем по просмотрам', {}); }catch(e){}
   }).catch(function(e){
     if(B !== cur) return;
     B.busy = false;
@@ -94396,11 +94555,18 @@ function paintDone(v, a){
     + '<div class="vb-video">' + thumb(v) + '<div class="vb-video-tx"><b>' + esc(v.title || 'Видео ' + PN[p]) + '</b>'
     + '<span class="vb-vc-h">' + pi(p, 'sm') + esc(h) + ' · ' + PN[p] + (v.postedAt ? ' · ' + esc(dsh(v.postedAt)) : '') + '</span></div></div>'
     + stats(v)
-    + '<div class="vb-money"><span>Сейчас по просмотрам<br>сумма в резерве задания</span><b>≈ ' + rub(nowAmt(v, c)) + '</b></div>'
+    + doneMoney(v, c)
     + (num(v.budgetCap) > 0 ? '<div class="vb-line warn">Бюджет задания почти закончился: за это видео заплатят не больше ' + rub(v.budgetCap) + ' — столько в нём оставалось.</div>' : '')
-    + '<div class="vb-note">Рекламодатель проверит интеграцию до 72 ч. Выплата — по просмотрам в момент проверки, сразу на баланс.</div>'
+    + '<div class="vb-next">' + CLOCK + '<span>Рекламодатель проверит рекламу до 72 ч. Потом 30 дней сайт сам обновляет просмотры и начисляет деньги — делать больше ничего не нужно.</span></div>'
     + '<div class="vb-btns"><button type="button" class="vb-go ghost" data-vb="again">Ещё видео</button><button type="button" class="vb-go" data-vb="close">Готово</button></div>';
   s.querySelector('.vb-card').scrollTop = 0;
+}
+/* сумма в окне успеха: ниже порога — сколько не хватает до начислений,
+   иначе — сколько ролик стоит по текущим просмотрам (и максимум) */
+function doneMoney(v, c){
+  var need = needOf(v, c), mn = minOf(v, c), mx = maxOf(v, c);
+  if(need) return '<div class="vb-money"><span>До начислений' + (cntViews(v) > 0 && need < mn ? '<br>нужно ' + fmt(mn) + ' ' + viewsW(mn) : '') + '</span><b>ещё ' + fmt(need) + '<small> ' + viewsW(need) + '</small></b></div>';
+  return '<div class="vb-money"><span>Сейчас по просмотрам' + (mx > 0 ? '<br>максимум за видео ' + rub(mx) : '') + '</span><b>≈ ' + rub(nowAmt(v, c)) + '</b></div>';
 }
 /* под окном могла остаться шторка задания — показываем там «На проверке» */
 function afterUpload(cid){
@@ -94419,6 +94585,9 @@ function doAct(act){
   if(act === 'old'){ if(B) oldSubmit(B.campId); return; }
   var m = /^conn:(tiktok|youtube)$/.exec(act); if(m){ connect(m[1]); return; }
   var m2 = /^reconn:(tiktok|youtube):(.+)$/.exec(act); if(m2){ connect(m2[1], m2[2]); return; }
+  /* пауза «нет доступа» у засчитанного: после подключения окно загрузки не
+     открываем — подсчёт продолжится сам (kickHeld) */
+  var m3 = /^refix:(tiktok|youtube):(.+)$/.exec(act); if(m3){ connect(m3[1], m3[2], true); return; }
 }
 document.addEventListener('click', function(e){
   var t = e.target.closest && e.target.closest('[data-vb]'); if(!t) return;
@@ -94560,12 +94729,13 @@ function topInner(c, b, mode){
 }
 function howBlock(body, c){
   if(body.querySelector(':scope > .vb-how')) return;
-  var al = allowed(c), el = document.createElement('div'); el.className = 'vb-how';
+  var al = allowed(c), mn = terms(c).min, el = document.createElement('div'); el.className = 'vb-how';
   el.innerHTML = '<b>Как засчитывается видео</b><ol>'
     + '<li>Опубликуйте ролик с рекламой на своём ' + esc(namesOf(al, ' или ')) + ', подключённом к BloggerPay.</li>'
-    + '<li>Когда ролик наберёт просмотры, нажмите «Загрузить видео» и выберите аккаунт.</li>'
-    + '<li>Рекламодатель проверит интеграцию — до 72 часов.</li>'
-    + '<li>Засчитали — деньги сразу на балансе, по просмотрам в момент проверки. Просмотры после выплаты в зачёт не идут.</li></ol>';
+    + '<li>Сразу после публикации нажмите «Загрузить видео» и выберите аккаунт — можно с 0 просмотров.</li>'
+    + '<li>Рекламодатель проверит рекламу — до 72 часов.</li>'
+    + '<li>Засчитали — 30 дней сайт сам раз в сутки обновляет просмотры и начисляет деньги на баланс, до максимума за видео.'
+    + (mn ? ' Начисления начнутся с ' + fmt(mn) + ' ' + viewsW(mn) + '.' : '') + '</li></ol>';
   var rules = body.querySelector(':scope > .tk-rules');
   if(rules && rules.nextSibling) body.insertBefore(el, rules.nextSibling);
   else if(rules) body.appendChild(el);
@@ -94574,7 +94744,14 @@ function howBlock(body, c){
 var RI = { pl:'M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18V6A1.5 1.5 0 0 1 5 4.5z M10 9v6l5-3z', one:'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M9 12.5l2 2 4-4.5' };
 function rulesRows(body, c){
   var rules = body.querySelector(':scope > .tk-rules'); if(!rules) return;
-  [].forEach.call(rules.querySelectorAll('.tk-rule-k'), function(k){ if(/^Максимальная выплата$/.test(k.textContent)) k.textContent = 'Макс. выплата за видео'; });
+  [].forEach.call(rules.querySelectorAll('.tk-rule-k'), function(k){
+    if(/^Максимальная выплата$/.test(k.textContent)) k.textContent = 'Макс. выплата за видео';
+    /* v3: минимум просмотров — не условие загрузки, а порог начислений */
+    else if(/^Мин\. количество просмотров$/.test(k.textContent)){
+      k.textContent = 'Порог начислений';
+      var kv = k.nextElementSibling; if(kv && !/просмотр/.test(kv.textContent)) kv.textContent = kv.textContent + ' ' + viewsW(num(String(kv.textContent).replace(/[^\d]/g, '')));
+    }
+  });
   function add(id, ico, k, v){
     if(rules.querySelector('[data-vb-rule="' + id + '"]')) return;
     var r = document.createElement('div'); r.className = 'tk-rule'; r.setAttribute('data-vb-rule', id);
@@ -94583,7 +94760,7 @@ function rulesRows(body, c){
     rules.appendChild(r);
   }
   add('pl', 'pl', 'Площадки для видео', namesOf(allowed(c), ', '));
-  add('one', 'one', 'Оплата', 'один раз за видео');
+  add('one', 'one', 'Оплата', '30 дней по росту просмотров');
 }
 /* вступившему — плавающая синяя таблетка «⊕ Загрузить видео» по центру
    поверх шторки (как у More Views); «Закрыть» не нужен — есть крестик */
@@ -94774,7 +94951,7 @@ document.addEventListener('click', function(e){
 }, true);
 
 /* «Мои видео» */
-var SUBS = [['ok', 'Одобренные'], ['wait', 'На проверке'], ['bad', 'Отклонённые']];
+var SUBS = [['ok', 'Засчитанные'], ['wait', 'На проверке'], ['bad', 'Отклонённые']];
 function mineHtml(id){
   var c = camp(id), list = mineOf(id), g = { ok:[], wait:[], bad:[] };
   list.forEach(function(v){ g[stOf(v).g].push(v); });
@@ -94793,26 +94970,39 @@ function mineHtml(id){
     }).join('');
 }
 function subNil(s, id){
-  if(s === 'wait') return nil(CLOCK, 'Нет видео на проверке', 'Опубликуйте ролик с рекламой и загрузите его, когда наберёт просмотры.', canUpload(id) ? upBtn(id, mineOf(id).length ? 'Загрузить ещё видео' : '') : '');
-  if(s === 'ok') return nil(OKI, 'Пока нет одобренных видео', 'Засчитанные видео и выплаты по ним появятся здесь.');
+  if(s === 'wait') return nil(CLOCK, 'Нет видео на проверке', 'Опубликовали ролик с рекламой — загрузите его сразу, даже с 0 просмотров.', canUpload(id) ? upBtn(id, mineOf(id).length ? 'Загрузить ещё видео' : '') : '');
+  if(s === 'ok') return nil(OKI, 'Пока нет засчитанных видео', 'После зачёта 30 дней сайт сам считает просмотры и начисляет деньги — всё будет здесь.');
   return nil(NOPE, 'Отклонённых видео нет', 'Здесь будут ролики, которые не засчитали, с причиной.');
 }
 function vcard(v, c){
-  var s = stOf(v), p = vplat(v), pay = '';
+  var s = stOf(v), p = vplat(v), pay = '', paid = num(v.paid), live = v.status === 'review' || v.status === 'rejected';
   if(v.status === 'paid'){
     var pv = num(v.paidViews) || num(v.views);
-    pay = '<div class="vb-vc-pay"><span>Выплачено за ' + fmt(pv) + ' ' + plural(pv, 'просмотр', 'просмотра', 'просмотров') + '</span><b class="ok">' + rub(v.paid) + '</b></div>';
-  } else if(s.g === 'wait'){
-    pay = '<div class="vb-vc-pay"><span>В резерве сейчас' + (num(v.budgetCap) > 0 ? ' · не больше остатка бюджета' : '') + '</span><b>≈ ' + rub(nowAmt(v, c)) + '</b></div>';
+    pay = paid > 0 ? '<div class="vb-vc-pay"><span>Выплачено за ' + fmt(pv) + ' ' + viewsW(pv) + '</span><b class="ok">' + rub(paid) + '</b></div>'
+      : '<div class="vb-vc-pay"><span>' + zeroTxt(v, c) + '</span></div>';
+  } else if(v.status === 'active'){
+    pay = accHtml(v, c);
+  } else if(live){
+    var need = needOf(v, c);
+    pay = need
+      ? '<div class="vb-vc-pay"><span>' + needTxt(v, c) + '</span></div>'
+      : '<div class="vb-vc-pay"><span>Сейчас по просмотрам' + (num(v.budgetCap) > 0 ? ' · не больше остатка бюджета' : '') + '</span><b>≈ ' + rub(nowAmt(v, c)) + '</b></div>';
+  } else if(paid > 0){
+    /* не засчитали или ролик удалили после начислений — выплаченное остаётся */
+    pay = '<div class="vb-vc-pay"><span>Выплачено до остановки</span><b>' + rub(paid) + '</b></div>';
   }
   var line = '';
+  var hk = String(v.holdKind || '');
   if(v.status === 'rejected') line = '<div class="vb-line warn">Рекламодатель указал проблему' + (v.reviewNote ? ': «' + esc(v.reviewNote) + '»' : '') + '. Решение примет BloggerPay — придёт уведомление.</div>';
-  else if(v.disputeHeld) line = '<div class="vb-line warn">По заданию открыт спор — выплата ждёт решения арбитра.</div>';
-  else if(v.riskHold) line = '<div class="vb-line warn">Просмотры растут необычно — BloggerPay проверяет их. Выплата придёт после проверки.</div>';
-  else if(v.payHold) line = '<div class="vb-line warn">Выплата задерживается — деньги в резерве, BloggerPay разбирается.</div>';
-  else if(v.status === 'active') line = '<div class="vb-line">Видео засчитано — выплата придёт при ближайшей сверке.</div>';
+  else if(v.disputeHeld) line = '<div class="vb-line warn">По заданию открыт спор — начисления ждут решения арбитра.</div>';
+  else if(v.riskHold) line = '<div class="vb-line warn">Просмотры растут необычно — BloggerPay проверяет их. Начисления продолжатся после проверки.</div>';
+  else if(v.payHold && hk === 'access') line = '<div class="vb-line warn">Нет доступа к аккаунту — переподключите ' + PN[p] + ', и начисления продолжатся.</div>'
+    + '<button type="button" class="vb-mini" style="margin-top:10px" data-vb="act" data-act="refix:' + p + ':' + esc(v.campId) + '">' + pi(p) + 'Переподключить ' + PN[p] + '</button>';
+  else if(v.payHold && hk === 'money') line = '<div class="vb-line warn">Начисления на паузе: в бюджете задания не хватило денег — BloggerPay разбирается.</div>';
+  else if(v.payHold) line = '<div class="vb-line warn">Начисления на паузе — BloggerPay разбирается.</div>';
+  else if(v.status === 'review') line = '<div class="vb-line">После зачёта 30 дней сайт сам обновляет просмотры и начисляет деньги — делать ничего не нужно.</div>';
   else if(v.status === 'declined') line = '<div class="vb-line bad">Видео не засчитано' + (v.decisionNote ? ': ' + esc(v.decisionNote) : '') + '.</div>';
-  else if(v.status === 'removed') line = '<div class="vb-line bad">При проверке ролик не нашёлся на ' + PN[p] + ' — его удалили или скрыли. Такие видео не оплачиваются.</div>';
+  else if(v.status === 'removed') line = '<div class="vb-line bad">Ролик не нашёлся на ' + PN[p] + ' — его удалили или скрыли. ' + (paid > 0 ? 'Дальше не начисляем, выплаченное остаётся у вас.' : 'Такие видео не оплачиваются.') + '</div>';
   else if(v.status === 'revoked') line = '<div class="vb-line bad">Нет доступа к аккаунту — переподключите ' + PN[p] + ', чтобы видео снова считалось.</div>'
     + '<button type="button" class="vb-mini" style="margin-top:10px" data-vb="act" data-act="reconn:' + p + ':' + esc(v.campId) + '">' + pi(p) + 'Переподключить ' + PN[p] + '</button>';
   return '<div class="vb-vc"><div class="vb-vc-top">' + thumb(v) + '<div class="vb-vc-tx"><b>' + esc(v.title || 'Видео ' + PN[p]) + '</b>'
@@ -95076,17 +95266,23 @@ function panelHtml(c){
   var go = function(t){ return '<button type="button" class="vb-p-go" data-vb-open="' + esc(c.id) + '">' + UP + t + '</button>'; };
   if(!v){
     return '<div class="vb-p-k">Ваш шаг</div><div class="vb-p-t">Загрузите видео</div>'
-      + '<div class="vb-p-s">Опубликуйте ролик с рекламой на ' + esc(namesOf(allowed(c), ' или ')) + ' и загрузите его, когда наберёт просмотры</div>'
+      + '<div class="vb-p-s">Опубликуйте ролик с рекламой на ' + esc(namesOf(allowed(c), ' или ')) + ' и сразу загрузите его — даже с 0 просмотров. 30 дней сайт сам начисляет деньги</div>'
       + go('Загрузить видео');
   }
   var g = { ok:0, wait:0, bad:0 }, paid = 0;
-  list.forEach(function(x){ g[stOf(x).g]++; if(x.status === 'paid') paid += num(x.paid); });
-  var s = stOf(v), p = vplat(v);
+  list.forEach(function(x){ g[stOf(x).g]++; paid += num(x.paid); });
+  var s = stOf(v), p = vplat(v), sub;
+  /* последний ролик: в подсчёте — «Начислено N ₽ · ещё X дн.», подсчёт
+     закончен — итог, иначе просмотры и аккаунт */
+  if(v.status === 'active' && s.g === 'ok') sub = 'Начислено ' + rub(v.paid) + ' · ' + daysTxt(v);
+  else if(v.status === 'paid') sub = num(v.paid) > 0 ? 'Выплачено ' + rub(v.paid) + ' за ' + viewsTxt(num(v.paidViews) || num(v.views)) : zeroTxt(v, c);
+  else sub = viewsTxt(v.views) + ' · ' + esc(handleTxt(v) || PN[p]);
+  /* статус — под подписью: «Начислено N ₽ · ещё X дн.» нужна вся ширина */
   return '<div class="vb-p-k">Ваши видео</div>'
     + '<div class="vb-p-row">' + thumb(v) + '<div class="vb-p-mid"><b>' + esc(v.title || 'Видео ' + PN[p]) + '</b>'
-    + '<i>' + viewsTxt(v.views) + ' · ' + esc(handleTxt(v) || PN[p]) + '</i></div><span class="vb-pill is-' + s.c + '">' + s.t + '</span></div>'
-    + '<div class="vb-p-cnt"><span>На проверке <b>' + g.wait + '</b></span><span>Одобрено <b>' + g.ok + '</b></span>'
-    + (paid ? '<span>Выплачено <b>' + rub(paid) + '</b></span>' : '') + '</div>'
+    + '<i>' + sub + '</i><span class="vb-pill is-' + s.c + '">' + s.t + '</span></div></div>'
+    + '<div class="vb-p-cnt"><span><b>' + g.wait + '</b>на проверке</span><span><b>' + g.ok + '</b>засчитано</span>'
+    + '<span><b>' + rub(paid) + '</b>начислено</span></div>'
     + go('Загрузить ещё видео');
 }
 function paintCards(){
@@ -95132,23 +95328,41 @@ function advItem(v, c){
     + '<b>' + esc(handleTxt(v) || 'Блогер') + '</b>'
     + '<i>' + esc(v.title || 'Видео ' + PN[p]) + '</i><u>' + (v.postedAt ? 'вышло ' + esc(dmy(v.postedAt)) + ' · ' : '') + 'данные на ' + esc(v.statsAt ? dmy(v.statsAt) : 'сегодня') + '</u></div></div>'
     + stats(v)
-    + ((v.riskHold || v.payHold) ? '<div class="vb-line warn">BloggerPay проверяет ' + (v.holdReason ? esc(v.holdReason).replace(/^./, function(x){ return x.toLowerCase(); }) : 'просмотры этого ролика') + ' — выплата подождёт решения.</div>'
+    + ((v.riskHold || v.payHold) && v.status !== 'paid' ? '<div class="vb-line warn">' + advHold(v) + '</div>'
         : risk ? '<div class="vb-line">Просмотры этого ролика под наблюдением BloggerPay.</div>' : '')
-    + (v.disputeHeld ? '<div class="vb-line warn">По заданию открыт спор — выплата за видео ждёт решения арбитра.</div>' : '')
-    + (v.status === 'review' ? '<div class="vb-line">Проверьте, что в ролике есть ваша реклама, маркировка erid и выполнены условия. Сейчас по просмотрам <b>≈ ' + rub(nowAmt(v, c)) + '</b> — сумма в резерве.</div>'
+    + (v.disputeHeld ? '<div class="vb-line warn">По заданию открыт спор — начисления за видео ждут решения арбитра.</div>' : '')
+    + (v.status === 'review' ? '<div class="vb-line">Проверьте, что в ролике есть ваша реклама, маркировка erid и выполнены условия.'
+        + (nowAmt(v, c) > 0 ? ' Сейчас по просмотрам <b>≈ ' + rub(nowAmt(v, c)) + '</b> — в резерве.' : '') + '</div>'
         + (R.busy[v.id]
           /* зачёт идёт (сервер делает свежий замер): перерисовка не должна вернуть активную кнопку */
           ? '<div class="vb-acts"><button type="button" class="ok" disabled>Засчитываем…</button><button type="button" class="bad" disabled>Есть проблема</button></div>'
           : '<div class="vb-acts"><button type="button" class="ok" data-vb="ok" data-id="' + esc(v.id) + '">Всё верно — засчитать</button><button type="button" class="bad" data-vb="bad" data-id="' + esc(v.id) + '">Есть проблема</button></div>')
-        + '<div class="vb-acts-cap">Засчитанное видео оплачивается сразу — по просмотрам в момент зачёта. Не ответите за 72 часа — засчитается само.</div>' : '')
-    + (v.status === 'active' ? '<div class="vb-line">Засчитано — выплата уйдёт блогеру при ближайшей сверке.</div>' : '')
+        + '<div class="vb-acts-cap">Засчитанное видео 30 дней оплачивается по мере роста просмотров — до максимума за ролик. Не ответите за 72 часа — засчитается само.</div>' : '')
+    + (v.status === 'active' ? '<div class="vb-line">' + advActive(v, c) + '</div>' : '')
     + (v.status === 'rejected' ? '<div class="vb-line warn">Вы указали проблему: «' + esc(v.reviewNote || '') + '». Разбирается BloggerPay — решение придёт уведомлением.</div>' : '')
-    + (v.status === 'declined' ? '<div class="vb-line">BloggerPay не засчитал видео' + (v.decisionNote ? ': ' + esc(v.decisionNote) : '') + '. Деньги остаются в бюджете.</div>' : '')
-    + (v.status === 'paid' ? '<div class="vb-line">Выплачено блогеру <b>' + rub(v.paid) + '</b> за ' + fmt(num(v.paidViews) || num(v.views)) + ' ' + plural(num(v.paidViews) || num(v.views), 'просмотр', 'просмотра', 'просмотров') + ' — из бюджета оффера.</div>' : '')
-    + (v.status === 'removed' ? '<div class="vb-line warn">Ролик удалён или скрыт на ' + PN[p] + ' — он не оплачивается.</div>' : '')
+    + (v.status === 'declined' ? '<div class="vb-line">BloggerPay не засчитал видео' + (v.decisionNote ? ': ' + esc(v.decisionNote) : '') + '. ' + (num(v.paid) > 0 ? 'Дальше не начисляем, остаток — в бюджете.' : 'Деньги остаются в бюджете.') + '</div>' : '')
+    + (v.status === 'paid' ? '<div class="vb-line">' + (num(v.paid) > 0
+        ? 'Выплачено блогеру <b>' + rub(v.paid) + '</b> за ' + fmt(num(v.paidViews) || num(v.views)) + ' ' + viewsW(num(v.paidViews) || num(v.views)) + ' — подсчёт завершён.'
+        : 'Подсчёт завершён: ' + zeroTxt(v, c).replace(/^./, function(x){ return x.toLowerCase(); }) + '.') + '</div>' : '')
+    + (v.status === 'removed' ? '<div class="vb-line warn">Ролик удалён или скрыт на ' + PN[p] + ' — ' + (num(v.paid) > 0 ? 'дальше не начисляем (выплачено ' + rub(v.paid) + ').' : 'он не оплачивается.') + '</div>' : '')
     + (v.status === 'revoked' ? '<div class="vb-line warn">Блогер закрыл доступ к аккаунту — видео не считается.</div>' : '')
     + '<div class="vb-links"><button type="button" data-vb="watch" data-id="' + esc(v.id) + '">Смотреть видео</button>'
     + (link ? '<a href="' + esc(link) + '" target="_blank" rel="noopener">Открыть в ' + PN[p] + '</a>' : '') + '</div></div>';
+}
+/* пауза глазами рекламодателя — свой текст по виду паузы: причина
+   (holdReason) написана для владельца («…или решите сами») и сюда не идёт */
+function advHold(v){
+  var hk = String(v.holdKind || '');
+  if(v.riskHold) return 'BloggerPay проверяет просмотры этого ролика — начисления подождут решения.';
+  if(hk === 'access') return 'Блогер потерял доступ к аккаунту — начисления на паузе, пока он не переподключит его.';
+  if(hk === 'money') return 'В бюджете оффера не хватило денег на начисление — BloggerPay разбирается, начисления подождут решения.';
+  return 'Начисления на паузе — BloggerPay разбирается.';
+}
+/* засчитанный ролик в подсчёте: «Выплачено N ₽ · считаем ещё X дн.» */
+function advActive(v, c){
+  var mx = maxOf(v, c), when = v.capReached || (mx > 0 && num(v.paid) >= mx) ? 'максимум за ролик набран.'
+    : daysLeftOf(v) >= 1 ? 'считаем ещё ' + daysLeftOf(v) + ' дн.' : 'последний день подсчёта.';
+  return 'Выплачено <b>' + rub(v.paid) + '</b> · ' + when + (needOf(v, c) ? ' Начисления — с ' + fmt(minOf(v, c)) + ' ' + viewsW(minOf(v, c)) + '.' : '');
 }
 function advBlock(campId){
   var c = camp(campId), cache = V.byCamp[String(campId)], list = (cache && cache.list) || [], b = boardOf(campId);
@@ -95263,13 +95477,15 @@ function advAction(a, t){
       delete R.busy[v.id];
       var nv = j && j.video; if(nv) upsert(nv); dropBoard(v.campId);
       var st = (nv && nv.status) || '', set = (j && j.settle) || '';
-      var m = 'Видео засчитано', k = 'ok';
-      if(st === 'paid'){ m = 'Видео засчитано — блогеру выплачено ' + rub(nv.paid); try{ if(window.bpMoney && typeof window.bpMoney.sync === 'function') window.bpMoney.sync(); }catch(e){ E(e); } }
+      var m = 'Видео засчитано', k = 'ok', pd = num(nv && nv.paid);
+      if(pd > 0){ try{ if(window.bpMoney && typeof window.bpMoney.sync === 'function') window.bpMoney.sync(); }catch(e){ E(e); } }
+      if(st === 'paid') m = 'Видео засчитано — блогеру выплачено ' + rub(pd);
       /* при зачёте ролика на площадке не оказалось — денег не ушло */
       else if(st === 'removed' || set === 'removed'){ m = 'Ролика больше нет на площадке — видео не оплачено, резерв вернулся в бюджет'; k = 'err'; }
-      else if(nv && nv.riskHold) m = 'Видео засчитано — выплату проверит BloggerPay';
-      else if(nv && (nv.payHold || nv.disputeHeld)) m = 'Видео засчитано — выплата задерживается';
-      else if(st === 'active') m = 'Видео засчитано — выплата пройдёт при ближайшей сверке';
+      else if(nv && nv.riskHold) m = 'Видео засчитано — начисления проверит BloggerPay';
+      else if(nv && (nv.payHold || nv.disputeHeld)) m = 'Видео засчитано — начисления задерживаются';
+      /* v3: зачёт открывает 30 дней начислений по мере роста просмотров */
+      else if(st === 'active') m = pd > 0 ? 'Видео засчитано — блогеру выплачено ' + rub(pd) + ', дальше 30 дней по росту просмотров' : 'Видео засчитано — 30 дней начисляем по росту просмотров';
       toast(m, k); syncLedger(V.byCamp[String(v.campId)] ? V.byCamp[String(v.campId)].list : V.list); mountAdv();
     }).catch(function(e){ delete R.busy[v.id]; t.disabled = false; t.textContent = 'Всё верно — засчитать'; toast((e && e.message) || 'Не получилось', 'err'); mountAdv(true); });
     return;
@@ -95309,19 +95525,22 @@ function advAction(a, t){
   }
 }
 
-/* оффер с видео на проверке не завершают и не удаляют: деньги по ним
-   ещё в резерве, касса держит бюджет до решения */
+/* оффер с видео на проверке или в подсчёте не завершают и не удаляют:
+   деньги по ним ещё в резерве, касса держит бюджет (409 videos_live), пока
+   есть review / rejected / active — v3: active считается 30 дней */
 function liveVids(campId){
   var all = V.list.slice(), bc = V.byCamp[String(campId)]; if(bc) all = all.concat(bc.list);
   var seen = {};
-  return all.filter(function(v){ if(!v || seen[v.id]) return false; seen[v.id] = 1; return String(v.campId) === String(campId) && stOf(v).g === 'wait'; });
+  return all.filter(function(v){ if(!v || seen[v.id]) return false; seen[v.id] = 1; return String(v.campId) === String(campId) && (v.status === 'review' || v.status === 'rejected' || v.status === 'active'); });
 }
 ['bpCampFinish', 'campComplete', 'campDelete'].forEach(function(n){
   var o = window[n]; if(typeof o !== 'function') return;
   window[n] = function(id){
     var lv = liveVids(id);
     if(lv.length){
-      toast('Пока нельзя: ' + lv.length + ' видео на проверке. Завершить оффер можно после решения по ним', 'err');
+      var ac = lv.filter(function(v){ return v.status === 'active'; }).length, rv = lv.length - ac;
+      var parts = []; if(rv) parts.push(rv + ' видео на проверке'); if(ac) parts.push((rv ? ac : ac + ' видео') + ' в подсчёте просмотров');
+      toast('Пока нельзя: ' + parts.join(', ') + '. Завершить оффер можно, когда по ним всё закончится', 'err');
       return;
     }
     return o.apply(this, arguments);
@@ -95336,21 +95555,49 @@ function notifyDiff(){
   var key = 'bpvb_seen:' + sid, raw = lsGet(key), first = raw === null;
   if(first){ var old = lsGet('bp_vb_seen:' + sid); if(old !== null){ raw = old; first = false; } }
   var seen = {}; try{ seen = JSON.parse(raw || '{}') || {}; }catch(e){}
-  var out = {};
+  /* v3: запись ролика — { s: статус, p: о скольких ₽ уже сказали, t: когда
+     сказали о прибавке }; прежний формат — строка статуса (выплаченное по
+     ней уже показали). Прибавки — не чаще раза в сутки на ролик, сводкой. */
+  var out = {}, now = Date.now();
   V.list.forEach(function(v){
-    var k = String(v.id), st = v.status + (v.riskHold ? ':hold' : ''), was = seen[k];
-    out[k] = st;
-    if(first || was === st) return;
+    var k = String(v.id), st = v.status + (v.riskHold ? ':hold' : ''), paid = num(v.paid), w = seen[k];
+    if(typeof w === 'string') w = { s:w, p:paid, t:0 };
+    var o = { s:st, p:w ? num(w.p) : 0, t:w ? num(w.t) : 0 };
+    out[k] = o;
+    if(first){ o.p = paid; return; }
+    var ws = w ? String(w.s || '') : '', wst = ws.split(':')[0];
     var c = camp(v.campId), nm = '«' + nameOf(c) + '»';
     if(Number(v.ownerId) === sid && Number(v.bloggerId) !== sid){
-      if(!was && v.status === 'review') note('Новое видео по заданию', nm + ': проверьте интеграцию');
+      if(!w && v.status === 'review') note('Новое видео по заданию', nm + ': проверьте интеграцию');
+      o.p = paid;
       return;
     }
-    if(Number(v.bloggerId) !== sid) return;
-    if(v.status === 'paid') note('Видео засчитано — ' + rub(v.paid) + ' на балансе', nm);
-    else if(v.status === 'declined') note('Видео не засчитано', nm + (v.decisionNote ? ': ' + v.decisionNote : ''));
-    else if(v.status === 'rejected') note('Рекламодатель указал проблему', nm + ': решает BloggerPay');
-    else if(v.status === 'removed') note('Видео удалено с площадки', nm + ': ролик удалён или скрыт — выплаты нет');
+    if(Number(v.bloggerId) !== sid){ o.p = paid; return; }
+    if(ws === st && paid <= o.p) return;
+    /* тексты — как у сервера (push и бот): первое начисление — «Видео
+       засчитано — N ₽ на балансе», дальше сводка раз в сутки, в конце —
+       «Подсчёт закончен — всего N ₽» */
+    if(v.status === 'paid' && wst !== 'paid'){
+      /* фикс платится сразу — это и первое начисление, и конец подсчёта */
+      if(paid > 0 && !(o.p > 0)) note('Видео засчитано — ' + rub(paid) + ' на балансе', nm + ': подсчёт закончен');
+      else if(paid > 0) note('Подсчёт закончен — всего ' + rub(paid), nm);
+      else note('Подсчёт закончен', nm + ': по условиям задания выплаты нет');
+      o.p = paid; o.t = now;
+    } else if(v.status === 'active' && paid > 0 && !(o.p > 0)){
+      note('Видео засчитано — ' + rub(paid) + ' на балансе', nm + ': дальше сайт сам обновляет просмотры и доначисляет — ' + daysTxt(v));
+      o.p = paid; o.t = now;
+    } else if(v.status === 'active' && wst !== 'active'){
+      var mn = minOf(v, c);
+      note('Видео засчитано — считаем просмотры', nm + (mn && needOf(v, c) ? ': начисления начнутся с ' + fmt(mn) + ' ' + viewsW(mn) : ': начисления пойдут по мере роста просмотров'));
+      o.p = paid; o.t = now;
+    } else if(v.status === 'active' && paid > o.p && now - o.t >= 864e5){
+      note('+' + rub(paid - o.p) + ' за просмотры: ' + nm, 'Всего за видео ' + rub(paid) + ' · ' + daysTxt(v));
+      o.p = paid; o.t = now;
+    } else if(ws !== st){
+      if(v.status === 'declined') note('Видео не засчитано', nm + (v.decisionNote ? ': ' + v.decisionNote : ''));
+      else if(v.status === 'rejected') note('Рекламодатель указал проблему', nm + ': решает BloggerPay');
+      else if(v.status === 'removed') note('Видео удалено с площадки', nm + (paid > 0 ? ': ролик удалён или скрыт — дальше не начисляем' : ': ролик удалён или скрыт — выплаты нет'));
+    }
   });
   lsSet(key, JSON.stringify(out));
 }
