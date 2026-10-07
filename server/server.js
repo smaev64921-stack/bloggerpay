@@ -5316,6 +5316,9 @@ const VID_ERR = {
     ? 'Переподключите YouTube и разрешите доступ к каналу'
     : 'Переподключите TikTok и разрешите доступ к роликам')],
   not_found: [404, 'Видео не найдено — проверьте ссылку'],
+  /* фото-карусель TikTok (/photo/…): у площадки это не ролик, Display API
+     её не отдаёт, и в задания, как у More Views, она не принимается */
+  not_video: [409, 'Это фото-пост, а не видео — в задания принимаются только видеоролики'],
   not_public: [409, 'Видео закрыто — откройте его для всех и попробуйте снова'],
   not_yours: [409, (x) => (x.chosen
     ? 'Этого видео нет на ' + (x.handle ? 'аккаунте ' + x.handle : 'выбранном аккаунте')
@@ -5367,6 +5370,7 @@ function ttCodeOf(code) {
 const TT_HOSTS = new Set(['www.tiktok.com', 'tiktok.com', 'm.tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com']);
 const TT_WEB_ORIGIN = (() => { try { return new URL(TT_WEB_BASE).origin; } catch (e) { return ''; } })();
 const TT_VID_RE = /(?:\/video\/|\/v\/|\/embed\/v2\/|\/player\/v1\/)(\d{15,21})/;
+const TT_PHOTO_RE = /\/photo\/(\d{15,21})/;
 const TT_UA = 'Mozilla/5.0 (compatible; BloggerPay/1.0; +' + PUBLIC_URL + ')';
 function ttUrlOk(u) {
   if (!u) return false;
@@ -5378,6 +5382,7 @@ function ttLinkOf(u) {
   if (!ttUrlOk(u)) return null;
   const id = TT_VID_RE.exec(u.pathname);
   if (id) return { url: u, id: id[1] };
+  if (TT_PHOTO_RE.test(u.pathname)) return { url: u, id: '', photo: true };
   const host = u.hostname.toLowerCase();
   if ((host === 'vm.tiktok.com' || host === 'vt.tiktok.com') && /^\/[\w-]{3,}\/?$/.test(u.pathname)) return { url: u, id: '' };
   if (/^\/t\/[\w-]{3,}\/?$/.test(u.pathname)) return { url: u, id: '' };
@@ -5445,15 +5450,47 @@ async function ttResolve(start) {
       throw ttErr('tiktok', 'короткая ссылка не раскрылась: ' + ((e && e.message) || e));
     }
     const loc = r.status >= 300 && r.status < 400 ? r.headers.get('location') : '';
-    if (!loc) throw ttErr('not_found');
+    if (!loc) {
+      /* Переадресации нет — площадка отдала страницу (так бывает с
+         браузерной заглушкой). Ищем адрес поста в её разметке: canonical,
+         og:url или первую ссылку вида /@ник/video|photo/<id>. Хост тот же,
+         из белого списка, читаем не больше 300 КБ. */
+      const pg = r.status === 200 ? await ttPageLink(cur) : null;
+      if (pg && TT_PHOTO_RE.test(pg.pathname)) throw ttErr('not_video');
+      const m0 = pg ? TT_VID_RE.exec(pg.pathname) : null;
+      if (m0) return { url: pg, id: m0[1] };
+      throw ttErr('not_found');
+    }
     let next;
     try { next = new URL(loc, cur); } catch (e) { throw ttErr('not_found'); }
     if (!ttUrlOk(next)) throw ttErr('not_found');
     const m = TT_VID_RE.exec(next.pathname);
     if (m) return { url: next, id: m[1] };
+    if (TT_PHOTO_RE.test(next.pathname)) throw ttErr('not_video');
     cur = next;
   }
   throw ttErr('not_found');
+}
+async function ttPageLink(cur) {
+  try {
+    const r = await fetch(cur.href, {
+      method: 'GET', redirect: 'manual',
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36' },
+      signal: AbortSignal.timeout(6000),
+    });
+    const loc = r.status >= 300 && r.status < 400 ? r.headers.get('location') : '';
+    if (loc) { try { if (r.body) await r.body.cancel(); } catch (e) { /* не нужно */ } const u = new URL(loc, cur); return ttUrlOk(u) ? u : null; }
+    if (!r.ok || !r.body) return null;
+    const rd = r.body.getReader(); let html = '', n = 0;
+    while (n < 300 * 1024) { const ch = await rd.read(); if (ch.done) break; n += ch.value.length; html += Buffer.from(ch.value).toString('utf8'); }
+    try { await rd.cancel(); } catch (e) { /* дочитывать не нужно */ }
+    /* в JSON страницы слэши экранированы: «\u002F» или «\/» */
+    const txt = html.replace(/\\u002F/gi, '/').replace(/\\\//g, '/');
+    const m = /https:\/\/(?:www\.|m\.)?tiktok\.com\/@[\w.-]+\/(?:video|photo)\/\d{15,21}/.exec(txt);
+    if (!m) return null;
+    const u = new URL(m[0]);
+    return ttUrlOk(u) ? u : null;
+  } catch (e) { return null; }
 }
 /* oEmbed площадки: открытый, без токена. Нужен ровно для одного —
    отличить «ролика нет вовсе» (400/404) от «ролик есть, но не ваш». */
@@ -5700,6 +5737,7 @@ function vidSeen(platform, v) {
 async function vidLocate(userId, link, chans, chosen) {
   const p = link.platform;
   let id = link.id, page = link.url;
+  if (link.photo) return { fail: 'not_video' };
   if (p === 'tiktok' && !id) {
     try { const r = await ttResolve(link.url); id = r.id; page = r.url; }
     catch (e) { return { fail: e.vidCode || 'tiktok' }; }

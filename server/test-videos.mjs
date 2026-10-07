@@ -262,6 +262,7 @@ const fake = createServer((req, res) => {
     const SHORT = {
       '/t/okA1/': TT + '/@blogera/video/' + ID.A1 + '?_r=1&_t=xyz',
       '/t/home/': '/?_r=1',
+      '/t/photo/': TT + '/@blogera/photo/7693945062417239316?_r=1',
       '/t/evil/': 'http://169.254.169.254/latest/meta-data/',
       '/t/hop1/': '/t/hop2/',
       '/t/hop2/': TT + '/@blogerb/video/' + ID.B1,
@@ -646,6 +647,10 @@ try {
   ok(sc.status === 409 && sc.body.code === 'scope' && /разрешите доступ к роликам/.test(sc.body.error), 'scope: нет права на ролики', sc.body);
   const home = await bind(A, 'main', TT + '/t/home/');
   ok(home.status === 404 && home.body.code === 'not_found', 'not_found: короткая ссылка ведёт на главную', home.body);
+  const ph = await bind(A, 'main', TT + '/@blogera/photo/7693945062417239316');
+  ok(ph.status === 409 && ph.body.code === 'not_video' && /фото-пост/.test(ph.body.error), 'фото-карусель по прямой ссылке — not_video, понятный текст', ph.body);
+  const phs = await bind(A, 'main', TT + '/t/photo/');
+  ok(phs.status === 409 && phs.body.code === 'not_video', 'короткая ссылка на фото-карусель — not_video, а не «не найдено»', phs.body);
   const evil = await bind(A, 'main', TT + '/t/evil/');
   ok(evil.status === 404 && evil.body.code === 'not_found', 'короткая ссылка наружу TikTok не раскрывается', evil.body);
   const none = await bind(A, 'main', link('blogera', ID.NONE));
