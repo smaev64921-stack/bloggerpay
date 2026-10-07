@@ -93205,6 +93205,9 @@ html body .vb-card:focus,html body .vb-card:focus-visible,html body .vb-dd-menu:
   transition:background .16s,transform .16s cubic-bezier(.22,1,.36,1);-webkit-tap-highlight-color:transparent}
 .vb-go:active{transform:scale(.985)}
 .vb-go:disabled{background:rgba(47,108,224,.30);color:rgba(255,255,255,.55);cursor:default;transform:none}
+.vb-ownnote{display:flex;flex-direction:column;gap:4px;margin:0 0 14px;padding:13px 15px;border-radius:16px;background:rgba(47,108,224,.10);border:1px solid rgba(91,147,245,.32)}
+.vb-ownnote b{font-size:14.5px;font-weight:800;color:#fff}
+.vb-ownnote span{font-size:13.5px;line-height:1.45;color:#b9c3d6}
 .vb-go.busy:disabled{background:#2f6ce0;color:#fff}
 .vb-go.ghost{background:rgba(255,255,255,.06);color:#e6eaf2;border:1px solid rgba(255,255,255,.1)}
 .vb-go .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -93860,7 +93863,7 @@ function normBoard(j){
     leaders:(Array.isArray(j.leaders) ? j.leaders : []).map(normPerson),
     participants:(Array.isArray(j.participants) ? j.participants : []).map(normPerson),
     more:typeof j.more === 'boolean' ? j.more : null,
-    me:m ? { rank:m.rank == null ? null : num(m.rank), videos:num(m.videos), views:num(m.views), earned:num(m.earned), joined:typeof m.joined === 'boolean' ? m.joined : null } : null
+    me:m ? { rank:m.rank == null ? null : num(m.rank), videos:num(m.videos), views:num(m.views), earned:num(m.earned), joined:typeof m.joined === 'boolean' ? m.joined : null, owner:m.owner === true } : null
   };
 }
 function uniqP(list){ var seen = {}; return list.filter(function(x){ var k = whoKey(x) || (x.me ? 'me' : ''); if(!k) return true; if(seen[k]) return false; seen[k] = 1; return true; }); }
@@ -94050,6 +94053,12 @@ window.bpVbOpen = function(campId, opts){
   var c = camp(campId); if(!c) return;
   opts = opts || {};
   closeMenu(true);
+  if(ownTask(campId)){
+    openSheet(sheet('bpVbSheet'), hd('Загрузка видео') + '<div class="vb-empty"><b>Это ваше задание</b><span>Видео в него загружают другие блогеры. В своё задание загрузить нельзя — выплата ушла бы вам же из вашего бюджета. Проверить загрузку можно с другого аккаунта.</span></div>'
+      + '<button type="button" class="vb-go" data-vb="own" data-camp="' + esc(campId) + '">Открыть мой оффер</button>'
+      + '<button type="button" class="vb-go ghost" data-vb="close" style="margin-top:10px">Закрыть</button>', 'Загрузка видео');
+    return;
+  }
   /* закрытое меню прошлого окна (возможно, другого человека) — пустым */
   var om = $('vbMenu'); if(om && om.innerHTML) om.innerHTML = '';
   accMine();
@@ -94581,6 +94590,22 @@ function rulesRows(body, c){
 function footBtn(foot, id){
   if(!foot) return;
   var sh = foot.closest('#bpTaskSheet'), js = joinSt(id);
+  if(ownTask(id)){
+    if(sh && sh.classList.contains('vb-fab')) sh.classList.remove('vb-fab');
+    var mo = foot.querySelector('.tk-btn-main');
+    if(mo && !mo.__vbOwn){
+      var ob = document.createElement('button'); ob.type = 'button'; ob.className = 'tk-btn-main vb-own'; ob.__vbOwn = 1;
+      ob.setAttribute('data-vb', 'own'); ob.setAttribute('data-camp', String(id)); ob.textContent = 'Открыть мой оффер';
+      mo.parentNode.replaceChild(ob, mo);
+    }
+    var bd = sh && sh.querySelector('.tk-sheet-body');
+    if(bd && !bd.querySelector('.vb-ownnote')){
+      var nt = document.createElement('div'); nt.className = 'vb-ownnote';
+      nt.innerHTML = '<b>Это ваше задание</b><span>Видео в него загружают другие блогеры. В своё задание загрузить нельзя — выплата ушла бы вам же из вашего бюджета. Ролики и выплаты — в «Мои офферы».</span>';
+      bd.insertBefore(nt, bd.firstChild);
+    }
+    return;
+  }
   var fab = canUpload(id);
   if(sh && sh.classList.contains('vb-fab') !== fab) sh.classList.toggle('vb-fab', fab);
   if(!fab) return;
@@ -94730,7 +94755,23 @@ function nil(ico, t, s, extra){ return '<div class="vb-nil"><i>' + ico + '</i><b
 function upBtn(id, label){ return '<button type="button" class="vb-mini blue" data-vb="upload" data-camp="' + esc(id) + '">' + UP.replace('<svg ', '<svg width="18" height="18" ') + (label || 'Загрузить видео') + '</button>'; }
 /* загружать можно и после «Сдать по ссылке» в смешанном задании (submitted):
    ручная работа на проверке не мешает загрузить ролик TikTok/YouTube */
-function canUpload(id){ var js = joinSt(id); return js === 'joined' || js === 'rejected' || js === 'accepted' || js === 'submitted'; }
+function canUpload(id){ if(ownTask(id)) return false; var js = joinSt(id); return js === 'joined' || js === 'rejected' || js === 'accepted' || js === 'submitted'; }
+/* своё задание: сервер не даёт загрузить в него видео (own_camp — иначе
+   выплата ушла бы автору из его же бюджета). Узнаём по локальной записи
+   оффера или по отметке сервера me.owner — она верна и на другом телефоне. */
+function ownTask(id){
+  var c = camp(id); if(c && isOwner(c)) return true;
+  var b = boardOf(id); return !!(b && b.data && b.data.me && b.data.me.owner);
+}
+function openOwn(id){
+  try{ var ts = $('bpTaskSheet'); if(ts) ts.remove(); }catch(e){}
+  closeSheet($('bpVbSheet'));
+  try{ if(typeof window.openCampDetail === 'function') window.openCampDetail(id); else if(typeof goTo === 'function') goTo('campaigns'); }catch(e){ E(e); }
+}
+document.addEventListener('click', function(e){
+  var t = e.target.closest && e.target.closest('[data-vb="own"]'); if(!t) return;
+  e.preventDefault(); e.stopPropagation(); openOwn(t.getAttribute('data-camp'));
+}, true);
 
 /* «Мои видео» */
 var SUBS = [['ok', 'Одобренные'], ['wait', 'На проверке'], ['bad', 'Отклонённые']];
@@ -95053,7 +95094,9 @@ function paintCards(){
   [].forEach.call(pg.querySelectorAll('.tk-list > .tk-card.hx'), function(card){
     try{
       var m = RX.exec(card.getAttribute('onclick') || ''); if(!m) return;
-      var c = camp(m[1]); if(!c || !isVidTask(c) || !joined(c.id) || !canUpload(c.id)) return;
+      var c = camp(m[1]);
+      if(c && ownTask(c.id)){ var op = card.querySelector('.vb-panel'); if(op){ op.remove(); var ob0 = card.querySelector('.hx-bank'); if(ob0) ob0.style.display = ''; } return; }
+      if(!c || !isVidTask(c) || !joined(c.id) || !canUpload(c.id)) return;
       var bank = card.querySelector('.hx-bank');
       var p = card.querySelector('.vb-panel');
       if(!p){ p = document.createElement('div'); p.className = 'vb-panel'; if(bank){ bank.style.display = 'none'; bank.parentNode.insertBefore(p, bank.nextSibling); } else card.appendChild(p); }

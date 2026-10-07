@@ -614,7 +614,7 @@ try {
   const ne = await bind(A, 'noesc', link('blogera', ID.A1));
   ok(ne.status === 409 && ne.body.code === 'camp_closed', 'camp_closed: у оффера нет заморозки — платить не из чего', ne.body);
   const own = await bind(ADV, 'main', link('blogera', ID.A1));
-  ok(own.status === 409 && own.body.code === 'own_camp' && own.body.error === 'Это ваше задание', 'own_camp', own.body);
+  ok(own.status === 409 && own.body.code === 'own_camp' && own.body.error === 'Это ваше задание — видео в своё задание загрузить нельзя', 'own_camp', own.body);
   const ntt = await bind(A, 'yt', link('blogera', ID.A1));
   ok(ntt.status === 409 && ntt.body.code === 'wrong_platform' && ntt.body.error === 'В этом задании принимаются видео только из: YouTube',
     'wrong_platform: TikTok в YouTube-задании (код not_tiktok больше не приходит)', ntt.body);
