@@ -92040,6 +92040,8 @@ html body #pg-tasks .tk-card-joined.hx .hx-bank,html body #pg-mytasks .tk-card-j
 
   /* та же карточка для «Моих заданий» (bp-vbind) */
   window.bpHxInner = function(c, joined){ return inner(c, joined); };
+  window.bpHxPlat = function(c){ return platPills(c); };
+  window.bpHxDays = function(c){ return daysLeft(c); };
   var RX = /bpTaskOpen\('((?:[^'\\]|\\.)*)'\)/;
   function enhance(){
     var page = document.getElementById('pg-tasks'); if(!page) return;
@@ -93252,9 +93254,65 @@ html body .vb-card:focus,html body .vb-card:focus-visible,html body .vb-dd-menu:
 .vb-go:active{transform:scale(.985)}
 .vb-go:disabled{background:rgba(47,108,224,.30);color:rgba(255,255,255,.55);cursor:default;transform:none}
 /* переключатель «Все задания / Мои задания» */
-.vb-sw{display:flex;gap:4px;margin:2px 0 14px;padding:4px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
-.vb-sw button{flex:1 1 0;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:0 10px;border:none;border-radius:12px;background:none;color:#98a2b3;font:inherit;font-size:14px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .18s,color .18s}
-.vb-sw button.on{background:#2f6ce0;color:#fff;box-shadow:0 6px 16px rgba(6,16,44,.35)}
+.vb-sw{position:relative;display:flex;gap:0;margin:2px 0 16px;padding:4px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
+.vb-sw-th{position:absolute;top:4px;bottom:4px;left:4px;width:calc(50% - 4px);border-radius:12px;background:#2f6ce0;box-shadow:0 6px 16px rgba(6,16,44,.35);transition:transform .32s cubic-bezier(.22,1,.36,1);pointer-events:none}
+.vb-sw.mine .vb-sw-th{transform:translateX(100%)}
+.vb-sw.no-anim .vb-sw-th{transition:none}
+.vb-sw button{position:relative;z-index:1;flex:1 1 0;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:0 10px;border:none;border-radius:12px;background:none;color:#98a2b3;font:inherit;font-size:14px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:color .25s}
+.vb-sw button.on{color:#fff}
+/* плитки сверху на «Заданиях» и «Моих заданиях» владелец убрал (09.10) */
+html body #pg-tasks > .tk-stats,html body #pg-mytasks > .tk-stats{display:none!important}
+/* «Все задания ⇄ Мои задания»: без въезда страницы и каскада — тёмной вспышки нет */
+html.vb-swing #pg-tasks.pg.on,html.vb-swing #pg-mytasks.pg.on,
+html.vb-swing #pg-tasks.pg.on > *,html.vb-swing #pg-mytasks.pg.on > *{animation:none!important}
+html.vb-swing .pg.vb-swin > :not(.cat-hd):not(.vb-sw){animation:vbSwIn .26s cubic-bezier(.22,1,.36,1) backwards!important}
+@keyframes vbSwIn{from{opacity:.45;transform:translateY(5px)}}
+@media (prefers-reduced-motion:reduce){.vb-sw-th{transition:none}html.vb-swing .pg.vb-swin > *{animation:none!important}}
+/* ── карточка «Моих заданий» ── */
+html body #pg-mytasks .tk-card.vb-mt2{display:block;padding:16px 16px 14px;border-radius:22px;background:linear-gradient(180deg,#161b25 0%,#131821 100%);border:1px solid rgba(255,255,255,.07);box-shadow:none;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:border-color .2s,transform .16s cubic-bezier(.22,1,.36,1)}
+html body #pg-mytasks .tk-card.vb-mt2 + .tk-card{margin-top:12px}
+html body #pg-mytasks .tk-card.vb-mt2:active{transform:scale(.99)}
+html body #pg-mytasks .tk-card.vb-mt2:focus-visible{outline:2px solid #5b93f5;outline-offset:2px}
+.vb-mt2 .mt-hd{display:flex;align-items:flex-start;gap:12px}
+.vb-mt2 .mt-tt{flex:1;min-width:0}
+.vb-mt2 .mt-name{display:block;font-size:18px;font-weight:800;line-height:1.25;color:#f2f5fa;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vb-mt2 .mt-by{display:flex;align-items:center;gap:7px;margin-top:6px;font-size:13px;color:#98a2b3;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb-mt2 .mt-ava{flex:none;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:#232a37;color:#cfd6e2;font-size:10.5px;font-weight:800}
+.vb-mt2 .mt-ava img{width:100%;height:100%;object-fit:cover}
+.vb-mt2 .mt-due{flex:none;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:999px;background:rgba(255,255,255,.05);color:#c3cad6;font-size:12.5px;font-weight:700;white-space:nowrap}
+.vb-mt2 .mt-due svg{width:14px;height:14px;opacity:.8}
+.vb-mt2 .mt-due.hot{background:rgba(245,165,36,.12);color:#f5c26b}
+.vb-mt2 .mt-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin-top:12px}
+.vb-mt2 .mt-meta .hx-pl{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:#c3cad6}
+.vb-mt2 .mt-meta .hx-pi{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center}
+.vb-mt2 .mt-meta .hx-pi svg{width:13px;height:13px;fill:#fff}
+.vb-mt2 .mt-rate{font-size:12.5px;font-weight:700;color:#8fb6ff}
+.vb-mt2 .mt-vids{margin-top:14px;border-top:1px solid rgba(255,255,255,.06)}
+.vb-mt2 .mt-v{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.vb-mt2 .mt-v .vb-thumb{flex:none;width:38px;height:50px;border-radius:9px}
+.vb-mt2 .mt-v-tx{flex:1;min-width:0}
+.vb-mt2 .mt-v-tx b{display:block;font-size:14px;font-weight:700;color:#eef2f8;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb-mt2 .mt-v-tx i{display:block;margin-top:2px;font-style:normal;font-size:12px;color:#8e98ab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb-mt2 .mt-st{display:inline-block;margin-top:5px;font-size:11.5px;font-weight:700;color:#8fb6ff}
+.vb-mt2 .mt-st.is-ok{color:#7ff0bd}
+.vb-mt2 .mt-st.is-warn{color:#f5c26b}
+.vb-mt2 .mt-st.is-bad{color:#ff8f8f}
+.vb-mt2 .mt-v-amt{flex:none;text-align:right;max-width:40%}
+.vb-mt2 .mt-v-amt b{display:block;font-size:16px;font-weight:800;color:#7ff0bd;font-variant-numeric:tabular-nums;white-space:nowrap}
+.vb-mt2 .mt-v-amt.wait b{color:#eef2f8}
+.vb-mt2 .mt-v-amt.z b{color:#8e98ab}
+.vb-mt2 .mt-v-amt i{display:block;margin-top:2px;font-style:normal;font-size:11px;color:#8e98ab;white-space:nowrap}
+.vb-mt2 .mt-more{padding:10px 0 0;font-size:12.5px;color:#8e98ab}
+.vb-mt2 .mt-empty{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.06);font-size:13px;line-height:1.45;color:#98a2b3}
+.vb-mt2 .mt-ft{display:flex;align-items:center;gap:12px;margin-top:14px}
+.vb-mt2 .mt-sum{flex:1;min-width:0}
+.vb-mt2 .mt-sum span{display:block;font-size:12px;color:#8e98ab}
+.vb-mt2 .mt-sum b{display:block;margin-top:1px;font-size:19px;font-weight:800;color:#eef2f8;font-variant-numeric:tabular-nums}
+.vb-mt2 .mt-sum b.ok{color:#7ff0bd}
+.vb-mt2 .mt-up{flex:none;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 18px 0 15px;border:none;border-radius:14px;background:#2f6ce0;color:#fff;font:inherit;font-size:14.5px;font-weight:800;cursor:pointer;box-shadow:0 8px 20px rgba(6,16,44,.4);-webkit-tap-highlight-color:transparent;transition:transform .16s cubic-bezier(.22,1,.36,1)}
+.vb-mt2 .mt-up svg{width:18px;height:18px}
+.vb-mt2 .mt-up:active{transform:scale(.97)}
+.vb-mt2 .mt-up:focus-visible{outline:2px solid #8fb6ff;outline-offset:2px}
 .vb-sw button em{font-style:normal;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:rgba(255,255,255,.12);font-size:11.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
 .vb-sw button.on em{background:rgba(255,255,255,.22)}
 .vb-sw button:focus-visible{outline:2px solid #8fb6ff;outline-offset:2px}
@@ -95387,62 +95445,88 @@ document.addEventListener('click', function(e){
 /* «Мои задания» — те же карточки, что в «Заданиях» (bp-tkcard), с блоком
    «Ваши видео» и кнопкой загрузки; у заданий без видео — их кнопки
    («Сдать работу», «Завершить») из старой карточки */
-function paidOld(j){
-  var s = (j.status === 'accepted' || j.status === 'finished') ? num(j.payout) : 0;
-  (Array.isArray(j.posts) ? j.posts : []).forEach(function(p){ if(p && p.status !== 'rejected') s += num(p.payout); });
-  return s;
+/* карточка «Моих заданий»: одна плоскость без вложенных рамок —
+   шапка (название, автор, срок), строка условий, мои ролики строками с
+   суммой справа, внизу «Начислено» и кнопка загрузки */
+function mtDays(c){
+  var d = typeof window.bpHxDays === 'function' ? window.bpHxDays(c) : null;
+  if(d == null) return '';
+  var t = d <= 0 ? 'срок вышел' : d === 1 ? 'последний день' : 'ещё ' + d + ' ' + plural(d, 'день', 'дня', 'дней');
+  return '<span class="mt-due' + (d <= 3 ? ' hot' : '') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>' + t + '</span>';
 }
-function myStats(pg){
-  var box = pg.querySelector('.tk-stats'); if(!box) return;
-  var sid = mySrv(), vids = V.list.filter(function(v){ return v && (sid == null || Number(v.bloggerId) === sid); });
-  var earned = 0, wait = 0, live = 0;
-  vids.forEach(function(v){
-    earned += num(v.paid);
-    if(v.status === 'review' || v.status === 'rejected') wait++;
-    else if(v.status === 'active') live++;
-  });
-  (window.bpMyJoins ? window.bpMyJoins() : []).forEach(function(j){ earned += paidOld(j); });
-  var h = '<div class="tk-stat"><span>Заработано</span><b>' + rub(earned) + '</b><em>' + (earned > 0 ? 'уже на балансе' : 'пока ничего') + '</em></div>'
-    + '<div class="tk-stat"><span>На проверке</span><b>' + wait + '</b><em>' + (wait ? plural(wait, 'видео ждёт', 'видео ждут', 'видео ждут') : 'видео не ждут') + '</em></div>'
-    + '<div class="tk-stat"><span>Считаем</span><b>' + live + '</b><em>' + (live ? 'видео набирают просмотры' : 'видео в подсчёте нет') + '</em></div>';
-  if(box.__vb !== h){ box.innerHTML = h; box.__vb = h; }
+function mtTerms(c){
+  var t = terms(c);
+  if(t.fixed) return rub(t.fixed) + ' за ролик';
+  var a = [];
+  if(t.rate) a.push(rub(t.rate) + ' за 1 000 просмотров');
+  if(t.cap) a.push('до ' + rub(t.cap));
+  return a.join(' · ');
+}
+function mtRow(v, c){
+  var s = stOf(v), p = vplat(v), paid = num(v.paid), mx = maxOf(v, c), amt, cls = 'ok';
+  if(v.status === 'review' || v.status === 'rejected'){ amt = needOf(v, c) ? 0 : nowAmt(v, c); cls = 'wait'; }
+  else amt = paid;
+  var sub = viewsTxt(cntViews(v)) + (v.status === 'active' && !v.payHold && !v.riskHold ? ' · ' + daysTxt(v) : '');
+  return '<div class="mt-v">' + thumb(v)
+    + '<div class="mt-v-tx"><b>' + esc(v.title || 'Видео ' + PN[p]) + '</b><i>' + sub + '</i><span class="mt-st is-' + s.c + '">' + s.t + '</span></div>'
+    + '<div class="mt-v-amt ' + (amt > 0 ? cls : 'z') + '"><b>' + (cls === 'wait' && amt > 0 ? '≈ ' : '') + rub(amt) + '</b>'
+    + (v.status === 'active' && mx > 0 ? '<i>из ' + rub(mx) + '</i>' : '') + '</div></div>';
+}
+function mtCard(c){
+  var id = String(c.id), list = mineOf(id), paid = 0;
+  list.forEach(function(v){ paid += num(v.paid); });
+  var nm = String(c.advertiserName || c.brand || 'Рекламодатель');
+  var letter = (Array.from ? Array.from(nm.trim())[0] : nm.trim().charAt(0)) || 'Р';
+  var img = safeImg(c.advertiserPhoto || c.brandLogo || '');
+  var pl = typeof window.bpHxPlat === 'function' ? window.bpHxPlat(c) : '';
+  var tr = mtTerms(c), up = canUpload(id);
+  var shown = list.slice(0, 3), more = list.length - shown.length;
+  return '<div class="mt-hd"><div class="mt-tt"><b class="mt-name">' + esc(nameOf(c)) + '</b>'
+    + '<span class="mt-by"><span class="mt-ava">' + (img ? '<img src="' + esc(img) + '" alt="">' : esc(letter.toUpperCase())) + '</span>' + esc(nm) + '</span></div>'
+    + mtDays(c) + '</div>'
+    + ((pl || tr) ? '<div class="mt-meta">' + pl + (tr ? '<span class="mt-rate">' + esc(tr) + '</span>' : '') + '</div>' : '')
+    + (list.length
+      ? '<div class="mt-vids">' + shown.map(function(v){ return mtRow(v, c); }).join('')
+        + (more > 0 ? '<div class="mt-more">ещё ' + more + ' ' + plural(more, 'видео', 'видео', 'видео') + ' — в задании</div>' : '') + '</div>'
+      : '<div class="mt-empty">Опубликуйте ролик с рекламой и загрузите его — даже с 0 просмотров. 30 дней сайт сам начисляет деньги.</div>')
+    + '<div class="mt-ft"><div class="mt-sum"><span>Начислено</span><b class="' + (paid > 0 ? 'ok' : '') + '">' + rub(paid) + '</b></div>'
+    + (up ? '<button type="button" class="mt-up" data-vb-open="' + esc(id) + '">' + UP + (list.length ? 'Загрузить ещё' : 'Загрузить видео') + '</button>' : '')
+    + '</div>';
 }
 function paintMyTasks(){
   var pg = $('pg-mytasks'); if(!pg) return;
-  myStats(pg);
   [].forEach.call(pg.querySelectorAll('.tk-list > .tk-mt-card:not(.tk-mt-gone)'), function(old){
     try{
       var m = RX.exec(old.getAttribute('onclick') || ''); if(!m) return;
-      var c = camp(m[1]); if(!c || typeof window.bpHxInner !== 'function') return;
+      var c = camp(m[1]); if(!c) return;
       var card = document.createElement('div');
-      card.className = 'tk-card tk-card-joined hx vb-mt';
       card.setAttribute('onclick', old.getAttribute('onclick'));
       card.setAttribute('role', 'button'); card.setAttribute('tabindex', '0');
-      card.innerHTML = window.bpHxInner(c, true);
-      if(isVidTask(c) && canUpload(c.id)){
-        var bank = card.querySelector('.hx-bank'); if(bank) bank.style.display = 'none';
-        var p = document.createElement('div'); p.className = 'vb-panel'; p.innerHTML = panelHtml(c); p.__h = p.innerHTML;
-        if(bank) bank.parentNode.insertBefore(p, bank.nextSibling); else card.appendChild(p);
+      if(isVidTask(c)){
+        card.className = 'tk-card vb-mt2'; card.setAttribute('data-camp', String(c.id));
+        card.innerHTML = mtCard(c); card.__h = card.innerHTML;
       } else {
-        /* без видео: отказ, выплаты и кнопки старой карточки */
+        if(typeof window.bpHxInner !== 'function') return;
+        /* без видео: карточка «Заданий» и кнопки старой («Сдать работу», «Завершить») */
+        card.className = 'tk-card tk-card-joined hx vb-mt';
+        card.innerHTML = window.bpHxInner(c, true);
+        var tm = card.querySelector('.tk-mine'); if(tm) tm.remove();
         [].forEach.call(old.querySelectorAll(':scope > .tk-rej, :scope > .tk-paid-row, :scope > .tk-foot'), function(n){ card.appendChild(n); });
-        [].forEach.call(card.querySelectorAll('[onclick*="bpOpenSubmit("]'), function(b){
-          if(isVidTask(c)) b.textContent = mineOf(c.id).length ? 'Загрузить ещё видео' : 'Загрузить видео';
-        });
       }
       old.parentNode.replaceChild(card, old);
     }catch(e){ E(e); }
   });
-  /* обновить блок «Ваши видео» у уже переделанных карточек */
-  [].forEach.call(pg.querySelectorAll('.tk-list > .vb-mt'), function(card){
-    var m = RX.exec(card.getAttribute('onclick') || ''), c = m && camp(m[1]), p = card.querySelector('.vb-panel');
-    if(c && p){ var h = panelHtml(c); if(p.__h !== h){ p.innerHTML = h; p.__h = h; } }
+  /* свежие цифры у уже переделанных карточек */
+  [].forEach.call(pg.querySelectorAll('.tk-list > .vb-mt2'), function(card){
+    var c = camp(card.getAttribute('data-camp')); if(!c) return;
+    var h = mtCard(c); if(card.__h !== h){ card.innerHTML = h; card.__h = h; }
   });
   paintSw();
 }
 
 /* переключатель «Все задания / Мои задания» вверху обеих страниц */
 function isAdvR(){ try{ return !!(typeof _isAdvertiser !== 'undefined' && _isAdvertiser); }catch(e){ return false; } }
+var SW_FROM = null;
 function paintSw(){
   var n = 0; try{ n = window.bpMyJoins ? window.bpMyJoins().length : 0; }catch(e){}
   ['pg-tasks', 'pg-mytasks'].forEach(function(id){
@@ -95450,21 +95534,39 @@ function paintSw(){
     var sw = pg.querySelector(':scope > .vb-sw');
     if(!n || isAdvR()){ if(sw) sw.remove(); return; }
     var mineOn = id === 'pg-mytasks';
-    var h = '<button type="button" role="tab" aria-selected="' + !mineOn + '"' + (mineOn ? ' data-vb-go="tasks"' : '') + ' class="' + (mineOn ? '' : 'on') + '">Все задания</button>'
+    var h = '<i class="vb-sw-th" aria-hidden="true"></i>'
+      + '<button type="button" role="tab" aria-selected="' + !mineOn + '"' + (mineOn ? ' data-vb-go="tasks"' : '') + ' class="' + (mineOn ? '' : 'on') + '">Все задания</button>'
       + '<button type="button" role="tab" aria-selected="' + mineOn + '"' + (mineOn ? '' : ' data-vb-go="mytasks"') + ' class="' + (mineOn ? 'on' : '') + '">Мои задания<em>' + n + '</em></button>';
     if(!sw){ sw = document.createElement('div'); sw.className = 'vb-sw'; sw.setAttribute('role', 'tablist'); sw.setAttribute('aria-label', 'Задания'); }
     if(sw.__h !== h){ sw.innerHTML = h; sw.__h = h; }
+    sw.classList.toggle('mine', mineOn);
     var hd = pg.querySelector(':scope > .cat-hd');
     if(hd){ if(hd.nextSibling !== sw) hd.parentNode.insertBefore(sw, hd.nextSibling); }
     else if(pg.firstChild !== sw) pg.insertBefore(sw, pg.firstChild);
   });
 }
+/* переход между «Все задания» и «Мои задания» — без въезда страницы и
+   каскада (они давали тёмную вспышку): бегунок переезжает, список
+   мягко проявляется с 0.5, а не из нуля */
+function swGo(to){
+  var from = to === 'mytasks' ? 'pg-tasks' : 'pg-mytasks', dest = to === 'mytasks' ? 'pg-mytasks' : 'pg-tasks';
+  var y = 0; try{ y = window.scrollY || 0; }catch(_){}
+  document.documentElement.classList.add('vb-swing');
+  if(typeof window.goTo === 'function') window.goTo(to);
+  var pg = $(dest), sw = pg && pg.querySelector(':scope > .vb-sw');
+  if(sw){
+    sw.classList.add('no-anim'); sw.classList.toggle('mine', to !== 'mytasks');
+    void sw.offsetWidth; sw.classList.remove('no-anim'); sw.classList.toggle('mine', to === 'mytasks');
+  }
+  if(pg){ pg.classList.remove('vb-swin'); void pg.offsetWidth; pg.classList.add('vb-swin'); }
+  try{ var hd = pg && pg.querySelector(':scope > .vb-sw'); if(y > 0 && hd){ var top = hd.getBoundingClientRect().top + (window.scrollY || 0) - 90; window.scrollTo(0, Math.max(0, Math.min(y, top))); } else window.scrollTo(0, 0); }catch(_){}
+  clearTimeout(swGo.t); swGo.t = setTimeout(function(){ document.documentElement.classList.remove('vb-swing'); if(pg) pg.classList.remove('vb-swin'); }, 420);
+}
 document.addEventListener('click', function(e){
   var b = e.target.closest && e.target.closest('.vb-sw [data-vb-go]'); if(!b) return;
-  e.preventDefault();
-  if(typeof window.goTo === 'function') window.goTo(b.getAttribute('data-vb-go'));
-  try{ window.scrollTo(0, 0); }catch(_){}
-});
+  e.preventDefault(); e.stopPropagation();
+  swGo(b.getAttribute('data-vb-go'));
+}, true);
 
 /* своё задание — не участие: старые записи (вступили до запрета) не
    считаются ни в «Моих заданиях», ни в полке, и тихо снимаются */
