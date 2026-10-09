@@ -88,6 +88,11 @@ try {
     ok(r.status === 200 && /text\/html/.test(r.headers.get('content-type') || '')
       && r.headers.get('x-frame-options') === 'DENY' && /BloggerPay/.test(html), 'страница пульта открывается по ' + p);
   }
+  const adminHtml = await (await fetch(BASE + '/admin')).text();
+  ok(/data-act="fullsite"/.test(adminHtml) && /data-act="fulloff"/.test(adminHtml)
+    && /localStorage\.setItem\(FULL_KEY, '1'\)/.test(adminHtml) && /FULL_KEY = 'bp_full_access'/.test(adminHtml)
+    && /Перейти на сайт с полным доступом/.test(adminHtml) && /Выключить полный доступ на этом устройстве/.test(adminHtml),
+  'в пульте есть «Перейти на сайт с полным доступом» и «Выключить полный доступ на этом устройстве»');
 
   /* ── посторонним закрыто ── */
   ok((await api('GET', '/api/admin/users', null, { cookie: false })).status === 403, 'список людей без входа закрыт');
@@ -207,13 +212,21 @@ try {
   const pub0 = await api('GET', '/api/tasks/public', null, { cookie: false });
   const has0 = JSON.stringify(pub0.body).includes('camp_test_1');
   ok(has0, 'задание видно в общей ленте', pub0.body);
+  const sum0 = await api('GET', '/api/tasks/summary', null, { cookie: false });
+  const st0 = sum0.body.camps && sum0.body.camps.camp_test_1;
+  ok(sum0.status === 200 && !!st0 && st0.videos === 0 && st0.views === 0 && st0.paid === 0 && st0.budget === 0,
+    'задание есть и в сводке «Главной» (без заморозки — нули)', sum0.body);
   const brandId = (onlyAdv.body.rows.find((r) => r.email === 'brand@t.ru') || {}).id;
   await api('POST', '/api/admin/users/block', { userId: brandId, blocked: true, reason: 'мошенничество' });
   const pub1 = await api('GET', '/api/tasks/public', null, { cookie: false });
   ok(!JSON.stringify(pub1.body).includes('camp_test_1'), 'после блокировки автора задание из ленты ушло', pub1.body);
+  const sum1 = await api('GET', '/api/tasks/summary', null, { cookie: false });
+  ok(sum1.status === 200 && !('camp_test_1' in (sum1.body.camps || {})), 'и из сводки — сразу, без минуты кэша', sum1.body);
   const pullM = await api('GET', '/api/sync/pull?since=0', null, { token: maria.token, cookie: false });
   ok(!JSON.stringify(pullM.body).includes('camp_test_1'), 'и в обмен другим людям больше не приходит');
   await api('POST', '/api/admin/users/block', { userId: brandId, blocked: false });
+  const sum2 = await api('GET', '/api/tasks/summary', null, { cookie: false });
+  ok('camp_test_1' in (sum2.body.camps || {}), 'разблокировали — задание вернулось в сводку');
 
   /* ── поиск числом: сам номер — первым ── */
   const byNum = await api('GET', '/api/admin/users?q=' + m.id);

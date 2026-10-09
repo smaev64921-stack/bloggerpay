@@ -149,6 +149,32 @@ try {
   const leak = JSON.stringify(shop.rows || []);
   ok(leak.indexOf('#srv:') < 0 && leak.indexOf('ownerId') < 0,
     'номеров людей в витрине нет', leak.slice(0, 160));
+
+  /* условия объявления для карточки «как у More Views» (10.10.2026):
+     тип, площадки, ставка, потолок, срок — и ничего лишнего */
+  await api('POST', '/api/sync/put', {
+    kind: 'camp', rid: 'camp_pub_3', shared: true,
+    data: { id: 'camp_pub_3', status: 'active', title: 'Нарезки про сервис', format: 'clips',
+      formatLabel: 'Нарезки', platforms: 'tt,yt', payMode: 'cpm', rate: 100, maxPayout: 3000,
+      minViews: 5000, deadline: '2030-01-02T03:04:05.000Z', budget: 20000,
+      ownerId: '#srv:' + adv.id, advertiserName: 'FitLab' },
+  }, adv.token);
+  await api('POST', '/api/sync/put', {
+    kind: 'camp', rid: 'camp_pub_4', shared: true,
+    data: { id: 'camp_pub_4', status: 'active', title: 'Кривые поля',
+      platforms: ['TT', '<img src=x>', 'yt'], rate: -5, maxPayout: 'много', fixedPrice: 1e15,
+      payMode: 'fixed', deadline: 'когда-нибудь', formatLabel: 'x'.repeat(200) },
+  }, adv.token);
+  const shop2 = await (await fetch(BASE + '/api/tasks/public')).json();
+  const t3 = (shop2.rows || []).find((r) => r.id === 'camp_pub_3') || {};
+  ok(t3.formatLabel === 'Нарезки' && t3.platforms === 'tt,yt' && t3.rate === 100 && t3.maxPayout === 3000
+    && t3.minViews === 5000 && t3.payMode === '' && t3.deadline === '2030-01-02T03:04:05.000Z',
+    'в витрине условия объявления: тип, площадки, ставка, потолок, порог, срок', t3);
+  const t4 = (shop2.rows || []).find((r) => r.id === 'camp_pub_4') || {};
+  ok(t4.platforms === 'tt,imgsrcx,yt' && t4.rate === 0 && t4.maxPayout === 0 && t4.fixedPrice === 1e9
+    && t4.payMode === 'fixed' && t4.deadline === '' && t4.formatLabel.length === 40,
+    'кривые поля приведены: площадки — только буквы, числа — конечные и неотрицательные, срок — дата или пусто', t4);
+  ok(JSON.stringify(shop2.rows || []).indexOf('#srv:') < 0, 'и в новой витрине номеров людей нет');
 } catch (e) {
   failed++; console.log('  FAIL исключение: ' + e.message);
 } finally {

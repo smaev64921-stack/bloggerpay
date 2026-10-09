@@ -10916,6 +10916,46 @@ window.BP_SERVER = window.BP_SERVER || '';
 })();
 </script>
 
+<script id="bp-mv-flag">
+/* ══ РЕЖИМ «КАК MORE VIEWS» · ранний флаг (09.10.2026) ═══════════════
+   Решение владельца: у всех приложение устроено как More Views —
+   главная = задания рекламодателей, карты блогеров, каталог карт и
+   сделки спрятаны. Класс html.bp-mv ставим ДО первой отрисовки, иначе
+   на долю секунды мелькнул бы старый каталог.
+   «Полный доступ» (сайт как до переделки) включает только кнопка в
+   /admin: она кладёт localStorage bp_full_access = '1'. Слой bp-mv в
+   конце файла спрашивает сервер (GET /api/admin/full-access) и без
+   подтверждения флаг снимает.
+   Без класса bp-mv не действует ни одно новое правило: всё как раньше.
+   Хранилище закрыто (инкогнито, Telegram Web) — флага нет, режим MV.
+   Откат: удалить этот скрипт и слои bp-mv-css / bp-mv в конце файла. */
+(function(){
+  var full = false;
+  try{
+    full = window.localStorage.getItem('bp_full_access') === '1';
+    /* Срок куки владельца, который сервер назвал при прошлой проверке
+       (bp-mv · verify). Истёк — сервер всё равно откажет: сразу режим MV,
+       без мигания прежним каталогом и лишней перезагрузки. */
+    var until = Number(window.localStorage.getItem('bp_full_access_until')) || 0;
+    if(full && until > 0 && Date.now() > until){
+      full = false;
+      window.localStorage.removeItem('bp_full_access');
+      window.localStorage.removeItem('bp_full_access_until');
+    }
+  }catch(e){ full = false; }
+  window.bpMvOn = function(){ return document.documentElement.classList.contains('bp-mv'); };
+  if(full) return;
+  document.documentElement.classList.add('bp-mv');
+  /* Старые адреса каталога, мастера карты и сделок ведут на главную:
+     bp-nav и bp-deeplink восстанавливают экран из адреса после загрузки. */
+  try{
+    var h = String(location.hash || '');
+    if(/^#\/(deal|tz|blogger)\//i.test(h) || /^#\/(home|favorites|add-blogger-card|company)\/?$/i.test(h))
+      history.replaceState(history.state, '', location.pathname + location.search + '#/tasks');
+  }catch(e){}
+})();
+</script>
+
 <style id="bp-font-manrope">
 /* Manrope, вариативный, 400-800 · четыре подмножества */
 @font-face{
@@ -16599,7 +16639,7 @@ function openNotifPrefsSheet(){
     </div>`;
   _bpSheetOpen('Уведомления', `
     ${row('vibro','Вибрация','Лёгкий отклик при новых уведомлениях', p.vibro)}
-    ${row('deadlines','Напоминания о дедлайнах','Предупреждать о сроках активных сделок', p.deadlines)}
+    ${row('deadlines','Напоминания о дедлайнах', (window.bpMvOn && window.bpMvOn()) ? 'Предупреждать о сроках заданий' : 'Предупреждать о сроках активных сделок', p.deadlines)}
     <div style="font-size:11px;color:var(--t3);line-height:1.6;padding-top:12px">Уведомления показываются, пока открыта вкладка с сайтом. Push-уведомления появятся в полной версии.</div>`);
 }
 function prefToggle(key, el){
@@ -16612,7 +16652,13 @@ function prefToggle(key, el){
 
 // ── Помощь и поддержка ──
 function openHelpSheet(){
-  const faq = [
+  /* Режим MV (bp-mv): сделок и каталога карт нет — вопросы про задания */
+  const faq = (window.bpMvOn && window.bpMvOn()) ? [
+    ['Как заработать на заданиях?','На «Главной» выберите задание рекламодателя, вступите в него и опубликуйте ролик с рекламой в TikTok или YouTube. Потом нажмите «Загрузить видео» в карточке задания.'],
+    ['Когда приходят деньги?','Рекламодатель проверяет ролик. После зачёта 30 дней деньги начисляются по мере роста просмотров — по ставке задания, до максимума за ролик.'],
+    ['Как вывести деньги?','Раздел «Баланс» → «Вывести». Подтвердите личность, привяжите карту и укажите сумму от 100 ₽. Комиссия — 4%.'],
+    ['Как разместить своё задание?','Переключитесь на роль рекламодателя в профиле, откройте «Мои задания» и нажмите «Создать задание». Бюджет замораживается и уходит блогерам за просмотры.']
+  ] : [
     ['Как работает безопасная сделка?','Рекламодатель оплачивает сделку — средства замораживаются. Блогер выполняет работу по шагам, рекламодатель проверяет публикацию, после подтверждения блогер получает выплату.'],
     ['Что делать при споре?','На любом шаге активной сделки можно открыть спор из карточки сделки — обе стороны прикладывают аргументы, решение фиксируется в сделке.'],
     ['Как вывести деньги?','Раздел «Баланс» → «Вывести». Привяжите карту, укажите сумму от 100 ₽. Комиссия — 4%.'],
@@ -17170,7 +17216,7 @@ function bpAskRoleSwitch() {
   ov.innerHTML =
       '<div class="bprl-card">'
     +   '<div class="bprl-t">Перейти в режим ' + to + '?</div>'
-    +   '<div class="bprl-s">Аккаунт, деньги и сделки останутся теми же. Вернуться можно тем же переключателем.</div>'
+    +   '<div class="bprl-s">' + ((window.bpMvOn && window.bpMvOn()) ? 'Аккаунт, деньги и задания останутся теми же.' : 'Аккаунт, деньги и сделки останутся теми же.') + ' Вернуться можно тем же переключателем.</div>'
     +   '<div class="bprl-acts">'
     +     '<button type="button" class="bprl-b ghost" id="bpRoleNo">Остаться</button>'
     +     '<button type="button" class="bprl-b main" id="bpRoleGo">Перейти</button>'
@@ -31184,9 +31230,9 @@ function _campRenderStep() {
 
       <div class="cwn-sec">Что дальше?</div>
       <div class="cwn-card cwn-next">
-        ${step('<circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3a15 15 0 0 0 0 18 15 15 0 0 0 0-18"/>', 'Блогеры увидят задание и смогут откликнуться.')}
-        ${step('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/>', 'Отклики и работы — в разделе «Мои офферы».')}
-        ${step('<path d="M8 5h5.5a4 4 0 0 1 0 8H8"/><path d="M8 9h8"/><path d="M8 13h6"/><path d="M11 13v6"/>', 'Выплаты пойдут автоматически после проверки работы.')}
+        ${step('<circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3a15 15 0 0 0 0 18 15 15 0 0 0 0-18"/>', ((window.bpMvOn && window.bpMvOn()) ? 'Блогеры увидят задание на «Главной» и смогут вступить.' : 'Блогеры увидят задание и смогут откликнуться.'))}
+        ${step('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 16 14"/>', ((window.bpMvOn && window.bpMvOn()) ? 'Видео блогеров и выплаты — в разделе «Мои задания».' : 'Отклики и работы — в разделе «Мои офферы».'))}
+        ${step('<path d="M8 5h5.5a4 4 0 0 1 0 8H8"/><path d="M8 9h8"/><path d="M8 13h6"/><path d="M11 13v6"/>', ((window.bpMvOn && window.bpMvOn()) ? 'Выплаты за просмотры пойдут сами после проверки видео.' : 'Выплаты пойдут автоматически после проверки работы.'))}
       </div>
 
       <div class="cwn-sec">Проверьте</div>
@@ -32324,7 +32370,9 @@ function _cdHint(c, m, st){
       ? {tone:'warn', t:'Срок оффера вышел', s:'В задание уже вступили — условия менять нельзя, можно завершить', act:{k:'finish', l:'Завершить'}}
       : {tone:'warn', t:'Срок оффера вышел', s:'Продлите дату окончания или завершите оффер', act:{k:'edit', l:'Изменить срок'}};
   if (!m.authors)
-    return {tone:'act', t:'Пока нет исполнителей', s:'Пригласите блогеров — они увидят задание и пришлют работы', act:{k:'invite', l:'Добавить'}};
+    return document.documentElement.classList.contains('bp-mv')
+      ? {tone:'act', t:'Пока нет исполнителей', s:'Блогеры увидят задание на главной и пришлют видео', act:null}
+      : {tone:'act', t:'Пока нет исполнителей', s:'Пригласите блогеров — они увидят задание и пришлют работы', act:{k:'invite', l:'Добавить'}};
   return {tone:'ok', t:'Оффер активен', s:'Новые работы появятся в разделе «Работы»', act:null};
 }
 
@@ -40194,7 +40242,9 @@ else setTimeout(boot, 0);
     all.forEach(function(c){ if(c.format) formats[String(c.format).toLowerCase()] = c.formatLabel || c.format; });
 
     var html =
-        '<div class="cat-hd"><h1>Задания</h1><span class="cat-cnt">'+list.length+' '+((list.length%10===1 && list.length%100!==11)?'задание':(list.length%10>=2 && list.length%10<=4 && (list.length%100<12 || list.length%100>14))?'задания':'заданий')+'</span></div>'
+        (document.documentElement.classList.contains('bp-mv')
+          ? '<div class="cat-hd mv-hd"><h1>Все задания</h1><span class="cat-cnt mv-cnt">'+list.length+'</span></div>'
+          : '<div class="cat-hd"><h1>Задания</h1><span class="cat-cnt">'+list.length+' '+((list.length%10===1 && list.length%100!==11)?'задание':(list.length%10>=2 && list.length%10<=4 && (list.length%100<12 || list.length%100>14))?'задания':'заданий')+'</span></div>')
       + (all.length
         ? '<div class="tk-stats">'
           + '<div class="tk-stat"><span>Общий бюджет</span>'
@@ -40787,7 +40837,9 @@ else setTimeout(boot, 0);
                    ['submitted','На проверке'],['accepted','Принято'],['finished','Завершено']];
 
     page.innerHTML =
-        '<div class="cat-hd"><h1>Мои задания</h1><span class="cat-cnt">'+mine.length+' '+((mine.length%10===1 && mine.length%100!==11)?'задание':(mine.length%10>=2 && mine.length%10<=4 && (mine.length%100<12 || mine.length%100>14))?'задания':'заданий')+'</span></div>'
+        (document.documentElement.classList.contains('bp-mv')
+          ? '<div class="cat-hd mv-hd"><h1>Мои задания</h1><span class="cat-cnt mv-cnt">'+mine.length+'</span></div>'
+          : '<div class="cat-hd"><h1>Мои задания</h1><span class="cat-cnt">'+mine.length+' '+((mine.length%10===1 && mine.length%100!==11)?'задание':(mine.length%10>=2 && mine.length%10<=4 && (mine.length%100<12 || mine.length%100>14))?'задания':'заданий')+'</span></div>')
       + (mine.length
         ? '<div class="tk-stats tk-stats-3">'
           + '<div class="tk-stat"><span>Заработано</span><b>'+money(earned)+'</b>'
@@ -40812,8 +40864,11 @@ else setTimeout(boot, 0);
         : '')
       + (!mine.length
         ? '<div class="tk-empty"><div class="tk-empty-t">Вы пока никуда не вступили</div>'
-          + '<div class="tk-empty-s">Откройте «Задания» и выберите подходящее</div>'
-          + '<button class="tk-btn-main tk-empty-btn" onclick="goTo(\'tasks\')">Смотреть задания</button></div>'
+          + (document.documentElement.classList.contains('bp-mv')
+              ? '<div class="tk-empty-s">Откройте «Главную» и выберите задание рекламодателя</div>'
+                + '<button class="tk-btn-main tk-empty-btn" onclick="goTo(\'tasks\')">На главную</button></div>'
+              : '<div class="tk-empty-s">Откройте «Задания» и выберите подходящее</div>'
+                + '<button class="tk-btn-main tk-empty-btn" onclick="goTo(\'tasks\')">Смотреть задания</button></div>')
         : !list.length
           ? '<div class="tk-empty"><div class="tk-empty-t">Здесь пусто</div>'
             + '<div class="tk-empty-s">В этом статусе заданий нет</div></div>'
@@ -51511,7 +51566,7 @@ function viewsSuspicious(userId, views){
           +     AUTO_ACCEPT_H + ' часов. Промолчит — работа принимается автоматически, и выплата уходит на баланс.</span></div>'
           +   '<div class="bptm-rule"><b>Второй замер</b><span>Через ' + REMEASURE_H
           +     ' часов попросим уточнить просмотры. Платим по второму числу — оно ближе к правде.</span></div>'
-          +   '<div class="bptm-rule"><b>Ссылка</b><span>Публикация должна лежать на канале, подтверждённом в вашей карте блогера. Чужие ролики не примут.</span></div>'
+          +   '<div class="bptm-rule"><b>Ссылка</b><span>Публикация должна лежать на канале, подтверждённом в ' + (document.documentElement.classList.contains('bp-mv') ? 'вашем профиле' : 'вашей карте блогера') + '. Чужие ролики не примут.</span></div>'
           +   '<div class="bptm-rule"><b>Если не согласны с решением</b><span>Отклонили несправедливо — открывайте спор, разберёт арбитр.</span></div>'
           + '</div>';
         var foot = sheet.querySelector('.tk-sheet-foot');
@@ -51866,10 +51921,10 @@ window.bpTmReSend = function(campId){
             extra += warn('bad', 'Скриншот статистики не приложен — работа сдана по старым правилам.');
           if(j.status === 'submitted' && j.linkMismatch)
             extra += warn('bad', 'Ссылка ведёт на канал «' + (j.linkMismatch.link || '?')
-                       + '», а в карте блогера подтверждён «' + (j.linkMismatch.card || '?')
+                       + '», а в ' + (document.documentElement.classList.contains('bp-mv') ? 'профиле' : 'карте') + ' блогера подтверждён «' + (j.linkMismatch.card || '?')
                        + '». Возможно, это второе имя того же канала — но проверьте автора публикации.');
           else if(j.status === 'submitted' && j.linkChecked)
-            extra += warn('', 'Ссылка сверена с каналом, подтверждённым в карте блогера.');
+            extra += warn('', 'Ссылка сверена с каналом, подтверждённым в ' + (document.documentElement.classList.contains('bp-mv') ? 'профиле' : 'карте') + ' блогера.');
           else if(j.status === 'submitted' && j.linkChecked === false)
             /* Спокойная пометка, а не красный флаг: большинство честных
                ссылок (youtube.com/watch, короткие адреса) канал в себе
@@ -52305,6 +52360,35 @@ document.addEventListener('visibilitychange', function(){ if(!document.hidden) s
   };
 })();
 
+/* Второе устройство рекламодателя: местной записи о заморозке нет — её
+   делал первый телефон, — а касса бюджет держит. Было: «Счёт оффера 0 ₽»,
+   красное «деньги не заведены» и «поломка» владельцу. Стало: спрашиваем
+   кассу (доска задания: бюджет и выплачено) и кладём местную копию. Нет
+   заморозки и у кассы — это и правда ошибка, сообщаем, как раньше. */
+var _holdAsked = {};
+function restoreHold(c){
+  var id = String(c.id);
+  if(_holdAsked[id]) return;
+  _holdAsked[id] = 1;
+  var S = window.bpSrv;
+  var bad = function(){ E(new Error('кампания ' + c.id + ' активна без записи о заморозке'), 62038); };
+  if(!S || typeof S.raw !== 'function' || !S.configured || !S.configured() || !S.token || !S.token()){ bad(); return; }
+  S.raw('GET', '/api/tasks/board?campId=' + encodeURIComponent(id) + '&limit=1').then(function(j){
+    var budget = Math.round(num(j && j.budget));
+    if(!(budget > 0)){ bad(); return; }
+    if(ledgerHas(holdKey(id))) return;
+    /* только заморозка: выплаты по кассе восстанавливает bp-camp-ledger
+       (GET /api/ops/mine) — своя запись здесь посчитала бы их дважды */
+    ledgerAdd({ key: holdKey(id), campId: id, kind:'camp_hold', amount: budget, advId: c.ownerId,
+                at: Date.now(), reason:'Заморозка по кассе (другое устройство)', srv:1 });
+    try{ paintCampAccount(); }catch(e){ E(e, 62039); }
+    try{ repaintTasks(); }catch(e){ E(e, 62039); }
+  }, function(e){
+    /* сеть или «часто» — не поломка: спросим при следующем входе */
+    if(e && e.status && e.status !== 429) bad(); else _holdAsked[id] = 0;
+  });
+}
+
 /* ─── старт ─── */
 function boot(){
   try{ stampLegacyCamps(); }catch(e){ E(e, 62037); }
@@ -52314,7 +52398,7 @@ function boot(){
   try{
     camps().forEach(function(c){
       if(String(c.status) === 'active' && !ledgerHas('camp_hold:' + c.id) && idEq(c.ownerId, myId()))
-        E(new Error('кампания ' + c.id + ' активна без записи о заморозке'), 62038);
+        restoreHold(c);
     });
   }catch(e){ E(e, 62038); }
   /* Догоняем все сроки, что прошли без нас, и только потом отчитываемся */
@@ -54875,7 +54959,7 @@ else boot();
           +  '</div>';
       });
     } else {
-      h += '<div class="blp-empty">Блогер пока не добавил площадки в свою карту</div>';
+      h += '<div class="blp-empty">' + (document.documentElement.classList.contains('bp-mv') ? 'Блогер пока не подключил площадки' : 'Блогер пока не добавил площадки в свою карту') + '</div>';
     }
     h += '</div>';
 
@@ -56863,7 +56947,12 @@ var ICO = {
   mytasks:   '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12.2l2.4 2.4 4.6-4.8"/>',
   campaigns: '<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a9 9 0 0 1 0 12"/>',
   chats:     '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
-  profile:   '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/>'
+  profile:   '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/>',
+  /* режим «как More Views» (bp-mv): сплошные белые глифы, свои пути */
+  mvHome:    '<path fill-rule="evenodd" d="M12 2.4c7.6 0 9.6 2 9.6 9.6s-2 9.6-9.6 9.6S2.4 19.6 2.4 12 4.4 2.4 12 2.4zM8 7.05a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm3.4.2a1 1 0 0 0 0 2h5a1 1 0 0 0 0-2zM8 10.8a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm3.4.2a1 1 0 0 0 0 2h5a1 1 0 0 0 0-2zM8 14.55a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zm3.4.2a1 1 0 0 0 0 2h5a1 1 0 0 0 0-2z"/>',
+  mvBag:     '<path d="M9.2 3.2h5.6a2.2 2.2 0 0 1 2.2 2.2V7h-1.9V5.6a.5.5 0 0 0-.5-.5h-5.2a.5.5 0 0 0-.5.5V7H7V5.4a2.2 2.2 0 0 1 2.2-2.2z"/><path d="M5.4 7.6h13.2a3 3 0 0 1 3 3v2.1H2.4v-2.1a3 3 0 0 1 3-3zM2.4 14.3h19.2v3.5a3 3 0 0 1-3 3H5.4a3 3 0 0 1-3-3z"/><rect x="10.3" y="11.5" width="3.4" height="4" rx="1"/>',
+  mvChats:   '<mask id="bpMvChM"><rect width="24" height="24" fill="#fff"/><rect x=".9" y="7.2" width="17" height="13.1" rx="6" fill="#000"/></mask><path mask="url(#bpMvChM)" d="M13.3 2.8h3.9a4.4 4.4 0 0 1 4.4 4.4v.9a4.4 4.4 0 0 1-1.6 3.4l.4 2.1c.1.5-.4.8-.8.5l-2.6-1.6h-3.7a4.4 4.4 0 0 1-4.4-4.4v-.9a4.4 4.4 0 0 1 4.4-4.4z"/><path d="M7 8.9h4.8a4.4 4.4 0 0 1 4.4 4.4v.9a4.4 4.4 0 0 1-4.4 4.4H8.3l-3 2.1c-.4.3-1 0-.9-.5l.3-2.1a4.4 4.4 0 0 1-2.1-3.9v-.9A4.4 4.4 0 0 1 7 8.9z"/>',
+  mvUser:    '<circle cx="12" cy="7.6" r="4.4"/><path d="M12 13.6c4.6 0 8.2 2.5 8.2 5.6 0 1-.8 1.8-1.8 1.8H5.6c-1 0-1.8-.8-1.8-1.8 0-3.1 3.6-5.6 8.2-5.6z"/>'
 };
 
 /* страницы, на которых полка вообще показывается */
@@ -56885,6 +56974,22 @@ var ADV = [
   {k:'chats',     i:'chats',     t:'Чаты', badge:1},
   {k:'profile',   i:'profile',   t:'Профиль'}
 ];
+/* Режим «как More Views» (bp-mv, 09.10.2026): набор постоянный, как у
+   них, — Главная (все задания) · Мои задания · Чаты · Профиль. Каталога
+   карт нет. «Мои задания» рекламодателя — его офферы. */
+var MV_BLOGGER = [
+  {k:'tasks',   i:'mvHome',  t:'Главная'},
+  {k:'mytasks', i:'mvBag',   t:'Мои задания'},
+  {k:'chats',   i:'mvChats', t:'Чаты', badge:1},
+  {k:'profile', i:'mvUser',  t:'Профиль'}
+];
+var MV_ADV = [
+  {k:'tasks',     i:'mvHome',  t:'Главная'},
+  {k:'campaigns', i:'mvBag',   t:'Мои задания'},
+  {k:'chats',     i:'mvChats', t:'Чаты', badge:1},
+  {k:'profile',   i:'mvUser',  t:'Профиль'}
+];
+function mvOn(){ return document.documentElement.classList.contains('bp-mv'); }
 
 function isAdv(){
   try{ return !!(typeof _isAdvertiser !== 'undefined' && _isAdvertiser); }
@@ -56925,17 +57030,18 @@ var _built = '';
 function build(){
   var box = document.getElementById('bpTabbarIn');
   if(!box) return;
-  var items = isAdv() ? ADV : BLOGGER;
+  var mvm = mvOn();
+  var items = mvm ? (isAdv() ? MV_ADV : MV_BLOGGER) : (isAdv() ? ADV : BLOGGER);
   /* вступил хоть в одно задание — вместо «Задания» кнопка «Мои задания»;
      все задания — переключателем вверху страницы и в боковом меню */
-  var mine = 0; try{ mine = !isAdv() && window.bpMyJoins ? window.bpMyJoins().length : 0; }catch(e){ mine = 0; }
+  var mine = 0; try{ mine = !mvm && !isAdv() && window.bpMyJoins ? window.bpMyJoins().length : 0; }catch(e){ mine = 0; }
   if(mine) items = items.map(function(x){ return x.k === 'tasks' ? {k:'mytasks', i:'mytasks', t:'Мои задания'} : x; });
-  var key = items.map(function(x){ return x.k; }).join(',');
+  var key = (mvm ? 'mv:' : '') + items.map(function(x){ return x.k; }).join(',');
   if(key === _built) return;
   _built = key;
   box.innerHTML = items.map(function(x){
     return '<button type="button" class="bptab-i" data-k="' + x.k + '" aria-label="' + x.t + '">'
-         +   '<svg viewBox="0 0 24 24">' + ICO[x.i] + '</svg>'
+         +   '<svg viewBox="0 0 24 24"' + (mvm ? ' aria-hidden="true"' : '') + '>' + ICO[x.i] + '</svg>'
          +   (x.badge ? '<span class="bptab-b" id="bpTabBadge"></span>' : '')
          +   '<span>' + x.t + '</span>'
          + '</button>';
@@ -56967,7 +57073,17 @@ function sync(){
   var box = document.getElementById('bpTabbarIn');
   if(box) Array.prototype.forEach.call(box.querySelectorAll('.bptab-i'), function(b){
     var k = b.getAttribute('data-k');
-    b.classList.toggle('on', k === page || ((k === 'tasks' || k === 'mytasks') && (page === 'tasks' || page === 'mytasks')));
+    /* MV: «Мои задания» блогера — его вступления (pg-mytasks); его же
+       офферы из бокового меню (pg-campaigns) — отдельный раздел, пункт
+       полки при этом не горит. У рекламодателя «Мои задания» — офферы. */
+    var on = mvOn()
+      ? (k === page || (k === 'campaigns' && page === 'mytasks'))
+      : (k === page || ((k === 'tasks' || k === 'mytasks') && (page === 'tasks' || page === 'mytasks')));
+    b.classList.toggle('on', on);
+    if(mvOn()){
+      if(on){ if(b.getAttribute('aria-current') !== 'page') b.setAttribute('aria-current', 'page'); }
+      else if(b.hasAttribute('aria-current')) b.removeAttribute('aria-current');
+    }
   });
 
   var bd = document.getElementById('bpTabBadge');
@@ -56975,6 +57091,13 @@ function sync(){
     var n = unread();
     bd.textContent = n > 0 ? (n > 99 ? '99+' : String(n)) : '';
     bd.classList.toggle('on', n > 0);
+    /* aria-label заменяет содержимое кнопки — число непрочитанных
+       говорим в самой подписи (MV) */
+    var cb = mvOn() && bd.parentNode && bd.parentNode.classList && bd.parentNode.classList.contains('bptab-i') ? bd.parentNode : null;
+    if(cb){
+      var lbl = 'Чаты' + (n > 0 ? ', непрочитанных: ' + n : '');
+      if(cb.getAttribute('aria-label') !== lbl) cb.setAttribute('aria-label', lbl);
+    }
   }
 }
 window.bpTabbarSync = sync;
@@ -61868,7 +61991,9 @@ function holdWords(){
   try{ blogger = (currentUser && currentUser.role === 'blogger'); }catch(e){}
   return blogger
     ? { n:'Ждёт приёмки', s:'Станет доступно, когда рекламодатель примет работу' }
-    : { n:'В сделках',    s:'Заморожено до выполнения условий — вернётся вам или уйдёт блогеру' };
+    : (document.documentElement.classList.contains('bp-mv')
+      ? { n:'В заданиях',  s:'Заморожено под задания — уйдёт блогерам за видео или вернётся вам' }
+      : { n:'В сделках',    s:'Заморожено до выполнения условий — вернётся вам или уйдёт блогеру' });
 }
 
 after('goTo', function(page){
@@ -61950,7 +62075,7 @@ function balCard(){
       setK(k1, 'Ждёт приёмки');    if(v1) v1.textContent = money(bloggerPending());
       setK(k2, 'Заработано всего'); if(v2) v2.textContent = money(bloggerEarned());
     } else {
-      setK(k1, 'Заморожено по сделкам'); if(v1) v1.textContent = money(held());
+      setK(k1, document.documentElement.classList.contains('bp-mv') ? 'Заморожено в заданиях' : 'Заморожено по сделкам'); if(v1) v1.textContent = money(held());
       setK(k2, 'Пополнено всего');       if(v2) v2.textContent = money((currentUser && currentUser.totalTopup) || 0);
     }
     var lbl = document.querySelector('#pg-balance .balx-label');
@@ -64045,6 +64170,7 @@ function route(n){
       if(typeof goTo !== 'function') return;
       if(cat === 'money'){ goTo('balance'); return; }
       if(cat === 'system'){ goTo('settings'); return; }
+      if(document.documentElement.classList.contains('bp-mv')){ goTo('mytasks'); return; }
       goTo('chats');
       try{ if(typeof switchMainSection === 'function') switchMainSection('deals'); }catch(e){}
     }catch(e){ E(e); }
@@ -64146,7 +64272,7 @@ function chipsHTML(all){
           '<button type="button" class="bpn2-chip' + (filter === 'unread' ? ' on' : '') + '" data-f="unread">Новые' + (u ? '<span class="bpn2-chip-n">' + (u > 99 ? '99+' : u) + '</span>' : '') + '</button>';
   ['deal','money','review','time','alert','system'].forEach(function(c){
     if(!cats[c]) return;
-    h += '<button type="button" class="bpn2-chip' + (filter === c ? ' on' : '') + '" data-f="' + c + '">' + CAT_NAME[c] + '</button>';
+    h += '<button type="button" class="bpn2-chip' + (filter === c ? ' on' : '') + '" data-f="' + c + '">' + (c === 'deal' && document.documentElement.classList.contains('bp-mv') ? 'Задания' : CAT_NAME[c]) + '</button>';
   });
   return h;
 }
@@ -64180,7 +64306,7 @@ function render(freshId){
     var t, s;
     if(filter === 'unread'){ t = 'Всё прочитано'; s = 'Новых уведомлений нет'; }
     else if(filter !== 'all'){ t = 'Здесь пусто'; s = 'В этом разделе пока нет событий'; }
-    else { t = 'Пока тихо'; s = 'События по сделкам, деньгам и отзывам будут появляться здесь'; }
+    else { t = 'Пока тихо'; s = document.documentElement.classList.contains('bp-mv') ? 'События по заданиям, деньгам и отзывам будут появляться здесь' : 'События по сделкам, деньгам и отзывам будут появляться здесь'; }
     list.innerHTML = '<div class="bpn2-empty"><div class="bpn2-empty-art">' + IC.bell + '</div>' +
       '<div class="bpn2-empty-t">' + t + '</div><div class="bpn2-empty-s">' + s + '</div></div>';
     return;
@@ -64565,7 +64691,7 @@ function paint(){
 
     var pl = $('st2ProfileLbl'), ps = $('st2ProfileSub');
     if(pl) pl.textContent = adv ? 'Профиль и компания' : 'Мой профиль';
-    if(ps) ps.textContent = adv ? 'Данные компании, контакты и реквизиты' : 'Имя, фото и карта блогера';
+    if(ps) ps.textContent = adv ? 'Данные компании, контакты и реквизиты' : (document.documentElement.classList.contains('bp-mv') ? 'Имя, фото и каналы' : 'Имя, фото и карта блогера');
 
     var fav = $('st2FavCnt');
     if(fav){ var n = 0; try{ n = (typeof saved !== 'undefined' && saved && saved.size) || 0; }catch(e){} fav.textContent = n ? String(n) : ''; }
@@ -65177,7 +65303,7 @@ function buildTopup(){
       '<div class="bw2-row minus"><span class="bw2-rk">Комиссия</span><span class="bw2-rv">0' + NB + '₽</span></div>' +
       '<div class="bw2-row total neutral"><span class="bw2-rk">Баланс после</span><span class="bw2-rv" id="bw2TuAfter">' + money(avail()) + '</span></div>' +
     '</div>' +
-    '<div class="bw2-note">' + I.lock + '<div><b>Пока без настоящего платежа</b>Сумма появится на балансе этого приложения, чтобы можно было пройти сделку и эскроу целиком. Когда подключим приём платежей, здесь появятся карта и СБП.</div></div>' +
+    '<div class="bw2-note">' + I.lock + '<div><b>Пока без настоящего платежа</b>Сумма появится на балансе этого приложения, чтобы можно было ' + ((window.bpMvOn && window.bpMvOn()) ? 'запустить задание и проверить выплаты целиком' : 'пройти сделку и эскроу целиком') + '. Когда подключим приём платежей, здесь появятся карта и СБП.</div></div>' +
     '<div class="bw2-cta on" id="bw2TuCta"><button type="button" class="bw2-go" id="tuBtn"><span id="tuBtnLabel">Пополнить</span></button></div>' +
     /* Совместимость: сделка, кампания и задание предзаполняют недостающую
        сумму в #tuAmountInput и зовут tuUpdate() (cs3GoTopup ~17226,
@@ -65350,7 +65476,7 @@ function paintAvail(){
      те же деньги дважды. */
   var h = Math.max(0, held() - q);
   var pills = '';
-  if(h > 0) pills += '<span class="bw2-pill hold">' + I.lock + (blg ? 'Ждёт приёмки' : 'В сделках') + ' <b>' + money(h) + '</b></span>';
+  if(h > 0) pills += '<span class="bw2-pill hold">' + I.lock + (blg ? 'Ждёт приёмки' : (document.documentElement.classList.contains('bp-mv') ? 'В заданиях' : 'В сделках')) + ' <b>' + money(h) + '</b></span>';
   if(lk.sum > 0) pills += '<span class="bw2-pill hold">' + I.lock + 'Под задания <b>' + money(lk.sum) + '</b></span>';
   if(q > 0) pills += '<span class="bw2-pill queue">' + I.clock + 'В обработке <b>' + money(q) + '</b></span>';
   var whole = Math.floor(a), kop = Math.round((a - whole) * 100);
@@ -65969,7 +66095,7 @@ function arrange(){
       help('cwnTags', 'Блогер добавит их в описание ролика — так вы найдёте публикации по заданию.');
     }
     if(step === 6){
-      var done = page.querySelector('.cwn-done-s'); if(done) done.innerHTML = 'Проверьте данные ниже.<br>После публикации блогеры увидят оффер в разделе «Задания».';
+      var done = page.querySelector('.cwn-done-s'); if(done) done.innerHTML = (window.bpMvOn && window.bpMvOn()) ? 'Проверьте данные ниже.<br>После публикации блогеры увидят задание на «Главной».' : 'Проверьте данные ниже.<br>После публикации блогеры увидят оффер в разделе «Задания».';
     }
     page.dataset.cwn2 = '1';
   }catch(e){ E(e); }
@@ -78113,11 +78239,13 @@ function todo(){
   items.push({ key:'photo', ok:!!(u.photo || u.avatar), t:'Добавить фото', s:'С лицом доверяют больше, чем букве', go:'photo' });
   items.push({ key:'about', ok:!!(u.about && String(u.about).trim()), t:'Рассказать о себе', s:'Два-три предложения о вас и контенте', go:'about' });
   if(!isAdv()){
-    items.push({ key:'niche', ok:hasNiche, t:'Выбрать тематику', s:'До четырёх направлений — по ним вас находят', go:'niche' });
+    /* В режиме MV блогера не ищут по тематике и городу — эти пункты анкеты лишние */
+    var mvq = (window.bpMvOn && window.bpMvOn());
+    if(!mvq) items.push({ key:'niche', ok:hasNiche, t:'Выбрать тематику', s:'До четырёх направлений — по ним вас находят', go:'niche' });
     items.push({ key:'plat', ok:pls.length > 0, t:'Добавить площадки', s:'Ссылки на каналы, где выходит реклама', go:'plat' });
     /* Шага «разместить карточку» здесь больше нет: карточка — не пункт
        анкеты, а отдельная работа со своим экраном и своей подсказкой. */
-    items.push({ key:'city', ok:!!u.city, t:'Указать город', s:'Нужен для локальных кампаний', go:'city' });
+    if(!mvq) items.push({ key:'city', ok:!!u.city, t:'Указать город', s:'Нужен для локальных кампаний', go:'city' });
     items.push({ key:'kyc', ok:id.status === 'verified', pending:id.status === 'pending', t: id.status === 'pending' ? 'Личность на проверке' : 'Подтвердить личность',
       s: id.status === 'pending' ? 'Документы на проверке у оператора' : (id.status === 'rejected' ? 'Оператор вернул документы — посмотрите почему' : 'Понадобится для вывода денег'), go:'kyc' });
     /* Реквизиты имеет смысл спрашивать только после подтверждённой
@@ -78127,7 +78255,7 @@ function todo(){
     var idDone = id.status === 'verified';
     items.push({ key:'payout', ok:!!(k.payout && k.payout.done), lock:!idDone,
       t:'Указать реквизиты',
-      s: idDone ? 'Куда приходят деньги за сделки' : 'Откроется после проверки личности',
+      s: idDone ? (document.documentElement.classList.contains('bp-mv') ? 'Куда приходят деньги за видео' : 'Куда приходят деньги за сделки') : 'Откроется после проверки личности',
       go: idDone ? 'payout' : 'kyc' });
   } else {
     var c = company();
@@ -78277,7 +78405,7 @@ function renderDone(){
   }).join('');
   el.innerHTML = '<div class="pf2-card">'
     + '<div class="pf2-done-top"><div><b>Заполнить профиль</b><div class="pf2-done-sub">'
-    + (isAdv() ? 'Заполненный профиль вызывает больше доверия у блогеров' : 'Заполненные профили чаще получают заказы')
+    + (isAdv() ? 'Заполненный профиль вызывает больше доверия у блогеров' : ((window.bpMvOn && window.bpMvOn()) ? 'Заполненный профиль вызывает больше доверия у рекламодателей' : 'Заполненные профили чаще получают заказы'))
     + ' · осталось ' + miss.length + ' из ' + T.total + '</div></div><i>' + pct + '%</i></div>'
     + '<div class="pf2-bar"><i style="width:' + (el._pct == null ? 0 : el._pct) + '%"></i></div>'
     + rows + (miss.length > 5 ? '<div class="pf2-more">…и ещё ' + (miss.length - 5) + '</div>' : '')
@@ -78322,13 +78450,15 @@ function renderPlat(){
   /* Каналы правятся прямо здесь — тем же блоком, что был в экране
      «Редактировать профиль» (bp-offer: карточки, крестик, «Добавить канал»). */
   if(typeof window.bpEpcRender === 'function'){
-    var hc = sec('pf2Plat', 'Каналы', pls.length ? 'Их видят рекламодатели в каталоге' : 'Добавьте канал — по нему вас находят', '', '');
+    var hc = sec('pf2Plat', 'Каналы', document.documentElement.classList.contains('bp-mv')
+      ? (pls.length ? 'С них вы загружаете видео в задания' : 'Подключите TikTok или YouTube — с них загружаете видео')
+      : (pls.length ? 'Их видят рекламодатели в каталоге' : 'Добавьте канал — по нему вас находят'), '', '');
     el.innerHTML = hc._head + '<div id="bpfChHost"></div>';
     window.bpEpcRender();
     pullChannels(function(){ try{ renderDone(); }catch(e){ E(e); } });
     return;
   }
-  var h = sec('pf2Plat', 'Площадки', pls.length ? 'Их видят рекламодатели в каталоге' : 'Каналы, где выходит реклама', pls.length ? 'Изменить' : '', 'edit');
+  var h = sec('pf2Plat', 'Площадки', pls.length ? (document.documentElement.classList.contains('bp-mv') ? 'С них вы загружаете видео в задания' : 'Их видят рекламодатели в каталоге') : 'Каналы, где выходит реклама', pls.length ? 'Изменить' : '', 'edit');
   var rows = pls.map(function(p){
     var P = PLAT[p.pid];
     return '<button type="button" class="pf2-row" onclick="bpPf2Go(\'edit\')"><span class="av p-' + P.k + '">' + GLYPH[P.k] + '</span>'
@@ -79774,6 +79904,8 @@ function pull(force){
           else if(row.kind === 'slot' && applySlots(row.rid, row.data)) touched++;
           else if(row.kind === 'mine' && applyMine(row.data)) touched++;
           else if(row.kind === 'prof' && applyProf(row.data)) touched++;
+          /* личные сообщения вне сделок — их укладывает bp-dm */
+          else if(row.kind === 'dm' && typeof window.bpDmApply === 'function') window.bpDmApply(row);
         }
       }catch(e){ E(e); }
     });
@@ -81432,8 +81564,21 @@ try{
       try{
         var v = window.bpAccIdOf();
         if(v && navigator.clipboard && navigator.clipboard.writeText){
-          navigator.clipboard.writeText(v);
-          try{ if(typeof toast === 'function') toast('Номер аккаунта скопирован', 'ok'); }catch(e){}
+          /* Браузер может запретить запись в буфер (нет разрешения, не та
+             вкладка): тогда копируем старым способом, без непойманной ошибки. */
+          var okT = function(){ try{ if(typeof toast === 'function') toast('Номер аккаунта скопирован', 'ok'); }catch(e){} };
+          var oldWay = function(){
+            var done = false;
+            try{
+              var ta = document.createElement('textarea');
+              ta.value = v; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+              document.body.appendChild(ta); ta.select();
+              done = !!(document.execCommand && document.execCommand('copy'));
+              document.body.removeChild(ta);
+            }catch(e){ done = false; }
+            try{ if(typeof toast === 'function') toast(done ? 'Номер аккаунта скопирован' : 'Номер аккаунта: ' + v, done ? 'ok' : 'info'); }catch(e){}
+          };
+          try{ navigator.clipboard.writeText(v).then(okT, oldWay); }catch(e){ oldWay(); }
           return;
         }
       }catch(e){ E(e); }
@@ -81541,6 +81686,16 @@ function loadTasks(){
           topics: r.topics || [], advertiserName: r.advertiser,
           createdAt: r.at, _public: true,
         };
+      });
+      /* Условия объявления (сервер с 10.10.2026): тип, площадки, ставка,
+         потолок, срок — карточка и фильтр без кодов «clips». Только в
+         режиме MV: «полный доступ» показывает гостю витрину как раньше. */
+      if(document.documentElement.classList.contains('bp-mv')) list.forEach(function(o, i){
+        var r = rows[i];
+        o.formatLabel = r.formatLabel || ({ clips:'Нарезки', banners:'Баннеры', ugc:'UGC-контент', other:'Другое' })[String(r.format || '').toLowerCase()] || '';
+        o.platforms = r.platforms || ''; o.payMode = r.payMode || ''; o.fixedPrice = r.fixedPrice || 0;
+        o.rate = r.rate || 0; o.maxPayout = r.maxPayout || 0; o.payMax = r.maxPayout || 0; o.minViews = r.minViews || 0;
+        o.deadline = r.deadline || '';
       });
       /* Пишем напрямую: у гостя нет сессии, отправлять это обратно
          некуда, а очередь bpData только мешала бы. */
@@ -82900,12 +83055,27 @@ var TITLE = {
   'fee':            'Комиссия сервиса',
   'admin_adjust':   'Правка оператором',
 };
+/* режим bp-mv: те же виды по заданию (ref = camp:<id>) */
+var CAMP_TITLE = {
+  'hold':           'Бюджет задания',
+  'release':        'Возврат бюджета задания',
+  'refund':         'Возврат бюджета задания',
+  'payout':         'Выплата за видео',
+  'settle':         'Расчёт по заданию',
+  'settle-payout':  'Выплата за видео',
+  'settle-refund':  'Возврат бюджета задания',
+};
 
 function when(v){
-  /* Сервер отдаёт «ГГГГ-ММ-ДД ЧЧ:ММ:СС». Показываем как в остальном
-     приложении — днём и месяцем. */
-  var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || ''));
+  /* Сервер отдаёт «ГГГГ-ММ-ДД ЧЧ:ММ:СС» по UTC. Показываем как в остальном
+     приложении — днём и месяцем, но по местному времени: выплата в час
+     ночи по Екатеринбургу стояла вчерашним числом. */
+  var m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/.exec(String(v || ''));
   if(!m) return '';
+  if(m[4] != null){
+    var d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)));
+    if(!isNaN(d.getTime())) return ('0' + d.getDate()).slice(-2) + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + '.' + d.getFullYear();
+  }
   return m[3] + '.' + m[2] + '.' + m[1];
 }
 
@@ -82920,7 +83090,7 @@ function toItems(rows){
       amount: amt,
       date: when(r.created_at),
       ts: Date.parse(String(r.created_at || '').replace(' ', 'T') + 'Z') || 0,
-      label: TITLE[kind] || 'Операция',
+      label: (document.documentElement.classList.contains('bp-mv') && /^camp:/.test(String(r.ref || '')) && CAMP_TITLE[kind]) || TITLE[kind] || 'Операция',
       _srv: true,
     });
   });
@@ -90654,8 +90824,8 @@ function render(){
     + '<button type="button" class="epc-add" data-epc-add="1"><span class="epc-add-ic">' + PLUS + '</span>'
     + '<span><b>Добавить канал</b><i>' + (items.length ? 'Ещё один — на другой площадке или второй YouTube' : 'YouTube, TikTok, Telegram, Instagram') + '</i></span></button>'
     + '<div class="epc-hint">' + (items.length
-        ? 'Канал с синей галочкой подтверждён входом — рекламодатель видит отметку. Остальные — «со слов блогера».'
-        : 'Добавьте хотя бы один канал — по нему рекламодатели находят блогеров.') + '</div>';
+        ? ((window.bpMvOn && window.bpMvOn()) ? 'Канал с синей галочкой подтверждён входом — с него можно загружать видео в задания. Остальные — «со слов блогера».' : 'Канал с синей галочкой подтверждён входом — рекламодатель видит отметку. Остальные — «со слов блогера».')
+        : ((window.bpMvOn && window.bpMvOn()) ? 'Добавьте канал, где выходит ваша реклама: TikTok или YouTube.' : 'Добавьте хотя бы один канал — по нему рекламодатели находят блогеров.')) + '</div>';
   Array.prototype.forEach.call(b.querySelectorAll('img[data-epc-img]'), function(im){
     function fb(){ var w = im.parentNode; if(!w) return; var p = (/p-(\w+)/.exec(w.className) || [])[1]; w.classList.remove('has-img'); w.classList.add('epc-sico'); w.innerHTML = p ? sico(p) : ''; }
     im.addEventListener('error', fb);
@@ -92057,8 +92227,15 @@ html body #pg-tasks .tk-card-joined.hx .hx-bank,html body #pg-mytasks .tk-card-j
         var c = m && byId[m[1]];
         if(!c) continue;
         var joined = el.classList.contains('tk-card-joined') || !!el.querySelector('.tk-mine');
-        el.innerHTML = inner(c, joined);
+        /* режим «как More Views» (bp-mv): карточка их вида — слой bp-mv-card;
+           без класса bp-mv или без слоя — прежняя inner() */
+        var mvc = '';
+        if(document.documentElement.classList.contains('bp-mv') && typeof window.bpMvCardInner === 'function'){
+          try{ mvc = window.bpMvCardInner(c, joined) || ''; }catch(e2){ mvc = ''; try{ console.warn('bp-mv-card:', e2 && e2.message); }catch(_){} }
+        }
+        el.innerHTML = mvc || inner(c, joined);
         el.classList.add('hx');
+        if(mvc) el.classList.add('mvc'); else el.classList.remove('mvc');
       }catch(e){ try{ console.warn('bp-tkcard:', e && e.message); }catch(_){} }
     }
   }
@@ -93859,6 +94036,12 @@ function fmtOf(c){ return String((c && (c.taskType || c.format)) || '').toLowerC
 function isMixed(c){ return isVidTask(c) && (platIds(c).some(function(x){ return VIDP.indexOf(x) < 0; }) || fmtOf(c) === 'other'); }
 function namesOf(list, sep){ return list.map(function(p){ return PN[p] || p; }).join(sep || ' и '); }
 window.bpVbIsVidTask = function(id){ return isVidTask(camp(id)); };
+/* свои ролики (как пришли с сервера) — плитки профиля в режиме bp-mv */
+window.bpVbMyVideos = function(){ try{ return (V && V.list || []).slice(); }catch(e){ return []; } };
+/* bp-mv-card: сводка «Главной» увидела новые цифры по заданию, где я
+   участвую, — панель «Ваши видео» и баланс догоняют её сразу, а не через
+   минуту (карточка не противоречит сама себе) */
+window.bpVbRefresh = function(){ try{ return load(true); }catch(e){ return null; } };
 
 function oldSubmit(campId){
   var o = window.__bpVbOrigSubmit; if(typeof o !== 'function') return;
@@ -93919,11 +94102,14 @@ function load(force){
     V.list = (j && j.videos) || []; V.at = Date.now(); V.p = null;
     var now = sigOf(V.list);
     staleBoards(was, now); moneyMoved(was, now);
+    /* ролики сдвинулись — цифры «Главной» (bp-mv-card) спрашиваем заново */
+    try{ if(typeof window.bpMvSummaryRefresh === 'function' && JSON.stringify(was) !== JSON.stringify(now)) window.bpMvSummaryRefresh(); }catch(e){}
     Object.keys(V.byCamp).forEach(function(cid){
       V.byCamp[cid] = { at:Date.now(), list:V.list.filter(function(v){ return String(v.campId) === cid; }) };
     });
     notifyDiff(); repaint(); syncLedger(V.list);
     try{ if(typeof _cdActiveCampId !== 'undefined' && _cdActiveCampId != null) mountAdv(true); }catch(e){}
+    try{ campListFix(); refreshBody(); }catch(e){}
     return V.list;
   }, function(){ V.p = null; return V.list; });
   return V.p;
@@ -95293,13 +95479,43 @@ function whoBp(w){
 /* карточка есть на сервере, но каталог на устройстве ещё не подтянулся */
 function cardsLater(w){
   try{ if(typeof window.bpCardsPull === 'function') window.bpCardsPull(); }catch(e){}
-  toast(w.key.charAt(0) === 'c' ? 'Карточка блогера загружается — нажмите ещё раз через пару секунд' : 'У блогера пока нет карточки', 'info');
+  var mvm = document.documentElement.classList.contains('bp-mv');
+  toast(w.key.charAt(0) === 'c' ? (mvm ? 'Профиль загружается — нажмите ещё раз через пару секунд' : 'Карточка блогера загружается — нажмите ещё раз через пару секунд') : (mvm ? 'Профиль блогера пока недоступен' : 'У блогера пока нет карточки'), 'info');
 }
 var PROF = { on:false };
+/* цифры участника в задании: строки лидерборда (там просмотры и выплаты)
+   той доски, где он есть; открытый список — первым */
+function whoStats(key, x){
+  var o = { videos:num(x.videos), views:num(x.views), earned:num(x.earned) };
+  var ids = Object.keys(BD);
+  if(LS && LS.cid) ids.sort(function(a, b){ return (b === String(LS.cid)) - (a === String(LS.cid)); });
+  for(var i = 0; i < ids.length; i++){
+    var b = BD[ids[i]]; if(!b) continue;
+    var lists = [b.data && b.data.leaders, b.data && b.data.participants];
+    Object.keys(b.lead || {}).forEach(function(k){ var L = b.lead[k]; if(L && L.leaders) lists.push(L.leaders); });
+    var hit = false;
+    lists.forEach(function(l){ (l || []).forEach(function(r){
+      if(!r || whoKey(r) !== key) return;
+      hit = true;
+      o.videos = Math.max(o.videos, num(r.videos)); o.views = Math.max(o.views, num(r.views)); o.earned = Math.max(o.earned, num(r.earned));
+    }); });
+    if(hit) break;
+  }
+  return o;
+}
 function whoProfile(key){
   if(!key) return;
   var w = whoOf(key);
   if(w.me){ closeOurs(); try{ if(typeof goTo === 'function') goTo('profile'); }catch(e){ E(e); } return; }
+  /* Режим MV: карт блогера нет — «Профиль» одинаковый у всех участников:
+     канал, видео, просмотры и заработок в этом задании (bp-mv-fix) */
+  if(document.documentElement.classList.contains('bp-mv') && typeof window.bpMvWho === 'function'){
+    var x = w.x || {}, s = whoStats(key, x);
+    window.bpMvWho({ name:x.name || '', handle:x.handle || '', platform:x.platform || '', avatar:x.avatar || '',
+      videos:s.videos, views:s.views, earned:s.earned, since:x.joinedAt || null,
+      chat:(w.uid != null || (w.c && w.c.userId != null)) ? function(){ whoChat(key); } : null });
+    return;
+  }
   if(!w.c){ cardsLater(w); return; }
   if(typeof window.bpOpenBloggerProfile !== 'function') return;
   try{
@@ -95716,14 +95932,15 @@ function mountAdv(noFetch){
       /* старый список «Работы исполнителей» (ручная сдача) пуст — его фильтры
          и «Работ пока нет» противоречили бы видео выше; если старые работы
          есть (сданы до перехода на видео), список остаётся как был */
-      var oldN = 0; try{ oldN = (typeof _cdMetrics === 'function') ? (_cdMetrics(c).works || []).length : 0; }catch(e){}
+      /* работы, собранные из роликов (метка _vb), — не «старые» */
+      var oldN = 0; try{ var mm0 = (typeof _cdMetrics === 'function') ? _cdMetrics(c) : null; oldN = (mm0 && !mm0._vb) ? (mm0.works || []).length : 0; }catch(e){}
       if(!oldN && !host.querySelector('.cdo-works')){
         [].forEach.call(host.querySelectorAll(':scope > .cdo-chips, :scope > .cdo-empty, :scope > .cdo-hint'), function(el){ el.style.display = 'none'; });
       }
     }
     if(!noFetch){
-      if(!cache || Date.now() - cache.at > 4000) loadCamp(c.id).then(function(){ mountAdv(true); });
-      loadBoard(c.id).then(function(){ mountAdv(true); });
+      if(!cache || Date.now() - cache.at > 4000) loadCamp(c.id).then(function(){ mountAdv(true); refreshBody(); });
+      loadBoard(c.id).then(function(){ mountAdv(true); refreshBody(); });
     }
   }catch(e){ E(e); }
 }
@@ -95739,7 +95956,119 @@ function mountAdv(noFetch){
 (function(){
   var o = window._renderCampDetailBody;
   if(typeof o !== 'function') return;
-  window._renderCampDetailBody = function(c){ var r = o.apply(this, arguments); try{ mountAdv(); }catch(e){ E(e); } return r; };
+  window._renderCampDetailBody = function(c){
+    BODY.on = 1;
+    var r;
+    try{ r = o.apply(this, arguments); } finally { BODY.on = 0; }
+    try{ if(c && c.id != null) BODY.k[String(c.id)] = bodyKey(c); }catch(e){}
+    try{ mountAdv(); }catch(e){ E(e); }
+    return r;
+  };
+})();
+
+/* ── экран и список офферов: работы видеозадания — его ролики ──
+   _cdMetrics считал работы по старой ручной сдаче (c.works, отклики).
+   У видеозадания их нет — на «Обзоре» и «Выплатах» стояли нули («0
+   Просмотры», «Работ всего 0», «Выплат пока нет»), в списке «✓0 🎞0».
+   Теперь для видеозадания: работы — ролики с сервера (V), просмотры и
+   выплаты — по кассе (доска). Вкладку «Работы» по-прежнему рисует блок
+   роликов (mountAdv), старый список туда не возвращаем. */
+var BODY = { on:0, k:{} };
+function vbWorks(c){
+  var cid = String(c.id), cache = V.byCamp[cid];
+  var list = cache ? cache.list : V.list.filter(function(v){ return v && String(v.campId) === cid; });
+  return list.filter(Boolean).map(function(v){
+    var paid = num(v.paid);
+    var st = paid > 0 || v.status === 'active' || v.status === 'paid' ? 'approved'
+      : v.status === 'review' ? 'pending' : 'rejected';
+    var at = ''; try{ if(v.postedAt){ var d = new Date(typeof v.postedAt === 'number' && v.postedAt < 1e11 ? v.postedAt * 1000 : v.postedAt); if(!isNaN(d)) at = d.toISOString(); } }catch(e){}
+    return { id:'v' + v.id, userId:v.bloggerId, round:0, postNo:1, author:handleTxt(v) || 'Блогер', platform:PN[vplat(v)] || '',
+      url:safeLink(v.url), thumb:'', views:num(v.views), payout:st === 'approved' ? paid : num(v.hold),
+      note:'', rejectReason:String(v.decisionNote || v.reviewNote || ''), belowMin:false, minViews:0,
+      paid:paid > 0, status:st, publishedAt:at, _vb:1 };
+  });
+}
+function bodyKey(c){
+  try{ var m = window._cdMetrics(c); return [m.works.length, m.approved, m.pending, m.views, m.spent, m.reserved, m.authors].join('|'); }
+  catch(e){ return ''; }
+}
+function refreshBody(){
+  try{
+    if(typeof _cdActiveCampId === 'undefined' || _cdActiveCampId == null) return;
+    if(typeof _cdActiveTab === 'undefined' || (_cdActiveTab !== 'overview' && _cdActiveTab !== 'payouts')) return;
+    var ov = $('campDetailOverlay'); if(!ov || !ov.classList.contains('open')) return;
+    var c = camp(_cdActiveCampId); if(!c || !isOwner(c) || !isVidTask(c)) return;
+    var k = bodyKey(c);
+    if(!k || BODY.k[String(c.id)] === k) return;
+    if(typeof window._renderCampDetailBody === 'function') window._renderCampDetailBody(c);
+  }catch(e){ E(e); }
+}
+(function(){
+  var o = window._cdMetrics;
+  if(typeof o !== 'function' || o.__vb) return;
+  var w = function(c){
+    var m = o.apply(this, arguments);
+    try{
+      if(!c || !m || (m.works && m.works.length) || !isVidTask(c)) return m;
+      /* вкладка «Работы» — блок роликов bp-vbind, старый список не нужен */
+      if(BODY.on && typeof _cdActiveTab !== 'undefined' && (_cdActiveTab === 'works' || _cdActiveTab === 'work')) return m;
+      var cid = String(c.id), b = boardOf(cid), d = b && b.data;
+      var has = !!V.byCamp[cid] || V.list.some(function(v){ return v && String(v.campId) === cid; });
+      if(!has && !d) return m;
+      var works = vbWorks(c);
+      var appr = works.filter(function(x){ return x.status === 'approved'; });
+      var pend = works.filter(function(x){ return x.status === 'pending'; });
+      var rej = works.filter(function(x){ return x.status === 'rejected'; }).length;
+      var vws = works.reduce(function(s, x){ return s + x.views; }, 0);
+      if(d && d.views > vws) vws = d.views;
+      /* выплачено — по кассе (доска); без неё — по роликам */
+      var spent = d ? d.paid : Math.max(num(m.spent), appr.reduce(function(s, x){ return s + x.payout; }, 0));
+      var budget = num(m.budget) || (d ? d.budget : 0);
+      var reserved = d ? d.reserved : pend.reduce(function(s, x){ return s + x.payout; }, 0);
+      var sp = budget > 0 ? Math.min(100, spent / budget * 100) : 0;
+      var byPlat = {};
+      works.forEach(function(x){ var k = x.platform || 'Без площадки'; byPlat[k] = (byPlat[k] || 0) + x.views; });
+      return Object.assign({}, m, {
+        works:works, views:vws, spent:spent, budget:budget, left:Math.max(0, budget - spent), reserved:reserved,
+        spentPct:sp, reservedPct:budget > 0 ? Math.min(100 - sp, reserved / budget * 100) : 0, pct:sp,
+        cpmFact:vws > 0 && spent > 0 ? spent / vws * 1000 : 0,
+        avgViews:works.length ? Math.round(vws / works.length) : 0,
+        avgPayout:appr.length ? Math.round(spent / appr.length) : 0,
+        approved:appr.length, pending:pend.length, rejected:rej,
+        approveRate:(appr.length + rej) ? appr.length / (appr.length + rej) * 100 : 0,
+        approvedList:appr, pendingList:pend,
+        joined:Math.max(num(m.joined), d ? d.members : 0), authors:Math.max(num(m.authors), d ? d.members : 0),
+        byPlat:byPlat, _vb:1
+      });
+    }catch(e){ E(e); return m; }
+  };
+  w.__vb = 1; w.__orig = o;
+  window._cdMetrics = w;
+})();
+/* список офферов: ролики пришли позже, чем он нарисован, — счётчики
+   и деньги карточки правим на месте, без перерисовки списка */
+function campListFix(){
+  try{
+    var pg = $('pg-campaigns'); if(!pg || !pg.classList.contains('on')) return;
+    camps().forEach(function(c){
+      if(!c || !isOwner(c) || !isVidTask(c)) return;
+      var card = document.getElementById('campCard_' + c.id); if(!card) return;
+      var m = window._cdMetrics(c); if(!m || !m._vb) return;
+      var sp = card.querySelectorAll('.cco-foot > span');
+      var setN = function(el, v){ if(!el) return; var tn = null; for(var i = el.childNodes.length - 1; i >= 0; i--){ if(el.childNodes[i].nodeType === 3){ tn = el.childNodes[i]; break; } } var s = (typeof _cdNum === 'function') ? _cdNum(v) : String(v); if(tn && tn.nodeValue !== s) tn.nodeValue = s; };
+      setN(sp[0], m.authors); setN(sp[1], m.approved); setN(sp[2], m.works.length);
+      var lb = card.querySelector('.cco2-left b'); var mon = (typeof _cdMoney === 'function') ? _cdMoney : function(v){ return String(v); };
+      if(lb && lb.textContent !== mon(m.left)) lb.textContent = mon(m.left);
+      var fill = card.querySelector('.cco2-bar .cdo-bar-fill'); if(fill) fill.style.width = m.pct + '%';
+    });
+  }catch(e){ E(e); }
+}
+(function(){
+  var o = window.renderCampaignsPage;
+  if(typeof o !== 'function' || o.__vb) return;
+  var w = function(){ var r = o.apply(this, arguments); try{ if(!V.at && srvOk()) load(false).then(campListFix); }catch(e){ E(e); } return r; };
+  w.__vb = 1; w.__orig = o;
+  window.renderCampaignsPage = w;
 })();
 
 /* лидерборд и участники у рекламодателя — те же списки, в шторке */
@@ -95751,12 +96080,17 @@ function listsInner(){
     + '<button type="button" class="vb-tab" role="tab" data-vb="ls-tab" data-tab="people" aria-selected="' + (idx === 1) + '" tabindex="' + (idx === 1 ? 0 : -1) + '">Участники' + (d ? '<em>' + cntTxt(d.members) + '</em>' : '') + '</button></div>'
     + '<div id="vbLsBody" role="tabpanel">' + (idx ? peopleHtml(cid) : leadHtml(cid, false)) + '</div>';
 }
+/* bp-mv-fix: «Участники · N» на карточке оффера в режиме MV открывает
+   эти списки (лидерборд и участники с «Профилем» и «Чатом») */
+window.bpVbOpenLists = function(cid, tab){ try{ openLists(cid, tab); }catch(e){ E(e); } };
 function openLists(cid, tab){
   LS = { cid:String(cid), tab:tab === 'people' ? 'people' : 'lead' };
   var s = sheet('bpVbList');
   openSheet(s, hd('Участники задания') + '<div id="vbLsWrap">' + listsInner() + '</div>', 'Лидерборд и участники');
   s.querySelector('.vb-card').classList.add('vb-lsheet');
-  loadBoard(cid).then(paintLists);
+  /* открыл список сам — свежие участники с сервера: кэш (до минуты) показывал
+     «никто не вступил», когда блогер вступил секунду назад */
+  loadBoard(cid, true).then(paintLists);
 }
 function paintLists(){
   var w = $('vbLsWrap'); if(!w || !LS.cid) return;
@@ -95974,6 +96308,1853 @@ setInterval(function(){
   }catch(e){ E(e); }
 }, 60000);
 document.addEventListener('visibilitychange', function(){ if(!document.hidden){ load(true); AC.at = 0; } });
+})();
+</script>
+<style id="bp-mv-css">
+/* ══ РЕЖИМ «КАК MORE VIEWS» · вид (09.10.2026) ═══════════════════════
+   Всё ниже — только под html.bp-mv (класс ставит bp-mv-flag в head).
+   В «полном доступе» класса нет, и ни одно правило не действует —
+   кроме плашки #bpFullBadge, которая и живёт только в полном доступе.
+   Ловушки файла: прятать только display:none (его понимает
+   bp-fullscreen-ov-fix), без :has(), без backdrop-filter, без смены
+   animation на открытой странице (тёмная вспышка).
+   Откат: удалить блок вместе со скриптом bp-mv и bp-mv-flag в head.   */
+
+/* ── 1 · Нижняя полка: тёмная таблетка, сплошные белые значки ── */
+html.bp-mv{ --bptab-h:74px }
+html.bp-mv body #bpTabbar{
+  max-width:440px;
+  padding:0 12px calc(env(safe-area-inset-bottom,0px) + 10px);
+}
+html.bp-mv body #bpTabbar .bptab-in{
+  height:74px; box-sizing:border-box; align-items:stretch;
+  gap:2px!important; padding:7px!important;
+  background:rgba(31,32,36,.92)!important; background-image:none!important;
+  border:1px solid rgba(255,255,255,.1)!important;
+  border-radius:9999px!important;
+  box-shadow:0 2px 12px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.1)!important;
+}
+html.bp-mv body #bpTabbar .bptab-i{
+  min-height:0; height:100%; padding:0 2px!important; gap:4px;
+  border-radius:9999px!important; border:1px solid transparent;
+  color:rgba(255,255,255,.56)!important; background:transparent!important;
+  transition:background .22s ease, color .22s ease, border-color .22s ease!important;
+}
+html.bp-mv body #bpTabbar .bptab-i.on{
+  color:#fff!important;
+  background:rgba(255,255,255,.085)!important;
+  border-color:rgba(255,255,255,.1);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
+}
+html.bp-mv body #bpTabbar .bptab-i svg,
+html.bp-mv body #bpTabbar .bptab-i.on svg{
+  width:24px; height:24px; margin:0;
+  fill:currentColor!important; stroke:none!important; transform:none!important;
+}
+html.bp-mv body #bpTabbar .bptab-i span:not(.bptab-b){
+  font-size:11px; font-weight:600; letter-spacing:-.1px; color:inherit!important; white-space:nowrap;
+}
+/* узкий экран: подпись остаётся 11px, место даёт таблетка */
+@media (max-width:360px){
+  html.bp-mv body #bpTabbar{ padding-left:10px; padding-right:10px }
+  html.bp-mv body #bpTabbar .bptab-in{ padding:6px 5px!important; gap:0!important }
+  html.bp-mv body #bpTabbar .bptab-i{ padding:0 1px!important }
+  html.bp-mv body #bpTabbar .bptab-i span:not(.bptab-b){ letter-spacing:-.25px }
+}
+html.bp-mv body #bpTabbar .bptab-i:active{ transform:scale(.95) }
+html.bp-mv body #bpTabbar .bptab-b{
+  top:7px; right:calc(50% - 22px);
+  border-color:#1f2024!important;
+}
+
+/* ── 2 · Главная «Все задания» и счётчик-бейдж ── */
+html.bp-mv body #pg-tasks > .cat-hd.mv-hd{
+  justify-content:flex-start!important; align-items:center!important; gap:12px;
+}
+html.bp-mv body #pg-tasks > .cat-hd.mv-hd h1{ font-size:28px!important; letter-spacing:-.6px!important; line-height:1.2 }
+html.bp-mv body #pg-tasks > .cat-hd.mv-hd .mv-cnt{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:32px; height:32px; padding:0 10px; box-sizing:border-box;
+  border-radius:9999px; background:#27292a;
+  font-size:14px!important; font-weight:600!important; color:#fff!important;
+  font-variant-numeric:tabular-nums;
+}
+
+/* поиск, сортировка и фильтры главной — как у More Views */
+html.bp-mv body #pg-tasks .tk-searchrow{ gap:10px }
+html.bp-mv body #pg-tasks .tk-search{
+  height:54px; box-sizing:border-box; padding:0 16px!important; gap:12px;
+  background:#1d1e20!important; border:1px solid rgba(255,255,255,.06)!important; border-radius:20px!important;
+}
+html.bp-mv body #pg-tasks .tk-search:focus-within{ border-color:rgba(97,118,255,.6)!important }
+html.bp-mv body #pg-tasks .tk-search svg{ width:20px; height:20px; color:rgba(255,255,255,.5) }
+html.bp-mv body #pg-tasks .tk-search input{ font-size:16px!important; padding:0!important; height:100% }
+html.bp-mv body #pg-tasks .tk-search input::placeholder{ color:rgba(255,255,255,.4) }
+html.bp-mv body #pg-tasks .tk-sort{
+  width:54px; height:54px; box-sizing:border-box; border-radius:20px!important;
+  background:#1d1e20!important; border:1px solid rgba(255,255,255,.06)!important; color:rgba(255,255,255,.72)!important;
+}
+html.bp-mv body #pg-tasks .tk-sort svg{ width:20px; height:20px }
+html.bp-mv body #pg-tasks .tk-filters{ gap:8px; margin:14px 0 16px!important }
+html.bp-mv body #pg-tasks .tk-f{
+  height:40px; box-sizing:border-box; padding:0 18px!important; border-radius:9999px!important;
+  background:#1d1e20!important; border:1px solid rgba(255,255,255,.06)!important;
+  color:rgba(255,255,255,.55)!important; font-size:15px!important; font-weight:600!important;
+}
+html.bp-mv body #pg-tasks .tk-f.on{
+  background:rgba(61,85,237,.16)!important; border-color:rgba(108,128,255,.75)!important; color:#fff!important;
+}
+
+/* переключатель «Все задания / Мои задания» — таблеткой, бегунок цвета кнопок MV */
+html.bp-mv body .vb-sw{ border-radius:9999px; background:#1d1e20; border-color:rgba(255,255,255,.06) }
+html.bp-mv body .vb-sw-th{
+  border-radius:9999px;
+  background:linear-gradient(180deg,#92a1ff 0%,#3d55ed 52%,#6176ff 100%);
+  box-shadow:0 4px 10px rgba(20,30,110,.35), inset 0 1px 0 rgba(255,255,255,.22);
+}
+html.bp-mv body .vb-sw button{ border-radius:9999px; color:rgba(255,255,255,.55) }
+html.bp-mv body .vb-sw button.on{ color:#fff }
+
+/* ── 3 · Каталог карт блогеров, избранное, мастер карты ── */
+html.bp-mv #pg-home, html.bp-mv #pg-home.on,
+html.bp-mv #pg-favorites, html.bp-mv #pg-favorites.on,
+html.bp-mv #pg-add-blogger-card, html.bp-mv #pg-add-blogger-card.on,
+html.bp-mv #abc-limit-toast, html.bp-mv #abcTopicSheet, html.bp-mv #a3-foot,
+html.bp-mv #bppWrap, html.bp-mv #bpNextBox,
+html.bp-mv #drw .drw-item[onclick*="add-blogger-card"],
+html.bp-mv #drw .drw-item[onclick*="goTo('favorites')"],
+html.bp-mv #drwTasks,
+html.bp-mv #pg-settings .st2-row[onclick*="favorites"],
+html.bp-mv .pf-mi[onclick*="add-blogger-card"],
+html.bp-mv button[onclick*="bpPf2Go('card')"],
+/* ── 4 · Сборка кампании из каталога и торг о цене ── */
+html.bp-mv #campBar, html.bp-mv #campMini, html.bp-mv #campStep1, html.bp-mv #campStep2,
+html.bp-mv #campAddBanner, html.bp-mv #platSelectOverlay, html.bp-mv #integSelectOverlay,
+html.bp-mv #bpdcOverlay, html.bp-mv button[data-cdo="invite"],
+/* ── 5 · Сделки: окна, шаги, заявки, отзывы ── */
+html.bp-mv #dealLaunchOverlay, html.bp-mv #dealDetailOverlay, html.bp-mv #dealOverlay,
+html.bp-mv #dealCompleteOverlay, html.bp-mv #bloggerDealDetailOverlay,
+html.bp-mv #bloggerDealStepOverlay, html.bp-mv #bloggerNewDealOverlay, html.bp-mv #tzOverlay,
+html.bp-mv #repeatDealOverlay, html.bp-mv #videoReviewModal, html.bp-mv #videoRevisionModal,
+html.bp-mv #orderRequestOverlay, html.bp-mv #advAcceptedOverlay, html.bp-mv #offerSheetOverlay,
+html.bp-mv #statusSheetOverlay, html.bp-mv #tzModal, html.bp-mv #condModal,
+html.bp-mv #reviewOverlay, html.bp-mv #bpReviewCard, html.bp-mv #bpReviewScrim, html.bp-mv #bpReviewStar,
+html.bp-mv #pf2Deals, html.bp-mv #pf2Rank,
+html.bp-mv #offerAgreementOverlay, html.bp-mv #orderTZPreviewOverlay,
+/* пункты меню переговоров и скидок */
+html.bp-mv #bpNgMenuSent, html.bp-mv #bpNgMenuBc, html.bp-mv #bpNgMenuTpl, html.bp-mv #bpNgMenuCal,
+html.bp-mv #drwDiscounts,
+/* чаты: вкладки «Входящие»/«Сделки», их разделы, строки заявок */
+html.bp-mv #mainTabOffers, html.bp-mv #mainTabDeals,
+html.bp-mv #offersSectionWrap, html.bp-mv #dealsSectionWrap, html.bp-mv #bloggerDealsSectionWrap,
+html.bp-mv #pg-chats .order-request-item,
+/* диалог: карточка сделки, «Предложить сделку», сделочные пилюли в ленте */
+html.bp-mv #cdInfoRow, html.bp-mv #cdOfferBtn, html.bp-mv #cdDealMiniBar, html.bp-mv #chatDealCard,
+html.bp-mv #cdMessages .bpof, html.bp-mv #cdMessages div[onclick="openDealFromChat()"],
+html.bp-mv #cdAttachMenu .bp-mv-dealrow,
+html.bp-mv #cdAttachMenu button[onclick*="openTzModal"],
+/* страница блогера: «Предложить сделку» и плашка сделки */
+html.bp-mv #pg-bl-profile .blp-deal, html.bp-mv #pg-bl-profile .blp-b.main,
+html.bp-mv #bloggerProfileModal button[onclick*="openOfferSheetFromModal"],
+/* экран входа: объяснение «безопасной сделки» */
+html.bp-mv #bpAuthExtra{ display:none!important }
+
+/* кошелёк: пустая история — без «сделки» */
+html.bp-mv #pg-balance #txRecent:empty::before{ content:'История операций появится после первого пополнения или выплаты' }
+
+/* центр уведомлений: у старых событий сделки ссылка ведёт в переписку */
+html.bp-mv .bpn2-go{ font-size:0!important }
+html.bp-mv .bpn2-go::before{ content:'Открыть чат'; font-size:11.5px }
+
+/* у меню вложений остаются «Файл / Фото / Ссылка» — ряд на три колонки */
+html.bp-mv #cdAttachMenu .bp-mv-row3{ grid-template-columns:repeat(3,1fr)!important }
+
+/* ── 6 · Чаты: вместо вкладок «Чаты / Сделки» — просто заголовок ── */
+html.bp-mv #pg-chats .bp-mv-chtabs{ padding:4px 16px 12px!important }
+html.bp-mv #pg-chats .bp-mv-chtabs > *{ display:none!important }
+html.bp-mv #pg-chats .bp-mv-chtabs::before{
+  content:'Чаты'; display:block;
+  font-size:28px; font-weight:800; letter-spacing:-.6px; line-height:1.2;
+  color:var(--t1,#fff);
+}
+/* в списке сделочный чат — обычная переписка */
+html.bp-mv #pg-chats .chat-item-active-deal{ box-shadow:none!important }
+
+/* «Профиль» на странице блогера — одна кнопка «Написать» на всю ширину */
+html.bp-mv #pg-bl-profile .blp-acts > *{ flex:1 1 100% }
+
+/* гостевая полоса — над списком заданий */
+html.bp-mv #pg-tasks > #bpGuestBar{ margin:0 0 14px }
+
+/* ── 7 · Плашка «Полный доступ · Выйти» (только полный доступ) ──
+   Стоит в потоке сразу под шапкой (шапка sticky), а не поверх страницы:
+   ничего не закрывает и уезжает вместе с содержимым. */
+#bpFullBadge{
+  position:relative; z-index:1; width:max-content; max-width:calc(100% - 32px);
+  margin:10px auto 0;
+  display:flex; align-items:center; gap:8px; height:30px; box-sizing:border-box;
+  padding:0 4px 0 12px; border-radius:9999px;
+  background:rgba(24,25,29,.94); border:1px solid rgba(255,196,77,.32);
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
+  font:600 12px/1 Manrope,system-ui,sans-serif; color:#f3f4f6; white-space:nowrap;
+  -webkit-tap-highlight-color:transparent;
+}
+#bpFullBadge i{ width:7px; height:7px; border-radius:50%; background:#ffc44d; box-shadow:0 0 0 3px rgba(255,196,77,.16) }
+#bpFullBadge button{
+  height:22px; padding:0 10px; border:0; border-radius:9999px; cursor:pointer;
+  background:rgba(255,255,255,.09); color:#fff; font:inherit; font-weight:700;
+}
+#bpFullBadge button:active{ transform:scale(.96) }
+html.bp-sheet-open #bpFullBadge, html.bp-screen-open #bpFullBadge,
+#mainTopbar[style*="display: none"] + #bpFullBadge, #mainTopbar[style*="display:none"] + #bpFullBadge{ display:none }
+</style>
+
+<script id="bp-mv">
+/* ══ РЕЖИМ «КАК MORE VIEWS» · поведение (09.10.2026) ═════════════════
+   Владелец: «хочу полностью повторить механику More Views». У всех:
+   · главная = «Все задания» (pg-tasks); goTo('home'|'favorites'|
+     'add-blogger-card') ведёт туда же;
+   · полка: Главная · Мои задания · Чаты · Профиль (слой bp-tabbar-js);
+   · каталог карт блогеров, публикация карты и сделки спрятаны — и
+     входы в интерфейсе (bp-mv-css), и функции-открывашки: в режиме MV
+     они тихо ничего не делают или уводят на главную.
+   Фоновые слои денег и синхронизации (эскроу, сроки, bp-dealsync) не
+   трогаем: они двигают деньги и возят задания.
+   «Полный доступ» — флаг bp_full_access из /admin. Сервер подтверждает
+   его по сессии владельца (GET /api/admin/full-access): 401/403 —
+   флаг снимаем и перезагружаемся в MV; сеть недоступна — не трогаем.
+   Каждая обёртка проверяет режим В МОМЕНТ ВЫЗОВА: без класса bp-mv
+   всё идёт как раньше, байт в байт.
+   Наружу: window.bpMvOn() → true/false, window.bpMvLeaveFull().     */
+(function(){
+'use strict';
+var de = document.documentElement;
+function mv(){ return de.classList.contains('bp-mv'); }
+window.bpMvOn = mv;
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'bp-mv'); }catch(_){} }
+function $(id){ return document.getElementById(id); }
+function isAdv(){ try{ return !!(typeof _isAdvertiser !== 'undefined' && _isAdvertiser); }catch(e){ return false; } }
+function onPage(id){ var p = $(id); return !!(p && p.classList.contains('on')); }
+function later(fn, ms){ setTimeout(function(){ try{ fn(); }catch(e){ E(e); } }, ms || 0); }
+
+/* ═══ 1 · Главная = «Задания» ═══
+   initApp → enterApp → goTo('home') срабатывает РАНЬШЕ, чем bp-tasks
+   смонтирует #pg-tasks (его boot висит на DOMContentLoaded после
+   initApp). Без страницы в PAGE_MAP ядро сняло бы .on со всех страниц —
+   пустой экран. Поэтому страницу монтируем сами, ровно как mount(). */
+function ensureTasks(){
+  if($('pg-tasks')) return;
+  var anchor = $('pg-favorites') || $('pg-home');
+  if(!anchor || !anchor.parentNode) return;
+  var el = document.createElement('div');
+  el.id = 'pg-tasks'; el.className = 'pg pg-home-pad';
+  anchor.parentNode.insertBefore(el, anchor);
+  try{ if(typeof ALL_PAGES !== 'undefined' && ALL_PAGES.indexOf('pg-tasks') < 0) ALL_PAGES.push('pg-tasks'); }catch(e){ E(e); }
+  try{ if(typeof PAGE_MAP !== 'undefined') PAGE_MAP.tasks = 'pg-tasks'; }catch(e){ E(e); }
+}
+var TO_HOME = { home:1, favorites:1, 'add-blogger-card':1 };
+function route(p){
+  if(TO_HOME[p]) return 'tasks';
+  if(p === 'mytasks' && isAdv()) return 'campaigns';   /* «Мои задания» рекламодателя — его офферы */
+  return p;
+}
+/* bp-nav считает домом 'home': на главной «Назад» должна предлагать
+   выход, а кнопка «Назад» Телеграма — прятаться. */
+function markHome(){
+  if(!onPage('pg-tasks')) return;
+  try{ _currentPage = 'home'; }catch(e){}
+  try{ if(typeof window.bpUpdateBack === 'function') window.bpUpdateBack(); }catch(e){ E(e); }
+}
+function wrapGo(){
+  var og = window.goTo;
+  if(typeof og !== 'function' || og.__bpMv) return;
+  var w = function(id){
+    if(!mv()) return og.apply(this, arguments);
+    var to = route(String(id == null ? 'home' : id));
+    if(to === 'tasks') ensureTasks();
+    var a = Array.prototype.slice.call(arguments); a[0] = to;
+    var r = og.apply(this, a);
+    if(to === 'tasks'){ markHome(); later(watchTasks, 0); if(typeof window.bpMvPressGuard === 'function') later(window.bpMvPressGuard, 0); }
+    if(to === 'profile') later(statsMv, 1600);
+    if(to === 'settings') later(texts, 60);
+    /* список чатов строится раньше, чем повешен наблюдатель, — правим сразу */
+    if(to === 'chats') later(function(){ markChats(); watchChats(); fixChatRows(); }, 0);
+    if(to === 'campaigns' && typeof window.bpMvCampNames === 'function') later(window.bpMvCampNames, 0);
+    return r;
+  };
+  w.__bpMv = 1; w.__orig = og;
+  window.goTo = w;
+}
+
+/* ═══ 2 · Входы в каталог, карту блогера и сделки ═══
+   QUIET — открывашки сделок: их зовут и фоновые обновления, поэтому
+   никуда не уводим, просто ничего не открываем.
+   HOME — то, что человек нажимает сам: уводим на главную.
+   LIST — счётчики заявок: пустой список (строки «ЗАЯВКА» в чатах,
+   бейджи, всплывашка при входе). */
+var QUIET = [
+  'openDealDetail','openBloggerDealDetail','openBloggerDealStep','openDealOverlay','openDealOverlayById',
+  'toggleDealPanel','openDealFromChat','openVideoReviewModal','openPublicationReviewModal','openTZOverlay',
+  'openBloggerTZ','openRepeatDealOverlay','repeatDeal','showDealLaunchOverlay','showBloggerNewDealOverlay',
+  'confirmRefund','openStatusSheet','openStatusOrDeal','openTzModal','openCondModal','bpDisputeOpen',
+  'showOrderRequestNotification','showAdvAcceptedNotification','bpOpenReviewCard','openReviewOverlay',
+  'openOfferSheetFromModal','submitBloggerOffer','triggerOrderRequest','bpProfileOffer',
+  'bpCounterForm','bpCounterSend','bpCounterAccept','bpCondHistory','bpReqRounds',
+  'campExpandStep','campMiniOpen','showOfferAgreement','cs3Launch','campAddShowBanner',
+  'bpkOpen','bpShareCard','bpCardPhoto','myCardDelete','_ownCardEditPhoto','abcContinue','bpSearchOpen',
+  /* после проверки 10.10: условия сделки, ТЗ заявки, отзывы по сделкам и
+     сборка кампании из каталога — окна или замок прокрутки */
+  'showOfferAgreementBlogger','openOrderTZPreview','showOrderRequest','openOfferFromList','_showOfferOverlay',
+  'acceptPendingDeal','openCampStep1','abcOpenTopicSheet','abcOpenFmtModal','abcChangePriceModal','bpShowReviewsModal'
+];
+var HOME = [
+  'bpGoToDealWith','bpOpenDealById','addToCamp','openCampStep1FromBar','campInviteBloggers',
+  'bpBroadcastStart','bpBroadcasts','bpBroadcastForm','bpSentRequests','bpTplPicker','bpMyCalendar',
+  'bpDiscountInbox','myCardEdit'
+];
+var LIST = ['getMyIncomingRequests'];
+function stub(name, kind){
+  var o = window[name];
+  if(typeof o !== 'function' || o.__bpMvStub) return;
+  var w = function(){
+    if(!mv()) return o.apply(this, arguments);
+    if(kind === 'list') return [];
+    if(kind === 'home') later(function(){
+      try{ if(typeof closeDrawer === 'function') closeDrawer(); }catch(e){}
+      if(typeof window.goTo === 'function') window.goTo('tasks');
+    }, 0);
+    return undefined;
+  };
+  w.__bpMvStub = 1; w.__orig = o;
+  window[name] = w;
+}
+/* Вкладки чатов «Входящие» и «Сделки»: любой раздел, кроме чатов, —
+   это чаты. Без перехода и тостов: функцию зовут и фоновые обновления. */
+function wrapSection(){
+  var o = window.switchMainSection;
+  if(typeof o !== 'function' || o.__bpMv) return;
+  var w = function(s){
+    if(!mv() || s === 'chats') return o.apply(this, arguments);
+    var a = Array.prototype.slice.call(arguments); a[0] = 'chats';
+    return o.apply(this, a);
+  };
+  w.__bpMv = 1; w.__orig = o;
+  window.switchMainSection = w;
+}
+/* После выхода ядро гасит свой список страниц, а «Задания» и «Мои
+   задания» в него не входят — главная оставалась бы .on под входом. */
+function wrapLogout(){
+  var o = window.doLogout;
+  if(typeof o !== 'function' || o.__bpMv) return;
+  var w = function(){
+    var r = o.apply(this, arguments);
+    if(mv()) ['pg-tasks', 'pg-mytasks'].forEach(function(id){ var p = $(id); if(p) p.classList.remove('on'); });
+    return r;
+  };
+  w.__bpMv = 1; w.__orig = o;
+  window.doLogout = w;
+}
+/* Смена роли на «Моих заданиях» блогера: у рекламодателя они — офферы. */
+function wrapRole(name){
+  var o = window[name];
+  if(typeof o !== 'function' || o.__bpMv) return;
+  var w = function(){
+    var r = o.apply(this, arguments);
+    if(mv()) later(function(){
+      if(isAdv() && onPage('pg-mytasks') && typeof window.goTo === 'function') window.goTo('campaigns');
+      if(typeof window.bpTabbarSync === 'function') window.bpTabbarSync();
+      if(typeof window.bpMvCampNames === 'function') window.bpMvCampNames();
+    }, 0);
+    return r;
+  };
+  w.__bpMv = 1; w.__orig = o;
+  window[name] = w;
+}
+/* Плитки статистики профиля считались по сделкам («Сделок в работе»,
+   «В эскроу»). В MV — по заданиям: блогеру вступления, свои ролики и
+   выплаты за них (с сервера, bp-vbind); рекламодателю — его задания,
+   выплаты блогерам и деньги, замороженные под задания. */
+function num(v){ v = Number(v); return isFinite(v) ? v : 0; }
+function rub(n){ return Math.round(num(n)).toLocaleString('ru') + ' ₽'; }
+function tiles(vals){
+  var box = $('pfStats'); if(!box) return;
+  var ts = box.querySelectorAll('.pf-st');
+  vals.forEach(function(v, i){
+    var el = ts[i]; if(!el) return;
+    var a = el.querySelector('.pf-st-val'), b = el.querySelector('.pf-st-lbl');
+    if(a && a.textContent !== String(v[0])) a.textContent = String(v[0]);
+    if(b && b.textContent !== v[1]) b.textContent = v[1];
+    /* своя иконка плитки (третий элемент) — один раз на отрисовку */
+    var ic = v[2] && el.querySelector('.pf-st-ico');
+    if(ic && ic.getAttribute('data-mv') !== v[1]){ ic.innerHTML = v[2]; ic.setAttribute('data-mv', v[1]); }
+  });
+}
+var EYE_T = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#f6a823" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+function shortNum(n){
+  n = Math.round(num(n));
+  if(n < 1e4) return n.toLocaleString('ru');
+  if(n < 1e6) return (n < 1e5 ? String(Math.round(n / 100) / 10).replace('.', ',') : String(Math.round(n / 1e3))) + ' тыс.';
+  return String(Math.round(n / 1e5) / 10).replace('.', ',') + ' млн';
+}
+function statsMv(){
+  if(!mv()) return;
+  var u = null; try{ u = (typeof currentUser !== 'undefined') ? currentUser : null; }catch(e){}
+  if(!u) return;
+  if(isAdv()){
+    var mine = [];
+    try{ mine = (typeof _loadCamps === 'function' ? _loadCamps() : []).filter(function(c){ return c && String(c.ownerId) === String(u.id); }); }catch(e){ mine = []; }
+    var act = mine.filter(function(c){ return c.status === 'active'; }).length;
+    var done = mine.filter(function(c){ return /^(finished|done|completed|closed)$/.test(String(c.status)); }).length;
+    var paid = mine.reduce(function(s, c){ return s + num(c.stats && c.stats.totalSpent); }, 0);
+    tiles([[act, 'Активных заданий'], [done, 'Завершено'], [rub(paid), 'Выплачено блогерам'], [rub(u.hold), 'В заданиях']]);
+  } else {
+    var joins = 0; try{ joins = window.bpMyJoins ? (window.bpMyJoins() || []).length : 0; }catch(e){ joins = 0; }
+    var sid = String(u.srvId || '');
+    var vids = [];
+    try{ vids = (window.bpVbMyVideos ? window.bpVbMyVideos() : []).filter(function(v){ return v && sid && String(v.bloggerId) === sid && v.status !== 'declined'; }); }catch(e){ vids = []; }
+    var earned = vids.reduce(function(s, v){ return s + num(v.paid); }, 0);
+    var seen = vids.reduce(function(s, v){ return s + num(v.views); }, 0);
+    /* четвёртая плитка была «Рейтинг по отзывам» — отзывы бывают только у
+       сделок, в MV там вечный прочерк; вместо неё — просмотры роликов */
+    tiles([[joins, 'Заданий в работе'], [vids.length, 'Видео загружено'], [rub(earned), 'Заработано'], [shortNum(seen), 'Просмотров', EYE_T]]);
+  }
+}
+/* Статичные подписи разметки, где речь о сделках */
+function texts(){
+  if(!mv()) return;
+  [].forEach.call(document.querySelectorAll('#pg-settings .st2-s'), function(s){
+    if(s.textContent === 'События по сделкам, деньгам и отзывам') s.textContent = 'События по заданиям, деньгам и отзывам';
+  });
+}
+function wrapStats(){
+  var o = window.renderProfileStats;
+  if(typeof o !== 'function' || o.__bpMv) return;
+  var w = function(){ var r = o.apply(this, arguments); try{ statsMv(); }catch(e){ E(e); } return r; };
+  w.__bpMv = 1; w.__orig = o;
+  window.renderProfileStats = w;
+}
+/* Приглашение по ссылке r_: текст звал «разместить свою карту». */
+function wrapNotify(){
+  var o = window.bpNotify;
+  if(typeof o !== 'function' || o.__bpMv) return;
+  var w = function(type, title, desc){
+    if(mv() && typeof desc === 'string' && /разместите свою карту/i.test(desc)){
+      var a = Array.prototype.slice.call(arguments);
+      a[2] = 'Выбирайте задания рекламодателей на главной, загружайте видео и получайте деньги за просмотры.';
+      return o.apply(this, a);
+    }
+    return o.apply(this, arguments);
+  };
+  w.__bpMv = 1; w.__orig = o;
+  window.bpNotify = w;
+}
+function install(){
+  try{ wrapGo(); }catch(e){ E(e); }
+  QUIET.forEach(function(n){ try{ stub(n, 'quiet'); }catch(e){ E(e); } });
+  HOME.forEach(function(n){ try{ stub(n, 'home'); }catch(e){ E(e); } });
+  LIST.forEach(function(n){ try{ stub(n, 'list'); }catch(e){ E(e); } });
+  try{ wrapSection(); }catch(e){ E(e); }
+  try{ wrapRender(); }catch(e){ E(e); }
+  try{ wrapLogout(); }catch(e){ E(e); }
+  try{ wrapRole('toggleRole'); }catch(e){ E(e); }
+  try{ wrapNotify(); }catch(e){ E(e); }
+  try{ wrapStats(); }catch(e){ E(e); }
+}
+/* Ставим сразу (до initApp) и накрываем ещё раз поверх слоёв, которые
+   оборачивают те же функции позже: bp-nav, bp-guest2, bp-cardsync,
+   bp-dealsync (DOMContentLoaded), bp-deeplink (+700 мс), bp-nocompany
+   (+1200 мс), bp-escrow-back (+5 с). Без интервала: bp-escrow-back
+   раз в минуту проверяет метку только у верхней обёртки, и вдвоём
+   с интервалом цепочка росла бы бесконечно. Внутренние копии
+   безвредны: перевод 'home' → 'tasks' идемпотентен. */
+install();
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install);
+else later(install, 0);
+[1000, 1500, 2600, 5600].forEach(function(ms){ later(install, ms); });
+
+/* ═══ 3 · Чаты ═══ */
+function markChats(){
+  var t = $('mainTabChats');
+  var row = t && t.parentNode && t.parentNode.parentNode;
+  if(row && row.id !== 'pg-chats' && !row.classList.contains('bp-mv-chtabs')) row.classList.add('bp-mv-chtabs');
+  var menu = $('cdAttachMenu');
+  if(menu){
+    var b = menu.querySelector('button[onclick*="openCondModal"]');
+    var r2 = b && b.parentNode;
+    if(r2 && r2 !== menu && !r2.classList.contains('bp-mv-dealrow')) r2.classList.add('bp-mv-dealrow');
+    var tz = menu.querySelector('button[onclick*="openTzModal"]');
+    var r1 = tz && tz.parentNode;
+    if(r1 && r1 !== menu && !r1.classList.contains('bp-mv-row3')) r1.classList.add('bp-mv-row3');
+  }
+}
+/* Строка сделочного чата: «Идёт сделка» вместо последнего сообщения —
+   в MV это обычная переписка, показываем само сообщение. */
+function contactById(id){
+  try{
+    if(typeof CHAT_CONTACTS === 'undefined') return null;
+    for(var i = 0; i < CHAT_CONTACTS.length; i++) if(String(CHAT_CONTACTS[i].id) === String(id)) return CHAT_CONTACTS[i];
+  }catch(e){}
+  return null;
+}
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+/* служебные строки сделки («Заявка принята», «Блогер принял заказ»,
+   «Ожидает принятия блогером») в MV не показываем — только переписку */
+var DEAL_RX = /сделк|заявк|заказ|эскроу|техническ\S* задан|оплат|принят|ожидает/i;
+function chatPreview(c){
+  var ms = (c && Array.isArray(c.messages)) ? c.messages : [];
+  for(var i = ms.length - 1; i >= 0; i--){
+    var m = ms[i]; if(!m || m.sys || m.system || m.type === 'system') continue;
+    var tx = String(m.text || '').replace(/\s+/g, ' ').trim();
+    if(tx && !DEAL_RX.test(tx)) return tx;
+    if(!tx && m.file && m.file.name) return String(m.file.name);
+  }
+  var pv = String((c && c.preview) || '').trim();
+  return pv && !DEAL_RX.test(pv) ? pv : 'Переписка';
+}
+function fixChatRows(){
+  if(!mv()) return;
+  var list = $('chatsList'); if(!list) return;
+  [].forEach.call(list.querySelectorAll('.chat-item'), function(row){
+    var m = /openChatDialog\(([^)]+)\)/.exec(row.getAttribute('onclick') || '');
+    var c = m && contactById(String(m[1]).replace(/['"]/g, ''));
+    if(row.classList.contains('chat-item-active-deal')) row.classList.remove('chat-item-active-deal');
+    if(!c || !(c._dealId || c.deal)) return;
+    var want = chatPreview(c);
+    var live = row.querySelector('.chat-deal-live');
+    if(live){
+      var p = document.createElement('span');
+      p.className = 'chat-preview';
+      p.textContent = want;
+      live.parentNode.replaceChild(p, live);
+      return;
+    }
+    var pv = row.querySelector('.chat-preview');
+    if(pv && pv.textContent !== want) pv.textContent = want;
+  });
+  /* Пустые чаты: у рекламодателя звали «Найти блогера» в каталог, у
+     блогера обещали «примет ваш отклик» — в MV откликов нет */
+  var box = document.querySelector('#pg-chats .chats-empty');
+  var role = isAdv() ? 'adv' : 'blogger';
+  if(box && box.getAttribute('data-bp-mv') !== role){
+    box.setAttribute('data-bp-mv', role);
+    [].forEach.call(box.children, function(k){
+      if(k.classList.contains('bp-empty-art')) return;
+      var t = String(k.textContent || '').trim();
+      if(/^(Чаты появятся|Чат откроется|Здесь появятся)/.test(t)){
+        k.textContent = role === 'adv'
+          ? 'Здесь появятся сообщения от блогеров, которые выполняют ваши задания'
+          : 'Здесь появятся сообщения от рекламодателей, в чьих заданиях вы участвуете';
+      } else if(k.getAttribute('onclick') && /Найти блогера|К заданиям|Мои задания|На главную/.test(t)){
+        k.setAttribute('onclick', role === 'adv' ? "goTo('campaigns')" : "goTo('tasks')");
+        k.innerHTML = role === 'adv'
+          ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Мои задания'
+          : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/></svg>На главную';
+      }
+    });
+  }
+}
+/* список перерисовывает сам приложение (раз в 2 с — под замком подписи);
+   после каждой отрисовки — наша правка, идемпотентно */
+function wrapRender(){
+  var o = window.renderChatsList;
+  if(typeof o !== 'function' || o.__bpMv) return;
+  var w = function(){
+    var r = o.apply(this, arguments);
+    if(mv()){ try{ markChats(); fixChatRows(); }catch(e){ E(e); } }
+    return r;
+  };
+  w.__bpMv = 1; w.__orig = o;
+  window.renderChatsList = w;
+}
+function watchChats(){
+  var pc = $('pg-chats');
+  if(!pc || pc.__bpMvMo || typeof MutationObserver === 'undefined') return;
+  pc.__bpMvMo = 1;
+  var t = null;
+  new MutationObserver(function(){
+    if(t || !mv()) return;
+    t = setTimeout(function(){ t = null; try{ fixChatRows(); }catch(e){ E(e); } }, 60);
+  }).observe(pc, { childList:true, subtree:true });
+  /* список уже мог быть построен до наблюдателя */
+  try{ fixChatRows(); }catch(e){ E(e); }
+}
+
+/* ═══ 4 · Гость: полоса «Вы смотрите без аккаунта» — на главной ═══
+   bp-guest2 вставляет её только в каталог (#pg-home). bpMorphPage при
+   каждой перерисовке «Заданий» убирает чужие узлы — возвращаем. */
+function guestBar(){
+  if(!mv()) return;
+  var pg = $('pg-tasks'); if(!pg) return;
+  var bar = $('bpGuestBar');
+  if(!window.bpIsGuest){ if(bar && bar.parentNode === pg) bar.remove(); return; }
+  if(bar && bar.parentNode === pg) return;
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'bpGuestBar';
+    bar.innerHTML = '<span>Вы смотрите без аккаунта</span>'
+      + '<button type="button" onclick="bpLeaveGuest(\'register\')">Создать аккаунт</button>';
+  }
+  pg.insertBefore(bar, pg.firstChild);
+}
+function watchTasks(){
+  var pg = $('pg-tasks');
+  if(!pg || pg.__bpMvMo || typeof MutationObserver === 'undefined') return;
+  pg.__bpMvMo = 1;
+  new MutationObserver(function(){ try{ guestBar(); }catch(e){ E(e); } }).observe(pg, { childList:true });
+  guestBar();
+}
+
+/* ═══ 5 · Полный доступ: проверка на сервере и плашка ═══ */
+function fullFlag(){ try{ return window.localStorage.getItem('bp_full_access') === '1'; }catch(e){ return false; } }
+function leaveFull(){
+  try{ window.localStorage.removeItem('bp_full_access'); }catch(e){}
+  try{ window.localStorage.removeItem('bp_full_access_until'); }catch(e){}
+  try{ history.replaceState(null, '', location.pathname + location.search + '#/tasks'); }catch(e){}
+  location.reload();
+}
+window.bpMvLeaveFull = leaveFull;
+function badge(){
+  var b = $('bpFullBadge');
+  if(mv() || !fullFlag()){ if(b) b.remove(); return; }
+  if(b) return;
+  b = document.createElement('div');
+  b.id = 'bpFullBadge';
+  b.setAttribute('role', 'status');
+  b.innerHTML = '<i aria-hidden="true"></i><span>Полный доступ</span><button type="button">Выйти</button>';
+  b.querySelector('button').addEventListener('click', leaveFull);
+  /* в потоке сразу под шапкой (она sticky): ничего не закрывает */
+  var tb = $('mainTopbar');
+  if(tb && tb.parentNode) tb.parentNode.insertBefore(b, tb.nextSibling);
+  else document.body.appendChild(b);
+}
+var checked = false;
+function verify(){
+  if(checked || mv() || !fullFlag()) return;
+  checked = true;
+  if(typeof fetch !== 'function' || !/^https?:$/.test(location.protocol)) return;
+  var ctl = null, t = 0;
+  try{ ctl = new AbortController(); t = setTimeout(function(){ try{ ctl.abort(); }catch(e){} }, 12000); }catch(e){ ctl = null; }
+  /* Простой fetch, без токена пользователя: bpSrv.raw на 401 стёр бы
+     вход в кассу. Кука владельца bp_admin уходит сама (тот же адрес). */
+  fetch(location.origin + '/api/admin/full-access', {
+    method:'GET', credentials:'same-origin', cache:'no-store', signal: ctl ? ctl.signal : undefined
+  }).then(function(r){
+    clearTimeout(t);
+    if(r.status === 401 || r.status === 403){ leaveFull(); return; }
+    /* срок куки владельца: с ним ранний флаг в head после истечения сразу
+       включит режим MV — без показа прежнего каталога и перезагрузки */
+    if(r.status === 200) return r.json().then(function(j){
+      var u = Number(j && j.until) || 0;
+      try{
+        if(u > Date.now()) window.localStorage.setItem('bp_full_access_until', String(u));
+        else window.localStorage.removeItem('bp_full_access_until');
+      }catch(e){}
+    }, function(){});
+  }, function(){ clearTimeout(t); /* сеть или офлайн — флаг не трогаем */ });
+}
+
+/* ═══ сборка ═══ */
+function boot(){
+  try{ badge(); }catch(e){ E(e); }
+  try{ verify(); }catch(e){ E(e); }
+  if(!mv()) return;
+  try{ markChats(); watchChats(); }catch(e){ E(e); }
+  try{ watchTasks(); }catch(e){ E(e); }
+  try{ texts(); }catch(e){ E(e); }
+  try{ if(typeof window.bpTabbarSync === 'function') window.bpTabbarSync(); }catch(e){ E(e); }
+  /* рекламодатель мог оказаться на «Моих заданиях» блогера */
+  try{ if(isAdv() && onPage('pg-mytasks') && typeof window.goTo === 'function') window.goTo('campaigns'); }catch(e){ E(e); }
+}
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else later(boot, 0);
+[700, 2000, 4000].forEach(function(ms){ later(function(){ if(mv()){ markChats(); watchChats(); watchTasks(); } }, ms); });
+})();
+</script>
+<style id="bp-mv-card-css">
+/* ══ КАРТОЧКА ЗАДАНИЯ «КАК У MORE VIEWS» · вид (bp-mv-card, 10.10.2026) ══
+   Только под html.bp-mv: в полном доступе карточки прежние (bp-tkcard).
+   Замеры их сайта (375 px): карточка #1d1e20, кромка .8px белого 5%,
+   радиус 32, поля 20; название 20/600; чипы #272829 14/500 6×12;
+   значки площадок внахлёст; полоса 8 px #27292a, заливка зелёная,
+   оранжевая риска — лимит выплат; «Открыть» — таблетка 46 px с
+   градиентом #92a1ff → #3d55ed → #6176ff и тенью 0 4px 4px.
+   Фон страницы не трогаем (палитра «Глубокая ночь»).
+   Специфичность: старые правила — html body #pg-tasks .tk-card.hx и
+   .tk-card-joined.hx с !important; наши — html.bp-mv … .tk-list >
+   .tk-card.mvc, сильнее. Имена классов обходят общие [class*="-sum"],
+   [class*="-amount"], [class*="-bar-fill"], [class*="-list"], [class*="-x"].
+   Без backdrop-filter, без animation на самой карточке (каскад bp-calm),
+   без !important на transform/transition (FLIP bp-calm пишет их в style). */
+
+html.bp-mv body #pg-tasks .tk-list{gap:16px}
+/* поиск на 320: поле ввода 16px не должно выталкивать кнопку сортировки */
+html.bp-mv body #pg-tasks .tk-search{min-width:0}
+html.bp-mv body #pg-tasks .tk-search input{min-width:0;width:100%;text-overflow:ellipsis}
+html.bp-mv body #pg-tasks .tk-list > .tk-card.mvc{
+  display:flex;flex-direction:column;align-items:stretch;
+  padding:20px;border-radius:32px;
+  background:#1d1e20;
+  border:.8px solid rgba(255,255,255,.05)!important;
+  box-shadow:none!important;
+  color:#fff;
+}
+@media (hover:hover){
+  html.bp-mv body #pg-tasks .tk-list > .tk-card.mvc:hover{background:#212224;border-color:rgba(255,255,255,.09)!important}
+}
+html.bp-mv body #pg-tasks .tk-list > .tk-card.mvc:focus-visible{outline:2px solid #8b9bff;outline-offset:3px}
+html.bp-mv body #pg-tasks .tk-list > .tk-card.mvc.tk-card-joined{border-color:rgba(95,227,155,.16)!important}
+
+/* «Вы участвуете» — маленькая зелёная таблетка над названием */
+html.bp-mv body #pg-tasks .tk-list > .tk-card.mvc .tk-mine{
+  align-self:flex-start;height:28px;margin:0 0 12px!important;padding:0 12px!important;gap:7px;
+  font-size:13px!important;font-weight:600!important;letter-spacing:0;
+  background:rgba(61,220,132,.12)!important;border:0!important;color:#5fe39b!important;
+}
+html.bp-mv body #pg-tasks .tk-list > .tk-card.mvc .tk-mine::before{width:7px;height:7px;background:#3ddc84!important;box-shadow:0 0 0 3px rgba(61,220,132,.16)}
+
+/* название */
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-t{
+  margin:0;font-size:20px;font-weight:600;line-height:1.3;letter-spacing:-.25px;color:#fff;
+  overflow-wrap:anywhere;text-wrap:pretty;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+
+/* «Заработано: N ₽ из M ₽ · %» и полоса */
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-m{margin-top:14px}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-k{font-size:14px;font-weight:500;line-height:1.3;color:rgba(255,255,255,.55)}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-mr{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:3px}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-amt{
+  min-width:0;font-size:17px;font-weight:700;line-height:1.35;letter-spacing:-.2px;color:#fff;
+  font-variant-numeric:tabular-nums;
+}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-amt span{white-space:nowrap}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-pc{flex:none;font-size:15px;font-weight:500;color:rgba(255,255,255,.72);font-variant-numeric:tabular-nums}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-bar{position:relative;height:8px;margin-top:12px;border-radius:9999px;background:#27292a}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-bar i{
+  position:absolute;left:0;top:0;bottom:0;min-width:8px;max-width:100%;border-radius:inherit;
+  background:#3ddc84;transition:width .5s cubic-bezier(.22,1,.36,1);
+}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-bar s{
+  position:absolute;right:5px;top:-2px;bottom:-2px;width:2px;border-radius:2px;
+  background:#ff8a1f;text-decoration:none;
+}
+
+/* чипы: формат · площадки · ставка. Разделитель — палочка слева от
+   чипа; у первого чипа строки она за краем ряда и срезается */
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-row{
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px 13px;
+  margin-top:16px;padding:2px 0 2px 2px;overflow:hidden;
+}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-row > *{position:relative;flex:none}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-row > * + *::before{
+  content:'';position:absolute;left:-7px;top:50%;width:1px;height:20px;margin-top:-10px;
+  background:rgba(255,255,255,.12);
+}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-fmt,
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-rate{
+  display:inline-flex;align-items:center;height:32px;box-sizing:border-box;padding:0 12px;
+  border-radius:9999px;background:#272829;
+  font-size:14px;font-weight:500;line-height:1;color:#fff;white-space:nowrap;
+}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-fmt{max-width:170px;overflow:hidden;text-overflow:ellipsis;display:inline-block;line-height:32px}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-rate{gap:3px;padding:0 10px;font-size:13px;font-variant-numeric:tabular-nums}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-rate b{font-size:14px;font-weight:600}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-rate i{font-style:normal;font-weight:500;color:rgba(255,255,255,.5)}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-rate svg{width:13px;height:13px;margin-left:1px;color:rgba(255,255,255,.45);flex:none}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-pls{display:inline-flex;align-items:center;height:32px}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi{
+  position:relative;width:30px;height:30px;flex:none;border-radius:50%;
+  display:inline-grid;place-items:center;background:#2a2c30;
+  box-shadow:0 0 0 2px #1d1e20;
+}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi + .mvc-pi{margin-left:-9px}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi svg{width:15px;height:15px;fill:#fff;display:block}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi.mvc-tt{background:#000}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi.mvc-tt svg{filter:drop-shadow(.8px 0 0 #fe2c55) drop-shadow(-.8px 0 0 #25f4ee)}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi.mvc-yt{background:#ff0033}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi.mvc-yt svg{width:16px;height:16px}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi.mvc-inst{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi.mvc-tg{background:#229ed9}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi.mvc-tg svg{margin-left:-1px}
+
+/* якорь панели участия: bp-vbind ставит .vb-panel сразу за ним */
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-anc{display:none!important}
+
+/* подвал: аватар бренда, имя, «N видео · 👁 X», «Открыть» */
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-ft{display:flex;align-items:center;gap:12px;margin-top:18px;min-height:46px}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-ava{
+  flex:none;width:44px;height:44px;border-radius:50%;overflow:hidden;
+  display:grid;place-items:center;background:#2b2d31;
+  font-size:18px;font-weight:700;line-height:1;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.18);
+}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-ava img{width:100%;height:100%;object-fit:cover;display:block}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-who{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:3px}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-nm{
+  display:block;font-size:17px;font-weight:600;line-height:1.25;letter-spacing:-.15px;color:#fff;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-st{
+  display:flex;flex-wrap:wrap;align-items:center;gap:1px 10px;
+  font-size:13.5px;font-weight:500;line-height:1.3;color:rgba(255,255,255,.55);
+  font-variant-numeric:tabular-nums;
+}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-st:empty{display:none}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-st span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-st svg{width:15px;height:15px;flex:none;opacity:.9}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-st.mvc-in{animation:mvcIn .32s ease-out}
+@keyframes mvcIn{from{opacity:0}}
+html.bp-mv #pg-tasks .tk-card.mvc .mvc-open{
+  flex:none;display:inline-flex;align-items:center;justify-content:center;
+  height:46px;padding:0 20px;box-sizing:border-box;border-radius:9999px;
+  background:linear-gradient(#92a1ff,#3d55ed,#6176ff);
+  box-shadow:0 4px 4px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.18);
+  font-size:16px;font-weight:500;line-height:1;color:#fff;white-space:nowrap;
+}
+html.bp-mv #pg-tasks .tk-card.mvc:active .mvc-open{filter:brightness(.94)}
+/* у вступившего главная кнопка — «Загрузить видео» в панели ниже */
+html.bp-mv #pg-tasks .tk-card.mvc .vb-panel ~ .mvc-ft .mvc-open{display:none}
+
+/* ── панель участия «Ваши видео / Загрузить видео» (bp-vbind) ── */
+html.bp-mv #pg-tasks .tk-card.mvc .vb-panel{
+  order:3;margin:16px 0 0;padding:16px;border-radius:24px;
+  background:#252628;border:0;box-shadow:none;
+}
+html.bp-mv #pg-tasks .tk-card.mvc .vb-p-k{font-size:13px;font-weight:500;letter-spacing:0;text-transform:none;color:rgba(255,255,255,.5)}
+html.bp-mv #pg-tasks .tk-card.mvc .vb-p-t{margin-top:4px;font-size:18px;font-weight:600;letter-spacing:-.2px;color:#fff}
+html.bp-mv #pg-tasks .tk-card.mvc .vb-p-s{margin-top:4px;font-size:14px;line-height:1.45;color:rgba(255,255,255,.6)}
+html.bp-mv #pg-tasks .tk-card.mvc .vb-p-row{margin-top:10px;gap:12px}
+html.bp-mv #pg-tasks .tk-card.mvc .vb-p-row .vb-thumb{width:46px;height:60px;border-radius:12px}
+html.bp-mv #pg-tasks .tk-card.mvc .vb-p-mid b{font-size:15px;font-weight:600;color:#fff}
+html.bp-mv #pg-tasks .tk-card.mvc .vb-p-mid i{font-size:13px;line-height:1.4;color:rgba(255,255,255,.55);white-space:normal;text-wrap:balance}
+html.bp-mv #pg-tasks .tk-card.mvc .vb-p-cnt{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+html.bp-mv #pg-tasks .tk-card.mvc .vb-p-cnt span{
+  flex:1 1 0;min-width:max-content;padding:10px 12px;border-radius:16px;
+  background:#1d1e20;border:0;font-size:12.5px;font-weight:500;color:rgba(255,255,255,.5);
+}
+html.bp-mv #pg-tasks .tk-card.mvc .vb-p-cnt b{font-size:17px;font-weight:700;color:#fff;overflow:visible;white-space:nowrap}
+html.bp-mv #pg-tasks .tk-card.mvc .vb-p-go{
+  margin-top:14px;min-height:46px;border-radius:9999px;
+  background:linear-gradient(#92a1ff,#3d55ed,#6176ff);
+  box-shadow:0 4px 4px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.18);
+  font-size:16px;font-weight:600;
+}
+html.bp-mv #pg-tasks .tk-card.mvc .vb-p-go:focus-visible{outline:2px solid #b7c1ff;outline-offset:2px}
+
+/* ── своя карточка автора (.vb-own2, bp-vbind): тот же смысл, вид MV ── */
+html.bp-mv body #pg-tasks .tk-list > .tk-card.mvc.vb-own2,
+html.bp-mv body #pg-tasks .tk-list > .tk-card.vb-own2{
+  display:block;padding:20px;border-radius:32px;background:#1d1e20;
+  border:.8px solid rgba(255,255,255,.05)!important;box-shadow:none!important;
+}
+html.bp-mv #pg-tasks .vb-own2 .ow-hd{flex-wrap:wrap;row-gap:8px}
+html.bp-mv #pg-tasks .vb-own2 .ow-tag{height:28px;padding:0 12px;gap:7px;background:rgba(97,118,255,.15);color:#b3bdff;font-size:13px;font-weight:600;white-space:nowrap}
+html.bp-mv #pg-tasks .vb-own2 .mt-due{height:28px;padding:0 11px;background:#272829;color:rgba(255,255,255,.72);font-size:13px;font-weight:500}
+html.bp-mv #pg-tasks .vb-own2 .mt-due.hot{background:rgba(255,138,31,.14);color:#ffb067}
+html.bp-mv #pg-tasks .vb-own2 .ow-name{
+  margin-top:14px;font-size:20px;font-weight:600;line-height:1.3;letter-spacing:-.25px;color:#fff;
+  white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+html.bp-mv #pg-tasks .vb-own2 .ow-meta{gap:10px;margin-top:14px}
+html.bp-mv #pg-tasks .vb-own2 .ow-fmt{height:32px;padding:0 12px;background:#272829;color:#fff;font-size:14px;font-weight:500}
+html.bp-mv #pg-tasks .vb-own2 .ow-meta .hx-pl{height:32px;padding:0;gap:0;border:0;background:none;font-size:0}
+html.bp-mv #pg-tasks .vb-own2 .ow-meta .hx-pl + .hx-pl{margin-left:-17px}
+html.bp-mv #pg-tasks .vb-own2 .ow-meta .hx-pi{width:30px;height:30px;box-shadow:0 0 0 2px #1d1e20}
+html.bp-mv #pg-tasks .vb-own2 .ow-meta .hx-pi.brd{background:#000!important}
+html.bp-mv #pg-tasks .vb-own2 .ow-meta .hx-pi.brd svg{filter:drop-shadow(.8px 0 0 #fe2c55) drop-shadow(-.8px 0 0 #25f4ee)}
+html.bp-mv #pg-tasks .vb-own2 .ow-meta .hx-pi svg{width:15px;height:15px}
+html.bp-mv #pg-tasks .vb-own2 .ow-grid{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;padding:0;border:0}
+html.bp-mv #pg-tasks .vb-own2 .ow-c{flex:1 1 0;min-width:max-content}
+html.bp-mv #pg-tasks .vb-own2 .ow-c,
+html.bp-mv #pg-tasks .vb-own2 .ow-c:first-child{padding:11px 12px;border-radius:18px;background:#252628}
+html.bp-mv #pg-tasks .vb-own2 .ow-c + .ow-c{border-left:0}
+html.bp-mv #pg-tasks .vb-own2 .ow-c span{font-size:12.5px;font-weight:500;color:rgba(255,255,255,.5)}
+html.bp-mv #pg-tasks .vb-own2 .ow-c b{margin-top:4px;font-size:17px;font-weight:700;color:#fff;overflow:visible}
+html.bp-mv #pg-tasks .vb-own2 .ow-c i{color:#ffb067}
+html.bp-mv #pg-tasks .vb-own2 .ow-go{
+  min-height:46px;margin-top:16px;border:0;border-radius:9999px;
+  background:linear-gradient(#92a1ff,#3d55ed,#6176ff);color:#fff;
+  box-shadow:0 4px 4px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.18);
+  font-size:16px;font-weight:600;
+}
+html.bp-mv #pg-tasks .vb-own2 .ow-go:focus-visible{outline:2px solid #b7c1ff;outline-offset:2px}
+
+/* ── «Мои задания» (.vb-mt2) — та же поверхность и кнопка, чтобы
+   переключатель «Все задания / Мои задания» не менял стиль ── */
+html.bp-mv body #pg-mytasks .tk-card.vb-mt2{
+  padding:20px;border-radius:32px;background:#1d1e20;
+  border:.8px solid rgba(255,255,255,.05);box-shadow:none;
+}
+html.bp-mv body #pg-mytasks .tk-card.vb-mt2 + .tk-card{margin-top:16px}
+html.bp-mv #pg-mytasks .vb-mt2 .mt-name{font-size:20px;font-weight:600;letter-spacing:-.25px;color:#fff}
+html.bp-mv #pg-mytasks .vb-mt2 .mt-by{font-size:14px;color:rgba(255,255,255,.55)}
+html.bp-mv #pg-mytasks .vb-mt2 .mt-due{background:#272829;color:rgba(255,255,255,.72);font-weight:500}
+html.bp-mv #pg-mytasks .vb-mt2 .mt-due.hot{background:rgba(255,138,31,.14);color:#ffb067}
+html.bp-mv #pg-mytasks .vb-mt2 .mt-vids,
+html.bp-mv #pg-mytasks .vb-mt2 .mt-v,
+html.bp-mv #pg-mytasks .vb-mt2 .mt-empty{border-color:rgba(255,255,255,.06)}
+html.bp-mv #pg-mytasks .vb-mt2 .mt-v .vb-thumb{border-radius:11px}
+html.bp-mv #pg-mytasks .vb-mt2 .mt-rate{color:rgba(255,255,255,.72);font-weight:600}
+html.bp-mv #pg-mytasks .vb-mt2 .mt-up{
+  min-height:46px;padding:0 20px 0 17px;border-radius:9999px;
+  background:linear-gradient(#92a1ff,#3d55ed,#6176ff);
+  box-shadow:0 4px 4px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.18);
+  font-size:15.5px;font-weight:600;
+}
+
+/* узкие экраны (320–360): поля чуть меньше, цифры целиком */
+@media (max-width:360px){
+  html.bp-mv body #pg-tasks .tk-list > .tk-card.mvc,
+  html.bp-mv body #pg-tasks .tk-list > .tk-card.vb-own2,
+  html.bp-mv body #pg-mytasks .tk-card.vb-mt2{padding:18px 16px;border-radius:28px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-t,html.bp-mv #pg-tasks .vb-own2 .ow-name{font-size:19px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-amt{font-size:16px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-ft{gap:10px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-ava{width:40px;height:40px;font-size:16px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-nm{font-size:16px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-open{padding:0 17px;font-size:15px}
+  html.bp-mv #pg-tasks .tk-card.mvc .vb-panel{margin-left:-6px;margin-right:-6px;padding:14px 12px}
+  html.bp-mv #pg-tasks .tk-card.mvc .vb-p-cnt{gap:6px}
+  html.bp-mv #pg-tasks .tk-card.mvc .vb-p-cnt span{padding:9px 8px;font-size:11.5px}
+  html.bp-mv #pg-tasks .tk-card.mvc .vb-p-cnt b{font-size:15.5px}
+  html.bp-mv #pg-tasks .tk-card.mvc .vb-p-row .vb-thumb{width:42px;height:56px}
+  /* ряд чипов: формат · две площадки · ставка помещаются в одну строку и на 320 */
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-row{column-gap:6px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-row > * + *::before{left:-3.5px;height:18px;margin-top:-9px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi + .mvc-pi{margin-left:-10px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-fmt{padding:0 9px;font-size:13px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-rate{padding:0 8px;gap:2px;font-size:12px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-rate b{font-size:13px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-rate svg{width:12px;height:12px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi{width:28px;height:28px}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-pi svg{width:14px;height:14px}
+  html.bp-mv #pg-tasks .vb-own2 .ow-c,html.bp-mv #pg-tasks .vb-own2 .ow-c:first-child{padding:10px 9px}
+  html.bp-mv #pg-tasks .vb-own2 .ow-tag{padding:0 10px;gap:6px;font-size:12.5px}
+  html.bp-mv #pg-tasks .vb-own2 .mt-due{padding:0 9px;gap:5px;font-size:12.5px}
+  html.bp-mv #pg-tasks .vb-own2 .ow-c b{font-size:15.5px}
+}
+@media (prefers-reduced-motion:reduce){
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-bar i{transition:none}
+  html.bp-mv #pg-tasks .tk-card.mvc .mvc-st.mvc-in{animation:none}
+}
+</style>
+<script id="bp-mv-card">
+/* ══ КАРТОЧКА ЗАДАНИЯ «КАК У MORE VIEWS» (режим bp-mv, 10.10.2026) ══
+   Владелец: «главная как у них: задания рекламодателей, выглядит так же».
+   Карточку на «Главной» (pg-tasks) рисует bp-tkcard: в режиме MV его
+   enhance() берёт разметку отсюда — window.bpMvCardInner(c, joined), —
+   а в полном доступе, как раньше, свою inner(). Поэтому порядок
+   наблюдателей на странице не важен: панель участия (.vb-panel) и свою
+   карточку (.vb-own2) bp-vbind дорисовывает поверх, как и прежде.
+   Состав (замеры их сайта, ширина 375):
+     «Вы участвуете» → название → «Заработано / N ₽ из M ₽ · %» →
+     полоса (зелёная — выплачено, оранжевая риска — лимит выплат) →
+     чипы: формат · значки площадок внахлёст · «10 ₽ за 1 000 👁» →
+     аватар бренда, имя, «N видео · 👁 X» и кнопка «Открыть».
+   «Открыть» — не кнопка, а надпись: нажатие уходит в onclick карточки
+   (bpTaskOpen); вложенная кнопка в role=button ломала бы доступность.
+   У вступившего блогера панель «Ваши видео / Загрузить» встаёт после
+   подвала (якорь .hx-bank.mvc-anc, CSS order), а «Открыть» прячется —
+   две главные кнопки подряд не нужны.
+   Видео, просмотры и «Заработано» — из открытой сводки сервера
+   GET /api/tasks/summary (без людей и ников): при показе главной и раз
+   в минуту, пока она открыта. Цифры меняются прямо в карточке, без
+   перерисовки списка; пока сводки нет — строки «N видео» нет вовсе.
+   Откат: удалить style#bp-mv-card-css и script#bp-mv-card — enhance()
+   сам вернётся к прежней карточке.                                   */
+(function(){
+'use strict';
+if(window.__bpMvCard) return; window.__bpMvCard = 1;
+var de = document.documentElement;
+function mv(){ return de.classList.contains('bp-mv'); }
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'bp-mv-card'); }catch(_){} }
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+function num(v){ var n = Number(v); return isFinite(n) && n > 0 ? n : 0; }
+/* число целиком неразрывное: «1 234 567 ₽» не делится по строкам */
+var NB = ' ';
+function int(n){ return Math.round(num(n)).toLocaleString('ru').replace(/\s/g, NB); }
+function rub(n){ return int(n) + NB + '₽'; }
+function camps(){ try{ return (typeof _loadCamps === 'function' ? _loadCamps() : JSON.parse(localStorage.getItem('bp_campaigns') || '[]')) || []; }catch(e){ return []; } }
+/* картинки — только https и встроенные (как в bp-tkcard) */
+function safeImg(u){ u = String(u || '').trim(); return (/^https:\/\//i.test(u) || /^data:image\/(png|jpe?g|webp|gif|avif);/i.test(u)) ? u : ''; }
+var RX = /bpTaskOpen\('((?:[^'\\]|\\.)*)'\)/;
+var EYE = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 5C6.6 5 2.9 9.4 1.6 11.2a1.4 1.4 0 0 0 0 1.6C2.9 14.6 6.6 19 12 19s9.1-4.4 10.4-6.2a1.4 1.4 0 0 0 0-1.6C21.1 9.4 17.4 5 12 5zm0 11.2a4.2 4.2 0 1 1 0-8.4 4.2 4.2 0 0 1 0 8.4zm0-6.6a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z"/></svg>';
+
+/* ── сводка сервера: { "<id задания>": { videos, views, paid, budget } } ── */
+var S = { at:0, map:null, p:null };
+function sumOf(id){
+  var m = S.map, k = String(id);
+  return (m && Object.prototype.hasOwnProperty.call(m, k) && m[k] && typeof m[k] === 'object') ? m[k] : null;
+}
+function base(){ try{ var s = window.bpSrv; return (s && s.configured && s.configured()) ? String(s.base() || '') : ''; }catch(e){ return ''; } }
+function load(force){
+  if(!mv() || S.p) return;
+  if(!force && S.at && Date.now() - S.at < 58000) return;
+  var b = base();
+  if(!b || typeof fetch !== 'function') return;
+  /* простой запрос без токена: ручка открыта всем, и чужой 401 здесь
+     не должен трогать вход в кассу (bpSrv.raw на 401 стирает ключ) */
+  S.p = fetch(b + '/api/tasks/summary', { method:'GET', cache:'no-store', credentials:'omit' })
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){
+      S.p = null; S.at = Date.now();
+      if(j && j.camps && typeof j.camps === 'object'){ S.map = j.camps; paint(); }
+    }, function(){ S.p = null; S.at = Date.now() - 40000; /* сеть: повтор секунд через 20 */ });
+}
+/* для проверок и соседних слоёв: снимок сводки и «обнови сейчас» */
+window.bpMvSummary = function(){ return S.map; };
+window.bpMvSummaryRefresh = function(){ load(true); };
+
+/* ── кусочки карточки ── */
+var FMT = { clips:'Нарезки', banners:'Баннеры', ugc:'UGC', other:'Другое' };
+function fmtOf(c){ var k = String(c.format || c.taskType || '').toLowerCase(); return String(c.formatLabel || FMT[k] || c.format || ''); }
+var PA = { tt:'tt', tiktok:'tt', yt:'yt', youtube:'yt', tg:'tg', telegram:'tg', inst:'inst', ig:'inst', instagram:'inst' };
+/* площадки оффера: строка мастера 'tt,yt', массив, объект {tt:true}, поле platform */
+function platIds(c){
+  var v = (c.platformsList && c.platformsList.length) ? c.platformsList : c.platforms, a = [];
+  if(Array.isArray(v)) a = v;
+  else if(typeof v === 'string') a = v.split(/[,;\s]+/);
+  else if(v && typeof v === 'object') a = Object.keys(v).filter(function(k){ return v[k]; });
+  if(!a.length && c.platform) a = [c.platform];
+  var out = [];
+  a.forEach(function(x){ var k = PA[String(x == null ? '' : x).trim().toLowerCase()]; if(k && out.indexOf(k) < 0) out.push(k); });
+  return out;
+}
+function platsHtml(c){
+  var list = [];
+  try{ list = (typeof CAMP_PLATFORMS !== 'undefined' && CAMP_PLATFORMS) || []; }catch(e){ list = []; }
+  var names = [];
+  var h = platIds(c).map(function(id){
+    var p = null;
+    for(var i = 0; i < list.length; i++) if(list[i] && list[i].id === id) p = list[i];
+    if(!p) return '';
+    names.push(p.label);
+    return '<span class="mvc-pi mvc-' + id + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + esc(p.svg) + '"/></svg></span>';
+  }).join('');
+  return h ? '<span class="mvc-pls" role="img" aria-label="' + esc(names.join(', ')) + '" title="' + esc(names.join(', ')) + '">' + h + '</span>' : '';
+}
+/* ставка: «10 ₽ за 1 000 👁», фикс — «N ₽ за видео», только потолок — «до N ₽ за видео» */
+function rateHtml(c){
+  var ban = String(c.taskType || c.format || '').toLowerCase() === 'banners';
+  var fixed = c.payMode === 'fixed' ? num(c.fixedPrice) : 0;
+  var rate = num(c.rate), cap = num(c.maxPayout) || num(c.payMax);
+  /* пробелы между частями — для текста и чтения с экрана; в ряду их съедает flex, отступ даёт gap */
+  if(fixed) return '<span class="mvc-rate"><b>' + rub(fixed) + '</b> <i>' + (ban ? 'за публикацию' : 'за видео') + '</i></span>';
+  if(rate) return '<span class="mvc-rate" aria-label="' + esc(rub(rate) + ' за 1 000 просмотров') + '"><b>' + rub(rate) + '</b> <i>за</i> 1' + NB + '000' + EYE + '</span>';
+  if(cap) return '<span class="mvc-rate"><i>до</i> <b>' + rub(cap) + '</b> <i>за видео</i></span>';
+  return '';
+}
+function figures(c){
+  var s = sumOf(c.id), b = 0, exact = true;
+  if(s && num(s.budget) > 0) b = num(s.budget);
+  else {
+    var lb = null; try{ lb = typeof window.bpHxBudget === 'function' ? window.bpHxBudget(c) : null; }catch(e){ lb = null; }
+    if(lb){ b = num(lb.v); exact = lb.exact !== false; }
+  }
+  return { budget:b, exact:exact, paid: s ? num(s.paid) : num(c.stats && c.stats.totalSpent) };
+}
+function pctTxt(p){ return p <= 0 ? '0%' : p < 1 ? '<1%' : Math.min(100, Math.round(p)) + '%'; }
+function moneyKey(c){ var f = figures(c); return f.paid + '|' + f.budget + '|' + (f.exact ? 1 : 0); }
+function amtHtml(f){
+  return '<span>' + rub(f.paid) + '</span>' + (f.budget > 0 ? ' из <span>' + (f.exact ? '' : 'до' + NB) + rub(f.budget) + '</span>' : '');
+}
+/* свежая сводка: правим узлы на месте — заливка полосы плавно доезжает
+   (transition на width), а не появляется сразу на новом месте */
+function setMoney(mm, c){
+  var f = figures(c), p = f.budget > 0 ? f.paid / f.budget * 100 : 0, w = Math.max(0, Math.min(100, p));
+  var amt = mm.querySelector('.mvc-amt'), pc = mm.querySelector('.mvc-pc'), bar = mm.querySelector('.mvc-bar');
+  if(!amt || !bar || (f.budget > 0) !== !!pc){ mm.innerHTML = moneyHtml(c); return; }
+  var ah = amtHtml(f); if(amt.innerHTML !== ah) amt.innerHTML = ah;
+  if(pc && pc.textContent !== pctTxt(p)) pc.textContent = pctTxt(p);
+  bar.setAttribute('aria-label', 'Заработано ' + pctTxt(p) + ' бюджета');
+  var i = bar.querySelector('i');
+  if(f.paid > 0){
+    if(!i){ i = document.createElement('i'); i.style.width = '0%'; bar.insertBefore(i, bar.firstChild); void i.offsetWidth; }
+    i.style.width = w.toFixed(2) + '%';
+  } else if(i) bar.removeChild(i);
+}
+function moneyHtml(c){
+  var f = figures(c), p = f.budget > 0 ? f.paid / f.budget * 100 : 0, w = Math.max(0, Math.min(100, p));
+  return '<div class="mvc-k">Заработано</div>'
+    + '<div class="mvc-mr"><b class="mvc-amt">' + amtHtml(f) + '</b>'
+    + (f.budget > 0 ? '<span class="mvc-pc">' + esc(pctTxt(p)) + '</span>' : '') + '</div>'
+    + '<div class="mvc-bar" role="img" aria-label="' + esc('Заработано ' + pctTxt(p) + ' бюджета') + '">'
+    + (f.paid > 0 ? '<i style="width:' + w.toFixed(2) + '%"></i>' : '') + '<s></s></div>';
+}
+/* просмотры коротко: 9 500 · 12,5 тыс. · 125 тыс. · 2,44 млн */
+function views(n){
+  n = Math.round(num(n));
+  function d(x, k){ var m = Math.pow(10, k); return String(Math.round(x * m) / m).replace('.', ','); }
+  if(n < 1e4) return int(n);
+  if(n < 999500) return (n < 1e5 ? d(n / 1e3, 1) : String(Math.round(n / 1e3))) + NB + 'тыс.';
+  return (n < 1e7 ? d(n / 1e6, 2) : d(n / 1e6, 1)) + NB + 'млн';
+}
+function statKey(c){ var s = sumOf(c.id); return s ? num(s.videos) + '|' + num(s.views) : ''; }
+function statHtml(c){
+  var s = sumOf(c.id); if(!s) return '';
+  return '<span>' + int(s.videos) + NB + 'видео</span> <span aria-label="' + esc(views(s.views) + ' просмотров') + '">' + EYE + views(s.views) + '</span>';
+}
+/* аватар бренда: логотип, если есть, иначе буква на цвете от имени */
+function ava(c, nm){
+  var img = safeImg(c.advertiserPhoto || c.brandLogo || '');
+  if(img) return '<span class="mvc-ava"><img src="' + esc(img) + '" alt="" loading="lazy"></span>';
+  var t = String(nm).trim(), h = 0;
+  for(var i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
+  h = h % 360;
+  var letter = (Array.from ? Array.from(t)[0] : t.charAt(0)) || 'Р';
+  return '<span class="mvc-ava" aria-hidden="true" style="background:linear-gradient(140deg,hsl(' + h + ',72%,62%) 0%,hsl(' + ((h + 28) % 360) + ',68%,46%) 100%)">' + esc(String(letter).toUpperCase()) + '</span>';
+}
+/* задания нет в сводке (только что вышло) — спросить сервер ещё раз,
+   но не раньше чем через 20 секунд после прошлого раза */
+var missT = 0;
+function missed(c){
+  if(!S.map || missT || sumOf(c.id)) return;
+  missT = setTimeout(function(){
+    missT = 0;
+    if(mv() && onTasks() && !document.hidden) load(true);
+  }, Math.max(0, 20000 - (Date.now() - S.at)));
+}
+function mvInner(c, joined){
+  missed(c);
+  var nm = String(c.advertiserName || c.brand || 'Рекламодатель');
+  var fmt = fmtOf(c);
+  var row = (fmt ? '<span class="mvc-fmt">' + esc(fmt) + '</span>' : '') + platsHtml(c) + rateHtml(c);
+  return (joined ? '<div class="tk-mine">Вы участвуете</div>' : '')
+    + '<div class="mvc-t">' + esc(c.name || c.title || 'Без названия') + '</div>'
+    + '<div class="mvc-m" data-mvc="m" data-k="' + esc(moneyKey(c)) + '">' + moneyHtml(c) + '</div>'
+    + (row ? '<div class="mvc-row">' + row + '</div>' : '')
+    + '<i class="hx-bank mvc-anc" aria-hidden="true"></i>'
+    + '<div class="mvc-ft">' + ava(c, nm)
+    +   '<span class="mvc-who"><b class="mvc-nm">' + esc(nm) + '</b>'
+    +   '<span class="mvc-st" data-mvc="st" data-k="' + esc(statKey(c)) + '">' + statHtml(c) + '</span></span>'
+    +   '<span class="mvc-open">Открыть</span></div>';
+}
+window.bpMvCardInner = function(c, joined){
+  if(!mv() || !c) return '';
+  attachSoon();
+  return mvInner(c, joined);
+};
+
+/* ── свежие цифры прямо в карточке (без перерисовки списка) ── */
+function paint(){
+  if(!mv()) return;
+  var pg = $('pg-tasks'); if(!pg) return;
+  var cards = pg.querySelectorAll('.tk-list > .tk-card.mvc:not(.vb-own2)');
+  if(!cards.length) return;
+  var by = {};
+  camps().forEach(function(c){ if(c && c.id != null) by[String(c.id)] = c; });
+  var mineMoved = false;
+  [].forEach.call(cards, function(card){
+    try{
+      var m = RX.exec(card.getAttribute('onclick') || ''), c = m && by[m[1]];
+      if(!c) return;
+      var joined = card.classList.contains('tk-card-joined');
+      var mm = card.querySelector('[data-mvc="m"]');
+      if(mm){
+        var k = moneyKey(c);
+        if(mm.getAttribute('data-k') !== k){
+          setMoney(mm, c); mm.setAttribute('data-k', k);
+          /* «Заработано» по заданию, где я участвую, сдвинулось по кассе —
+             панель и баланс догоняют вместе с ним */
+          if(joined && sumOf(c.id)) mineMoved = true;
+        }
+      }
+      var st = card.querySelector('[data-mvc="st"]');
+      if(st){
+        var k2 = statKey(c), was = st.getAttribute('data-k');
+        if(was !== k2){
+          var fresh = !st.firstChild;
+          st.innerHTML = statHtml(c); st.setAttribute('data-k', k2);
+          /* строка появилась впервые — мягко проявляем, без скачка */
+          if(fresh && k2){ st.classList.remove('mvc-in'); void st.offsetWidth; st.classList.add('mvc-in'); }
+          /* у задания, где я участвую, сдвинулись ролики — панель «Ваши
+             видео» (bp-vbind) должна сдвинуться вместе с цифрами */
+          if(joined && was) mineMoved = true;
+        }
+      }
+    }catch(e){ E(e); }
+  });
+  if(mineMoved && typeof window.bpVbRefresh === 'function' && Date.now() - lastVb > 8000){
+    lastVb = Date.now();
+    try{ window.bpVbRefresh(); }catch(e){ E(e); }
+  }
+}
+var lastVb = 0;
+
+/* ── когда грузить: показ главной, возврат во вкладку, раз в минуту ── */
+function onTasks(){ var pg = $('pg-tasks'); return !!(pg && pg.classList.contains('on')); }
+function attach(){
+  var pg = $('pg-tasks');
+  if(!pg || pg.__mvcAt || typeof MutationObserver === 'undefined') return;
+  pg.__mvcAt = 1;
+  /* только читаем класс — ничего не пишем в атрибуты (иначе круг) */
+  new MutationObserver(function(){ if(mv() && pg.classList.contains('on')) load(false); }).observe(pg, { attributes:true, attributeFilter:['class'] });
+  if(pg.classList.contains('on')) load(false);
+}
+var aT = 0;
+function attachSoon(){ if(aT) return; aT = setTimeout(function(){ aT = 0; try{ attach(); if(onTasks()) load(false); }catch(e){ E(e); } }, 0); }
+function tick(){
+  if(!mv()) return;
+  try{ attach(); }catch(e){ E(e); }
+  if(!document.hidden && onTasks()) load(false);
+}
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tick); else setTimeout(tick, 0);
+setInterval(tick, 20000);
+document.addEventListener('visibilitychange', function(){ if(!document.hidden) tick(); });
+})();
+</script>
+<style id="bp-mv-fix-css">
+/* ══ РЕЖИМ MV · ДОВОДКА ПОСЛЕ ПРОВЕРКИ (bp-mv-fix, 10.10.2026) ════════
+   Всё под html.bp-mv — в «полном доступе» ни одно правило не действует.
+   Что здесь:
+   1 · фокус с клавиатуры не прячется под полкой и шапкой;
+   2 · шапка «Моих заданий» такая же, как у «Всех заданий» (переключатель
+       не прыгает), карточки «Моих заданий» в языке главной;
+   3 · пустые экраны и «Мои задания» рекламодателя (pg-campaigns) в
+       стиле MV: поверхности #1d1e20, главная кнопка — таблетка-градиент;
+   4 · чаты: у старого сделочного чата нет синей полосы и подсветки;
+   5 · зоны нажатия не меньше 44 px (вид прежний);
+   6 · мастер задания: Telegram не предлагаем — видео загружают только
+       с TikTok и YouTube;
+   7 · профиль участника задания — своё окно (#bpMvWho).
+   Ловушки файла соблюдены: без :has(), без backdrop-filter, без смены
+   animation у открытой страницы, transform без !important.
+   Откат: удалить этот блок и script#bp-mv-fix.                         */
+
+/* ── 1 · Фокус не уходит под полку (74 + 10 + запас) и под шапку ── */
+html.bp-mv{
+  scroll-padding-top:calc(env(safe-area-inset-top,0px) + 84px);
+  scroll-padding-bottom:calc(74px + 10px + env(safe-area-inset-bottom,0px) + 16px);
+}
+
+/* ── 2 · Шапка «Моих заданий» = шапка «Всех заданий» ── */
+html.bp-mv body #pg-mytasks > .cat-hd.mv-hd{
+  justify-content:flex-start!important; align-items:center!important; gap:12px;
+  margin-bottom:14px!important;
+}
+html.bp-mv body #pg-tasks > .cat-hd.mv-hd{ margin-bottom:14px!important }
+html.bp-mv body #pg-mytasks > .cat-hd.mv-hd h1{ font-size:28px!important; letter-spacing:-.6px!important; line-height:1.2 }
+html.bp-mv body #pg-mytasks > .cat-hd.mv-hd .mv-cnt{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:32px; height:32px; padding:0 10px; box-sizing:border-box;
+  border-radius:9999px; background:#27292a;
+  font-size:14px!important; font-weight:600!important; color:#fff!important;
+  font-variant-numeric:tabular-nums;
+}
+html.bp-mv body #pg-tasks > .vb-sw,
+html.bp-mv body #pg-mytasks > .vb-sw{ margin-top:2px!important }
+
+/* карточка «Моих заданий»: название в две строки, срок переносится вниз,
+   площадки — значками внахлёст, ставка — чипом, суммы белые */
+html.bp-mv #pg-mytasks .vb-mt2 .mt-hd{ flex-wrap:wrap; row-gap:10px }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-tt{ flex:1 1 170px }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-name{
+  white-space:normal; overflow-wrap:anywhere; line-height:1.3;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+html.bp-mv #pg-mytasks .vb-mt2 .mt-due{ height:30px; padding:0 12px; border-radius:9999px; font-size:13px }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-ava{ width:24px; height:24px; font-size:11.5px; background:#2b2d31; color:#fff }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-meta{ gap:10px; margin-top:14px }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-meta .hx-pl{ height:32px; gap:0; padding:0; border:0; background:none; font-size:0 }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-meta .hx-pl + .hx-pl{ margin-left:-19px }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-meta .hx-pi{ width:30px; height:30px; box-shadow:0 0 0 2px #1d1e20 }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-meta .hx-pi.brd{ background:#000!important }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-meta .hx-pi.brd svg{ filter:drop-shadow(.8px 0 0 #fe2c55) drop-shadow(-.8px 0 0 #25f4ee) }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-meta .hx-pi svg{ width:15px; height:15px }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-rate{
+  display:inline-flex; align-items:center; min-height:32px; padding:4px 12px; box-sizing:border-box;
+  border-radius:16px; background:#272829; color:#fff; font-size:13.5px; font-weight:500; line-height:1.3;
+}
+html.bp-mv #pg-mytasks .vb-mt2 .mt-sum b,
+html.bp-mv #pg-mytasks .vb-mt2 .mt-sum b.ok,
+html.bp-mv #pg-mytasks .vb-mt2 .mt-v-amt b{ color:#fff; font-weight:700 }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-st.is-ok{ color:#5fe39b }
+html.bp-mv #pg-mytasks .vb-mt2 .mt-empty{ border-top-color:rgba(255,255,255,.06); color:rgba(255,255,255,.6); font-size:14px }
+
+/* ── 3 · Пустые экраны и главные кнопки — таблетка MV ── */
+html.bp-mv #pg-mytasks .tk-empty-btn,
+html.bp-mv #pg-tasks .tk-empty-btn,
+html.bp-mv #pg-campaigns .camps-create-wide,
+html.bp-mv #pg-campaigns .camps-empty-btn{
+  min-height:46px!important; border:0!important; border-radius:9999px!important;
+  background:linear-gradient(#92a1ff,#3d55ed,#6176ff)!important;
+  box-shadow:0 4px 4px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.18)!important;
+  color:#fff!important; font-size:16px!important; font-weight:600!important;
+}
+html.bp-mv #pg-chats .chats-empty > [onclick]{
+  min-height:46px!important; box-sizing:border-box; padding:0 20px!important; border-radius:9999px!important;
+  background:linear-gradient(#92a1ff,#3d55ed,#6176ff)!important;
+  box-shadow:0 4px 4px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.18)!important;
+  font-size:15px!important; font-weight:600!important; gap:8px!important;
+}
+html.bp-mv #pg-mytasks .tk-empty,
+html.bp-mv #pg-tasks .tk-empty{ border-radius:32px; background:#1d1e20; border:.8px solid rgba(255,255,255,.05) }
+
+/* «Мои задания» рекламодателя (pg-campaigns) — тот же язык, что главная */
+html.bp-mv body #pg-campaigns .camps-title{ font-size:28px!important; letter-spacing:-.6px!important; line-height:1.2 }
+html.bp-mv body #pg-campaigns .camps-search{
+  height:54px; box-sizing:border-box; border-radius:20px!important;
+  background:#1d1e20!important; border:1px solid rgba(255,255,255,.06)!important;
+}
+html.bp-mv body #pg-campaigns .camps-search input{ font-size:16px!important }
+html.bp-mv body #pg-campaigns .camp-card.cco2{
+  border-radius:32px!important; background:#1d1e20!important;
+  border:.8px solid rgba(255,255,255,.05)!important; box-shadow:none!important;
+}
+html.bp-mv body #pg-campaigns .camp-card.cco2::before{ display:none!important }
+html.bp-mv body #pg-campaigns .camp-card.cco2 .cco-name{ font-size:20px; font-weight:600; letter-spacing:-.25px }
+html.bp-mv body #pg-campaigns .camp-card.cco2 .cco2-id{ display:none }
+html.bp-mv body #pg-campaigns .camp-card.cco2 .cco2-left b{ color:#fff!important; font-weight:700 }
+html.bp-mv body #pg-campaigns .camp-card.cco2 .cco2-bar{ height:8px; border-radius:9999px; background:#27292a }
+html.bp-mv body #pg-campaigns .camp-card.cco2 .cco2-bar .cdo-bar-fill{ border-radius:9999px; background:#3ddc84!important; background-image:none!important; box-shadow:none!important }
+html.bp-mv body #pg-campaigns .camp-card.cco2 .tk-mini{
+  min-height:40px; border-radius:9999px; background:#272829; border-color:transparent; color:#fff; font-weight:500;
+}
+
+/* ── 4 · Чаты: старый сделочный чат — обычная строка переписки ── */
+html.bp-mv #pg-chats .chat-item-active-deal::before,
+html.bp-mv #pg-chats .chat-item-active-deal::after{ display:none!important }
+html.bp-mv #pg-chats .chat-item-active-deal{ background-image:none!important; border-color:transparent }
+
+/* ── 5 · Зоны нажатия от 44 px; вид не меняется ── */
+html.bp-mv body .vb-sw button{ min-height:44px }
+html.bp-mv body #pg-tasks .tk-f{ position:relative }
+html.bp-mv body #pg-tasks .tk-f::after{ content:''; position:absolute; left:0; right:0; top:-2px; bottom:-2px }
+#bpFullBadge button{ position:relative }
+#bpFullBadge button::after{ content:''; position:absolute; left:-6px; right:-8px; top:-11px; bottom:-11px }
+
+/* нажатие на кнопку панели («Загрузить видео») не гасит и не сжимает
+   всю карточку — у кнопки своё нажатие */
+html.bp-mv body #pg-tasks .tk-list > .tk-card.mvc.mvc-pp,
+html.bp-mv body #pg-tasks .tk-list > .tk-card.mvc.mvc-pp:active{ opacity:1; transform:none }
+
+/* ── 6 · Мастер задания: только площадки, откуда загружают видео ── */
+html.bp-mv #cwnNetList .cwn-row[data-id="tg"]{ display:none!important }
+
+/* ── 7 · Профиль участника (#bpMvWho) ── */
+#bpMvWho{
+  position:fixed; inset:0; z-index:760; display:flex; align-items:flex-end; justify-content:center;
+  background:rgba(8,9,12,.62); opacity:0; transition:opacity .2s ease;
+  -webkit-tap-highlight-color:transparent;
+}
+#bpMvWho.on{ opacity:1 }
+#bpMvWho .mw-card{
+  width:100%; max-width:440px; box-sizing:border-box;
+  padding:10px 20px calc(env(safe-area-inset-bottom,0px) + 20px);
+  border-radius:32px 32px 0 0; background:#1d1e20; border:.8px solid rgba(255,255,255,.06); border-bottom:0;
+  box-shadow:0 -10px 40px rgba(0,0,0,.4);
+  transform:translateY(24px); transition:transform .28s cubic-bezier(.22,1,.36,1);
+  color:#fff; font-family:inherit;
+}
+#bpMvWho.on .mw-card{ transform:none }
+#bpMvWho .mw-grab{ width:40px; height:4px; margin:0 auto 14px; border-radius:9999px; background:rgba(255,255,255,.16) }
+#bpMvWho .mw-top{ display:flex; align-items:center; gap:14px }
+#bpMvWho .mw-ava{
+  position:relative; flex:none; width:64px; height:64px; border-radius:50%; overflow:hidden;
+  display:grid; place-items:center; background:#2b2d31; font-size:26px; font-weight:700; color:#fff;
+}
+#bpMvWho .mw-ava img{ width:100%; height:100%; object-fit:cover; display:block }
+#bpMvWho .mw-who{ flex:1; min-width:0 }
+#bpMvWho .mw-nm{ display:block; font-size:21px; font-weight:600; line-height:1.25; letter-spacing:-.25px; overflow-wrap:anywhere }
+#bpMvWho .mw-ch{ display:flex; align-items:center; gap:8px; margin-top:6px; font-size:14px; color:rgba(255,255,255,.6); min-width:0 }
+#bpMvWho .mw-ch span{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+#bpMvWho .mw-pi{ flex:none; width:24px; height:24px; border-radius:50%; display:grid; place-items:center; background:#2a2c30 }
+#bpMvWho .mw-pi svg{ width:13px; height:13px; fill:#fff; display:block }
+#bpMvWho .mw-pi.tt{ background:#000 }
+#bpMvWho .mw-pi.tt svg{ filter:drop-shadow(.7px 0 0 #fe2c55) drop-shadow(-.7px 0 0 #25f4ee) }
+#bpMvWho .mw-pi.yt{ background:#ff0033 }
+#bpMvWho .mw-x{
+  flex:none; align-self:flex-start; width:44px; height:44px; margin:-4px -8px 0 0; border:0; border-radius:50%;
+  display:grid; place-items:center; background:transparent; color:rgba(255,255,255,.55); cursor:pointer;
+}
+#bpMvWho .mw-x svg{ width:20px; height:20px }
+#bpMvWho .mw-x:focus-visible,#bpMvWho .mw-go:focus-visible{ outline:2px solid #b7c1ff; outline-offset:2px }
+#bpMvWho .mw-grid{ display:flex; gap:8px; margin-top:18px }
+#bpMvWho .mw-c{ flex:1 1 0; min-width:0; padding:12px; border-radius:18px; background:#252628 }
+#bpMvWho .mw-c span{ display:block; font-size:12.5px; font-weight:500; color:rgba(255,255,255,.5); white-space:nowrap }
+#bpMvWho .mw-c b{ display:block; margin-top:4px; font-size:18px; font-weight:700; font-variant-numeric:tabular-nums; white-space:nowrap }
+#bpMvWho .mw-note{ margin-top:14px; font-size:13.5px; line-height:1.5; color:rgba(255,255,255,.55) }
+#bpMvWho .mw-go{
+  display:flex; align-items:center; justify-content:center; gap:8px; width:100%; min-height:48px; margin-top:18px;
+  border:0; border-radius:9999px; cursor:pointer; color:#fff; font:inherit; font-size:16px; font-weight:600;
+  background:linear-gradient(#92a1ff,#3d55ed,#6176ff);
+  box-shadow:0 4px 4px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.18);
+}
+#bpMvWho .mw-go svg{ width:18px; height:18px }
+#bpMvWho .mw-go:active{ filter:brightness(.94) }
+@media (max-width:360px){
+  #bpMvWho .mw-card{ padding-left:16px; padding-right:16px }
+  #bpMvWho .mw-c{ padding:10px 9px }
+  #bpMvWho .mw-c b{ font-size:16px }
+}
+@media (prefers-reduced-motion:reduce){
+  #bpMvWho, #bpMvWho .mw-card{ transition:none }
+}
+</style>
+<script id="bp-mv-fix">
+/* ══ РЕЖИМ MV · ДОВОДКА ПОСЛЕ ПРОВЕРКИ (bp-mv-fix, 10.10.2026) ════════
+   1 · Профиль участника задания. В MV карт блогера нет, поэтому «Профиль»
+       в списке участников, шапка чата и любые старые входы в «Профиль
+       блогера» открывают одно и то же окно #bpMvWho: аватар, канал,
+       цифры по заданию и «Написать». Ничего из старой карты каталога
+       (подписчики, ER, «сообщение блогера») здесь не показываем.
+   2 · Боковое меню: «Мои задания» стоят после «Главной»; у рекламодателя
+       его офферы называются «Мои задания» — как на полке.
+   3 · «Мои задания» рекламодателя (pg-campaigns): заголовок, кнопка
+       «Создать задание», поиск и пустой экран — словами MV.
+   4 · Нажатие на кнопку панели участия не «проседает» всей карточкой.
+   5 · Буфер обмена (в обоих режимах): отказ браузера в записи больше
+       не падает непойманной ошибкой — вызывающий код по-прежнему видит
+       отказ, если сам его ловит.
+   Все обёртки смотрят на режим в момент вызова: без html.bp-mv идут
+   прежним путём.
+   Откат: удалить этот скрипт и style#bp-mv-fix-css.                    */
+(function(){
+'use strict';
+if(window.__bpMvFix) return; window.__bpMvFix = 1;
+var de = document.documentElement;
+function mv(){ return de.classList.contains('bp-mv'); }
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'bp-mv-fix'); }catch(_){} }
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+function num(v){ var n = Number(v); return isFinite(n) && n > 0 ? n : 0; }
+function isAdv(){ try{ return !!(typeof _isAdvertiser !== 'undefined' && _isAdvertiser); }catch(e){ return false; } }
+var NB = ' ';
+function int(n){ return Math.round(num(n)).toLocaleString('ru').replace(/\s/g, NB); }
+function rub(n){ return int(n) + NB + '₽'; }
+function views(n){
+  n = Math.round(num(n));
+  function d(x, k){ var m = Math.pow(10, k); return String(Math.round(x * m) / m).replace('.', ','); }
+  if(n < 1e4) return int(n);
+  if(n < 999500) return (n < 1e5 ? d(n / 1e3, 1) : String(Math.round(n / 1e3))) + NB + 'тыс.';
+  return (n < 1e7 ? d(n / 1e6, 2) : d(n / 1e6, 1)) + NB + 'млн';
+}
+function safeImg(u){ u = String(u || '').trim(); return (/^https:\/\//i.test(u) || /^data:image\/(png|jpe?g|webp|gif|avif);/i.test(u)) ? u : ''; }
+function safeCol(c){ c = String(c || ''); return /^(linear-gradient\([#\d\w\s,.%()-]+\)|#[0-9a-f]{3,8})$/i.test(c) ? c : ''; }
+function wrap(name, make){
+  var o = window[name];
+  if(typeof o !== 'function' || o.__bpMvFix) return;
+  var w = make(o); w.__bpMvFix = 1; w.__orig = o;
+  window[name] = w;
+}
+
+/* ═══ 1 · Профиль участника ═══ */
+var PLAT = {
+  tiktok:{ c:'tt', n:'TikTok', p:'M16.6 2h-3v13.1a2.6 2.6 0 1 1-2.6-2.6c.3 0 .5 0 .8.1V9.5a5.9 5.9 0 1 0 4.9 5.8V8.7c1 .8 2.3 1.3 3.7 1.4V6.9a4 4 0 0 1-3.8-4.9z' },
+  youtube:{ c:'yt', n:'YouTube', p:'M21.6 7.2c-.2-.9-.9-1.6-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4c-.9.2-1.6.9-1.8 1.8C2 8.8 2 12 2 12s0 3.2.4 4.8c.2.9.9 1.6 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.6.4-4.8.4-4.8s0-3.2-.4-4.8zM10 15V9l5.2 3z' }
+};
+function platKey(p){
+  p = String(p || '').toLowerCase().trim();
+  if(/^(tt|tiktok)$/.test(p)) return 'tiktok';
+  if(/^(yt|youtube)$/.test(p)) return 'youtube';
+  return '';
+}
+var CHAT_I = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
+var X_I = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+var whoBack = null;
+function closeWho(){
+  var ov = $('bpMvWho'); if(!ov) return;
+  ov.classList.remove('on');
+  document.removeEventListener('keydown', whoKey, true);
+  setTimeout(function(){ if(ov.parentNode) ov.parentNode.removeChild(ov); }, 230);
+  try{ if(whoBack && whoBack.focus) whoBack.focus({ preventScroll:true }); }catch(e){}
+  whoBack = null;
+}
+function whoKey(e){ if(e.key === 'Escape'){ e.stopPropagation(); closeWho(); } }
+/* o: { name, handle, platform, avatar, color, initials, videos, views,
+        earned, since, note, chat:function|null } */
+window.bpMvWho = function(o){
+  try{
+    o = o || {};
+    var old = $('bpMvWho'); if(old && old.parentNode) old.parentNode.removeChild(old);
+    var nm = String(o.name || o.handle || 'Участник').trim().slice(0, 60) || 'Участник';
+    var h = String(o.handle || '').trim();
+    if(h && h.charAt(0) !== '@' && /^[\w.-]+$/.test(h)) h = '@' + h;
+    if(h && h.replace(/^@/, '') === nm.replace(/^@/, '')) nm = h;
+    var pk = platKey(o.platform), pl = PLAT[pk];
+    var img = safeImg(o.avatar || o.img);
+    var col = safeCol(o.color) || 'linear-gradient(140deg,#6176ff,#3d55ed)';
+    var letter = String(o.initials || (Array.from ? Array.from(nm.replace(/^@/, ''))[0] : nm.charAt(0)) || 'Б').slice(0, 2).toUpperCase();
+    var ava = img ? '<span class="mw-ava"><img src="' + esc(img) + '" alt=""></span>'
+                  : '<span class="mw-ava" aria-hidden="true" style="background:' + col + '">' + esc(letter) + '</span>';
+    var ch = (pl || h) ? '<span class="mw-ch">' + (pl ? '<i class="mw-pi ' + pl.c + '" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="' + pl.p + '"/></svg></i>' : '')
+      + '<span>' + esc(h || pl.n) + (pl && h ? ' · ' + pl.n : '') + '</span></span>' : '';
+    var hasStats = o.videos != null || o.views != null || o.earned != null;
+    var grid = hasStats ? '<div class="mw-grid">'
+      + '<div class="mw-c"><span>Видео</span><b>' + int(o.videos) + '</b></div>'
+      + '<div class="mw-c"><span>Просмотры</span><b>' + views(o.views) + '</b></div>'
+      + '<div class="mw-c"><span>Заработано</span><b>' + rub(o.earned) + '</b></div></div>' : '';
+    var since = '';
+    if(o.since){ var d = new Date(o.since); if(!isNaN(d)) since = 'В задании с ' + d.toLocaleDateString('ru', { day:'numeric', month:'long' }) + '.'; }
+    var note = [since, String(o.note || '')].filter(Boolean).join(' ');
+    var ov = document.createElement('div');
+    ov.id = 'bpMvWho';
+    ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-labelledby', 'bpMvWhoT');
+    ov.innerHTML = '<div class="mw-card"><div class="mw-grab" aria-hidden="true"></div>'
+      + '<div class="mw-top">' + ava + '<span class="mw-who"><b class="mw-nm" id="bpMvWhoT">' + esc(nm) + '</b>' + ch + '</span>'
+      + '<button type="button" class="mw-x" aria-label="Закрыть">' + X_I + '</button></div>'
+      + grid + (note ? '<div class="mw-note">' + esc(note) + '</div>' : '')
+      + (typeof o.chat === 'function' ? '<button type="button" class="mw-go">' + CHAT_I + 'Написать</button>' : '')
+      + '</div>';
+    ov.addEventListener('click', function(e){ if(e.target === ov) closeWho(); });
+    ov.querySelector('.mw-x').addEventListener('click', closeWho);
+    var go = ov.querySelector('.mw-go');
+    if(go) go.addEventListener('click', function(){ var f = o.chat; closeWho(); setTimeout(function(){ try{ f(); }catch(e){ E(e); } }, 60); });
+    whoBack = document.activeElement;
+    document.body.appendChild(ov);
+    document.addEventListener('keydown', whoKey, true);
+    void ov.offsetWidth; ov.classList.add('on');
+    try{ (go || ov.querySelector('.mw-x')).focus({ preventScroll:true }); }catch(e){}
+  }catch(e){ E(e); }
+};
+window.bpMvWhoClose = closeWho;
+
+/* старые входы в «Профиль блогера» (каталог) — в MV то же окно */
+function fromBp(bp, userId){
+  bp = bp || {};
+  var uid = String(userId == null ? '' : userId);
+  var canChat = !!bp.name && /^srv:\d+$/.test(uid) && typeof window.openOrCreateChatWithBlogger === 'function';
+  window.bpMvWho({
+    name: bp.name, handle: bp.handle, platform: bp.platform, avatar: bp.img, color: bp.color, initials: bp.initials,
+    chat: canChat ? function(){ window.openOrCreateChatWithBlogger(bp, uid); } : null
+  });
+}
+function wrapProfiles(){
+  ['showBloggerProfileModal', 'bpOpenBloggerProfile'].forEach(function(n){
+    wrap(n, function(o){
+      return function(bp, userId){
+        if(!mv()) return o.apply(this, arguments);
+        /* ссылка #/blogger/<id> и прочие вызовы без данных — молча */
+        if(!bp || typeof bp !== 'object') return;
+        fromBp(bp, userId);
+      };
+    });
+  });
+  wrap('openCurrentChatBloggerProfile', function(o){
+    return function(){
+      if(!mv()) return o.apply(this, arguments);
+      var c = null;
+      try{ c = (typeof CHAT_CONTACTS !== 'undefined' && typeof currentChatId !== 'undefined') ? CHAT_CONTACTS.find(function(x){ return x && x.id === currentChatId; }) : null; }catch(e){ c = null; }
+      if(!c) return;
+      window.bpMvWho({ name: c.name, handle: c.handle, platform: c.platform, avatar: c.img, color: c.color, initials: c.initials });
+    };
+  });
+}
+
+/* ═══ 2 · Боковое меню ═══ */
+var LBL_KEY = 'data-bp-mv-lbl';
+function fixDrawer(){
+  if(!mv()) return;
+  var home = document.querySelector('#drw .drw-item[onclick*="goTo(\'home\')"]');
+  var my = $('drwMyTasks');
+  if(home && my && home.parentNode === my.parentNode && home.nextSibling !== my) home.parentNode.insertBefore(my, home.nextSibling);
+  var offers = document.querySelector('#drw .drw-item[onclick*="goTo(\'campaigns\')"] .drw-item-lbl');
+  if(offers){
+    if(!offers.hasAttribute(LBL_KEY)) offers.setAttribute(LBL_KEY, offers.textContent);
+    var want = isAdv() ? 'Мои задания' : offers.getAttribute(LBL_KEY);
+    if(offers.textContent !== want) offers.textContent = want;
+  }
+}
+
+/* ═══ 3 · «Мои задания» рекламодателя — словами MV ═══ */
+function setText(el, adv, mvText){
+  if(!el) return;
+  if(!el.hasAttribute(LBL_KEY)) el.setAttribute(LBL_KEY, el.textContent);
+  var want = adv ? mvText : el.getAttribute(LBL_KEY);
+  if(el.textContent !== want) el.textContent = want;
+}
+function lastText(btn){
+  if(!btn) return null;
+  for(var i = btn.childNodes.length - 1; i >= 0; i--){
+    var n = btn.childNodes[i];
+    if(n.nodeType === 3 && String(n.nodeValue).trim()) return n;
+  }
+  return null;
+}
+function setBtn(btn, adv, mvText){
+  var t = lastText(btn); if(!t) return;
+  if(!btn.hasAttribute(LBL_KEY)) btn.setAttribute(LBL_KEY, String(t.nodeValue).trim());
+  var want = adv ? mvText : btn.getAttribute(LBL_KEY);
+  if(String(t.nodeValue).trim() !== want) t.nodeValue = ' ' + want + ' ';
+}
+function campNames(){
+  if(!mv()) return;
+  var pg = $('pg-campaigns'); if(!pg) return;
+  var adv = isAdv();
+  setText(pg.querySelector('.camps-title'), adv, 'Мои задания');
+  setText(pg.querySelector('.camps-subtitle > span'), adv, 'Как работают задания?');
+  setBtn($('campCreateWide'), adv, 'Создать задание');
+  [].forEach.call(pg.querySelectorAll('.camps-empty-btn'), function(b){ setBtn(b, adv, 'Создать задание'); });
+  var inp = $('campSearchInput');
+  if(inp){
+    if(!inp.hasAttribute(LBL_KEY)) inp.setAttribute(LBL_KEY, inp.getAttribute('placeholder') || '');
+    var ph = adv ? 'Поиск заданий…' : inp.getAttribute(LBL_KEY);
+    if(inp.getAttribute('placeholder') !== ph) inp.setAttribute('placeholder', ph);
+  }
+  /* пустой экран пишет renderCampaignsPage — переводим его слова */
+  var t = $('campEmptyTitle'), s = $('campEmptySub');
+  if(adv && t && /оффер/i.test(t.textContent)) t.textContent = t.textContent.replace('Офферов пока нет', 'Заданий пока нет').replace(/оффер(ов|ы)?/gi, function(m){ return m.toLowerCase() === 'офферов' ? 'заданий' : m.toLowerCase() === 'офферы' ? 'задания' : 'задание'; });
+  if(adv && s && /оффер/i.test(s.textContent)) s.textContent = s.textContent.replace(/оффер(ов|ы)?/gi, function(m){ return m.toLowerCase() === 'офферов' ? 'заданий' : m.toLowerCase() === 'офферы' ? 'задания' : 'задание'; });
+}
+
+/* ═══ 4 · Кнопка панели участия: своё нажатие ═══ */
+function pressGuard(){
+  var pg = $('pg-tasks');
+  if(!pg || pg.__bpMvPp) return;
+  pg.__bpMvPp = 1;
+  var on = null;
+  function off(){ if(on){ on.classList.remove('mvc-pp'); on = null; } }
+  pg.addEventListener('pointerdown', function(e){
+    if(!mv()) return;
+    var t = e.target && e.target.closest ? e.target.closest('.vb-panel button, .vb-panel a, .vb-panel [role="button"]') : null;
+    if(!t) return;
+    var card = t.closest('.tk-card.mvc'); if(!card) return;
+    off(); on = card; card.classList.add('mvc-pp');
+  }, true);
+  ['pointerup', 'pointercancel', 'dragstart'].forEach(function(n){ document.addEventListener(n, function(){ setTimeout(off, 0); }, true); });
+}
+
+/* ═══ 5 · Буфер обмена: отказ не падает непойманной ошибкой ═══ */
+(function(){
+  try{
+    var cb = navigator.clipboard;
+    if(!cb || typeof cb.writeText !== 'function' || cb.writeText.__bpSafe) return;
+    var ow = cb.writeText;
+    var w = function(){
+      var p = ow.apply(cb, arguments);
+      try{ if(p && typeof p.catch === 'function') p.catch(function(){}); }catch(e){}
+      return p;
+    };
+    w.__bpSafe = 1;
+    cb.writeText = w;
+  }catch(e){}
+})();
+
+/* ═══ сборка ═══ */
+function install(){
+  try{ wrapProfiles(); }catch(e){ E(e); }
+  wrap('openDrawer', function(o){ return function(){ var r = o.apply(this, arguments); try{ fixDrawer(); }catch(e){ E(e); } return r; }; });
+  wrap('renderCampaignsPage', function(o){ return function(){ var r = o.apply(this, arguments); try{ campNames(); }catch(e){ E(e); } return r; }; });
+  /* «Участники · N» у видеозадания: старый список откликов писал «Работа
+     ещё не сдана» при засчитанном ролике — в MV открываем списки роликов
+     (лидерборд и участники, «Профиль», «Чат») */
+  wrap('bpOpenParticipants', function(o){
+    return function(campId){
+      if(mv() && typeof window.bpVbOpenLists === 'function' && typeof window.bpVbIsVidTask === 'function' && window.bpVbIsVidTask(campId)){
+        try{ var old = $('bpPartSheet'); if(old) old.remove(); }catch(e){}
+        return window.bpVbOpenLists(campId, 'people');
+      }
+      return o.apply(this, arguments);
+    };
+  });
+}
+/* goTo и toggleRole не оборачиваем второй раз: их уже держит bp-mv
+   (wrapGo / wrapRole) и зовёт эти крючки — лишняя обёртка поверх его
+   переустановок только удлиняла бы цепочку. */
+window.bpMvCampNames = function(){ try{ campNames(); fixDrawer(); }catch(e){ E(e); } };
+window.bpMvPressGuard = function(){ try{ pressGuard(); }catch(e){ E(e); } };
+install();
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install);
+[1200, 2800, 6000].forEach(function(ms){ setTimeout(function(){ try{ install(); if(mv()){ campNames(); pressGuard(); } }catch(e){ E(e); } }, ms); });
+})();
+</script>
+<script id="bp-dm">
+/* ══ ЛИЧНЫЕ СООБЩЕНИЯ МЕЖДУ УСТРОЙСТВАМИ (bp-dm, 10.10.2026) ══════════
+   Было: «Чат» у участника задания (и «Написать» без сделки) заводил
+   переписку только в этом браузере. Рекламодатель писал — блогер на
+   своём телефоне не видел ничего, а пустые «Чаты» обещали ровно это:
+   «Чат откроется, когда рекламодатель напишет вам».
+   Стало: каждое сообщение такого чата уезжает конвертом /api/sync
+   (kind 'dm', адресат — серверный номер собеседника) и приходит второй
+   стороне общим опросом bp-dealsync (раз в 15 с и при входе в «Чаты»).
+   У получателя чат заводится сам; на втором своём устройстве человек
+   видит и свои отправленные.
+   Номер записи: dm.<от кого>.<кому>.<id сообщения>. Принимаем только
+   версию автора (from === a): адресат не может переписать чужие слова.
+   Старые сообщения (до этого слоя) не отправляем задним числом.
+   Сделочные чаты (_dealId) сюда не относятся — у них своя доставка.
+   Работает в обоих режимах: это доставка, а не вид.
+   Откат: удалить этот скрипт и строку 'dm' в bp-dealsync pull().       */
+(function(){
+'use strict';
+if(window.__bpDm) return; window.__bpDm = 1;
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'bp-dm'); }catch(_){} }
+function S(){ return window.bpSrv; }
+function me(){ try{ return (typeof currentUser !== 'undefined') ? currentUser : null; }catch(e){ return null; } }
+function mySrv(){
+  try{ if(window.bpMoney && typeof window.bpMoney.mySrvId === 'function'){ var v = window.bpMoney.mySrvId(); if(v != null) return Number(v); } }catch(e){}
+  var u = me(); return (u && u.srvId != null) ? Number(u.srvId) : null;
+}
+function ready(){
+  try{ var s = S(); return !!(s && s.configured && s.configured() && s.token && s.token() && me() && mySrv() != null); }
+  catch(e){ return false; }
+}
+function list(){ try{ return (typeof CHAT_CONTACTS !== 'undefined' && Array.isArray(CHAT_CONTACTS)) ? CHAT_CONTACTS : null; }catch(e){ return null; } }
+function save(){ try{ if(typeof saveChats === 'function') saveChats(); }catch(e){ E(e); } }
+function isAdv(){ try{ return !!(typeof _isAdvertiser !== 'undefined' && _isAdvertiser); }catch(e){ return false; } }
+/* собеседник чата на сервере: только прямой чат, только серверный номер */
+function peerOf(c){
+  if(!c || c._dealId) return null;
+  if(c._dmPeer != null && /^\d+$/.test(String(c._dmPeer))) return Number(c._dmPeer);
+  var m = /^srv:(\d+)$/.exec(String(c.bloggerId == null ? '' : c.bloggerId));
+  return m ? Number(m[1]) : null;
+}
+function hhmm(ms){ var d = new Date(ms || Date.now()); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+function newId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+/* ── отправка ── */
+var busy = {};
+function sendOne(c, m, peer){
+  var my = mySrv(); if(my == null || peer == null || peer === my) return;
+  if(!m.dmId) m.dmId = newId();
+  if(!m.dmAt) m.dmAt = Date.now();
+  if(busy[m.dmId]) return;
+  var u = me() || {};
+  var data = { v:1, t:String(m.text || '').slice(0, 4000), time:m.time || hhmm(m.dmAt), at:m.dmAt,
+               n:String(u.name || '').slice(0, 60), pn:String(c.name || '').slice(0, 60), r:isAdv() ? 'adv' : 'blogger' };
+  if(m.file && typeof m.file === 'object'){
+    var f = { name:String(m.file.name || 'файл').slice(0, 120), size:String(m.file.size || '').slice(0, 20), type:String(m.file.type || '').slice(0, 20) };
+    if(typeof m.file.dataUrl === 'string' && /^data:image\//.test(m.file.dataUrl) && m.file.dataUrl.length < 300 * 1024) f.dataUrl = m.file.dataUrl;
+    data.f = f;
+  }
+  busy[m.dmId] = 1;
+  S().raw('POST', '/api/sync/put', { kind:'dm', rid:'dm.' + my + '.' + peer + '.' + m.dmId, data:data, to:peer })
+    .then(function(){ busy[m.dmId] = 0; m._dm = 1; save(); },
+          function(e){
+            busy[m.dmId] = 0;
+            /* 4xx кроме «часто» и «нужен вход» — не повторять вечно */
+            var st = e && e.status;
+            if(st && st >= 400 && st < 500 && st !== 429 && st !== 401) { m._dm = 'x'; save(); }
+          });
+}
+/* всё неотправленное из прямых чатов (после обрыва связи или закрытия) */
+function flush(){
+  if(!ready()) return;
+  var cs = list(); if(!cs) return;
+  cs.forEach(function(c){
+    var peer = peerOf(c); if(peer == null) return;
+    (c.messages || []).forEach(function(m){
+      if(m && m.dir === 'out' && m.dmId && m._dm !== 1 && m._dm !== 'x') sendOne(c, m, peer);
+    });
+  });
+}
+function wrapSend(){
+  var o = window.sendChatMessage;
+  if(typeof o !== 'function' || o.__bpDm) return;
+  var w = function(){
+    var c = null, n = 0;
+    try{
+      var cs = list();
+      c = (cs && typeof currentChatId !== 'undefined') ? cs.find(function(x){ return x && x.id === currentChatId; }) : null;
+      n = c && Array.isArray(c.messages) ? c.messages.length : 0;
+    }catch(e){ c = null; }
+    var r = o.apply(this, arguments);
+    try{
+      var peer = peerOf(c);
+      if(c && peer != null && Array.isArray(c.messages) && c.messages.length > n){
+        var fresh = c.messages.slice(n).filter(function(m){ return m && m.dir === 'out' && !m.dmId; });
+        if(fresh.length){
+          var now = Date.now();
+          fresh.forEach(function(m, i){ m.dmId = newId(); m.dmAt = now + i; m._dm = 0; });
+          save();
+          if(ready()) fresh.forEach(function(m){ sendOne(c, m, peer); });
+        }
+      }
+    }catch(e){ E(e); }
+    return r;
+  };
+  w.__bpDm = 1; w.__orig = o;
+  window.sendChatMessage = w;
+}
+
+/* ── приём (зовёт bp-dealsync pull для строк kind 'dm') ── */
+function findChat(peer){
+  var cs = list(); if(!cs) return null;
+  for(var i = 0; i < cs.length; i++) if(cs[i] && !cs[i]._dealId && peerOf(cs[i]) === peer) return cs[i];
+  return null;
+}
+function newChat(peer, nm, r){
+  var cs = list(); if(!cs) return null;
+  nm = String(nm || '').trim() || (r === 'adv' ? 'Рекламодатель' : 'Блогер');
+  var h = 0; for(var i = 0; i < nm.length; i++) h = (h * 31 + nm.charCodeAt(i)) >>> 0; h = h % 360;
+  var c = {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    bloggerKey: 'blogger_direct_srv:' + peer, bloggerId: 'srv:' + peer, _dmPeer: peer,
+    name: nm, handle: '', initials: (Array.from ? Array.from(nm)[0] : nm.charAt(0)).toUpperCase(),
+    color: 'linear-gradient(135deg,hsl(' + h + ',70%,60%),hsl(' + ((h + 30) % 360) + ',66%,45%))',
+    img: null, online: false, unread: 0, time: '', preview: '', platform: null, messages: []
+  };
+  cs.unshift(c);
+  return c;
+}
+function dialogOpenWith(c){
+  try{
+    var d = document.getElementById('pg-chat-dialog');
+    return !!(d && d.classList.contains('on') && typeof currentChatId !== 'undefined' && currentChatId === c.id && !document.hidden);
+  }catch(e){ return false; }
+}
+var paintT = 0;
+function repaint(c, opened){
+  try{ if(typeof updateChatsBadge === 'function') updateChatsBadge(); }catch(e){ E(e); }
+  try{
+    var pc = document.getElementById('pg-chats');
+    if(pc && pc.classList.contains('on') && typeof renderChatsList === 'function')
+      renderChatsList((typeof _chatFilterCurrent !== 'undefined' && _chatFilterCurrent) || 'all');
+  }catch(e){ E(e); }
+  if(opened){
+    try{ if(typeof renderChatMessages === 'function') renderChatMessages(c.messages); }catch(e){ E(e); }
+    try{ if(typeof _cdScrollToBottom === 'function') _cdScrollToBottom(true); }catch(e){}
+  }
+  try{ if(typeof window.bpTabbarSync === 'function') window.bpTabbarSync(); }catch(e){}
+}
+window.bpDmApply = function(row){
+  try{
+    if(!row || !row.data || typeof row.data !== 'object') return false;
+    var my = mySrv(); if(my == null) return false;
+    var a = Number(row.a), b = Number(row.b), from = Number(row.from);
+    if(!isFinite(a) || !isFinite(b) || from !== a) return false;
+    var m = /^dm\.(\d+)\.(\d+)\.([\w-]{4,40})$/.exec(String(row.rid || ''));
+    if(!m || Number(m[1]) !== a || Number(m[2]) !== b) return false;
+    var out = a === my;
+    if(!out && b !== my) return false;
+    var peer = out ? b : a, d = row.data, id = m[3];
+    if(!list()) return false;
+    var c = findChat(peer) || newChat(peer, out ? d.pn : d.n, out ? (d.r === 'adv' ? 'blogger' : 'adv') : d.r);
+    if(!c) return false;
+    if(!Array.isArray(c.messages)) c.messages = [];
+    if(c.messages.some(function(x){ return x && x.dmId === id; })) return false;
+    var at = Number(d.at) || Date.now();
+    var msg = { dir: out ? 'out' : 'in', text: String(d.t || '').slice(0, 4000), time: String(d.time || hhmm(at)).slice(0, 5),
+                read: true, dmId: id, dmAt: at, _dm: 1 };
+    if(d.f && typeof d.f === 'object'){
+      msg.file = { name:String(d.f.name || 'файл').slice(0, 120), size:String(d.f.size || '').slice(0, 20), type:String(d.f.type || 'image').slice(0, 20) };
+      if(typeof d.f.dataUrl === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(d.f.dataUrl)) msg.file.dataUrl = d.f.dataUrl;
+    }
+    /* по времени отправки: сообщения с двух устройств встают по порядку */
+    var i = c.messages.length;
+    while(i > 0 && c.messages[i - 1] && c.messages[i - 1].dmAt && c.messages[i - 1].dmAt > at) i--;
+    c.messages.splice(i, 0, msg);
+    var opened = dialogOpenWith(c);
+    if(i === c.messages.length - 1){
+      c.preview = msg.text || (msg.file ? msg.file.name : '');
+      c.time = msg.time;
+    }
+    if(!out && !opened) c.unread = (Number(c.unread) || 0) + 1;
+    /* свежий разговор — наверх списка */
+    var cs = list(), k = cs.indexOf(c);
+    if(k > 0){ cs.splice(k, 1); cs.unshift(c); }
+    save();
+    clearTimeout(paintT);
+    paintT = setTimeout(function(){ repaint(c, dialogOpenWith(c)); }, 30);
+    return true;
+  }catch(e){ E(e); return false; }
+};
+
+/* ── подключение ── */
+wrapSend();
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wrapSend);
+[1500, 4000].forEach(function(ms){ setTimeout(wrapSend, ms); });
+setInterval(function(){ if(!document.hidden) try{ flush(); }catch(e){ E(e); } }, 20000);
+setTimeout(function(){ try{ flush(); }catch(e){ E(e); } }, 5000);
 })();
 </script>
 </body>

@@ -1374,6 +1374,25 @@ const q = {
     WHERE user_id = ? AND platform IN ('tiktok','youtube') ORDER BY id ASC LIMIT 1`),
   lastStats: db.prepare(`SELECT med_views, followers, er_likes FROM channel_stats
     WHERE user_id = ? AND platform = ? AND external_id = ? ORDER BY at DESC, id DESC LIMIT 1`),
+  /* Публичная сводка заданий для карточек «Главной» (режим как у More
+     Views): по каждому активному общему заданию — роликов, просмотров,
+     выплачено и заморожено. Ролики и просмотры — ровно как в лидерборде
+     (boardRows): те же статусы, то же поле v.views, блогер не заблокирован.
+     Иначе карточка на «Главной» и шторка задания показали бы разные цифры.
+     Задания заблокированного автора не попадают, как и в общую ленту.
+     json_valid под CASE: один конверт с битым JSON иначе уронил бы весь
+     запрос (json_extract на нём бросает). */
+  tasksSummary: db.prepare(`SELECT s.rid AS id,
+      COALESCE(d.amount, 0) AS budget, COALESCE(d.paid, 0) AS paid,
+      (SELECT COUNT(*) FROM task_videos v JOIN users u ON u.id = v.blogger_id
+        WHERE v.camp_id = s.rid AND v.status IN ('review','rejected','active','paid') AND u.is_blocked = 0) AS videos,
+      (SELECT COALESCE(SUM(v.views), 0) FROM task_videos v JOIN users u ON u.id = v.blogger_id
+        WHERE v.camp_id = s.rid AND v.status IN ('review','rejected','active','paid') AND u.is_blocked = 0) AS views
+    FROM sync s LEFT JOIN deals d ON d.id = 'camp:' || s.rid
+    WHERE s.kind = 'camp' AND s.b_id IS NULL
+      AND s.a_id NOT IN (SELECT id FROM users WHERE is_blocked = 1)
+      AND (CASE WHEN json_valid(s.data) THEN json_extract(s.data, '$.status') END) = 'active'
+    ORDER BY s.ver DESC LIMIT ?`),
 };
 
 /* ── ВХОД ПО ТЕЛЕГРАМУ ────────────────────────────────────────────────
@@ -1534,6 +1553,8 @@ function moneyOp(opKey, userId, kind, build) {
       touched.add(uid);
       /* новая выплата меняет рейтинг блогеров — кэш списка сбрасываем сразу */
       if (k === 'payout' || k === 'settle-payout') lbCache.at = 0;
+      /* и сводку заданий: выплата или заморозка по заданию меняет «выплачено N ₽ из M ₽» */
+      if (k === 'payout' || k === 'settle-payout' || String(ref || '').startsWith('camp:')) tsumCache.at = 0;
     };
 
     const result = build(add);
@@ -1922,6 +1943,13 @@ const CARD_STR = { name: 60, initials: 4, col: 64, catsText: 200, sinceText: 60,
   subsVal: 20, reachVal: 20, erVal: 20, cpvVal: 20, publishedAt: 40, msg: 500 };
 const CARD_PLATS = ['youtube', 'telegram', 'tiktok', 'instagram', 'vk'];
 function cardStr(v, max) { return String(v == null ? '' : v).slice(0, max); }
+/* витрина заданий: число из объявления (ставка, потолок) — только
+   конечное неотрицательное; площадки — короткие коды через запятую */
+function pubNum(v) { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.min(n, 1e9) : 0; }
+function pubPlats(v) {
+  const a = Array.isArray(v) ? v : String(v == null ? '' : v).split(/[,;\s]+/);
+  return a.map((x) => String(x || '').toLowerCase().replace(/[^a-z]/g, '').slice(0, 12)).filter(Boolean).slice(0, 8).join(',');
+}
 function cleanCard(raw) {
   const src = (raw && typeof raw === 'object') ? raw : {};
   const out = {};
@@ -1984,6 +2012,10 @@ const cardsCache = { at: 0, rows: null };
 
 /* Рейтинг пересчитывается не чаще раза в минуту: запрос групповой, а ручка открытая. */
 const lbCache = { at: 0, rows: null, total: 0 };
+/* Сводка заданий (GET /api/tasks/summary) — так же, раз в минуту на всех.
+   Сбрасывается там же, где лидерборд задания (vidBoardDrop), рейтинг
+   (выплата, блокировка), и при правке конверта задания. */
+const tsumCache = { at: 0, body: null };
 
 /* ── УВЕДОМЛЕНИЯ НА ТЕЛЕФОН ──────────────────────────────────────────
    Приложение показывает события, только пока оно открыто. Чтобы
@@ -2667,6 +2699,8 @@ const routes = {
       try { db.exec('ROLLBACK'); } catch (_) {}
       throw e;
     }
+    /* задание включили, поставили на паузу или завели — сводка «Главной» устарела */
+    if (kind === 'camp') tsumCache.at = 0;
     return { status: 200, body: { ok: true, ver, a, b } };
   },
 
@@ -2699,10 +2733,50 @@ const routes = {
         format: cardStr(d.format, 40),
         topics: Array.isArray(d.topics) ? d.topics.slice(0, 6).map((t) => cardStr(t, 40)) : [],
         advertiser: cardStr(d.advertiserName, 60),
+        /* условия объявления — то, что гость и так прочтёт в задании:
+           тип, площадки, ставка и потолок за видео, срок (10.10.2026,
+           карточка «как у More Views»: чип формата, значки площадок,
+           «10 ₽ за 1 000») */
+        formatLabel: cardStr(d.formatLabel, 40),
+        platforms: pubPlats(d.platforms),
+        payMode: d.payMode === 'fixed' ? 'fixed' : '',
+        fixedPrice: pubNum(d.fixedPrice),
+        rate: pubNum(d.rate),
+        maxPayout: pubNum(d.maxPayout || d.payMax),
+        minViews: pubNum(d.minViews),
+        deadline: Number.isFinite(Date.parse(d.deadline)) ? new Date(Date.parse(d.deadline)).toISOString() : '',
         at: r.updated_at,
       });
     }
     return { status: 200, body: { rows: out } };
+  },
+
+  /* ── Сводка заданий для «Главной» (как у More Views) ──
+     Карточка задания показывает «N видео · 👁 X» и «N ₽ из M ₽». Эти же
+     цифры любой вошедший и так видит в шторке задания (/api/tasks/board),
+     поэтому ручка открыта всем, гостю тоже. Наружу — только номер задания
+     и четыре числа: ни людей, ни ников, ни каналов, ни названий.
+       videos — роликов в статусах лидерборда (review, rejected, active, paid);
+       views  — их просмотры (v.views, как в лидерборде);
+       paid   — выплачено блогерам из заморозки задания;
+       budget — заморожено под задание всего.
+     Кэш общий на 60 секунд (tsumCache). Ключи — Object.create(null):
+     номер задания пишет клиент, и «__proto__» иначе ушёл бы в прототип. */
+  'GET /api/tasks/summary': async (req) => {
+    if (!rateLimit(req, 'tsum', 120, 60000)) return tooOften;
+    const now = Date.now();
+    if (!tsumCache.body || now - tsumCache.at >= 60000) {
+      const camps = Object.create(null);
+      for (const r of q.tasksSummary.all(1000)) {
+        camps[String(r.id).slice(0, 80)] = {
+          videos: Number(r.videos) || 0, views: Number(r.views) || 0,
+          paid: Number(r.paid) || 0, budget: Number(r.budget) || 0,
+        };
+      }
+      tsumCache.body = { ok: true, at: now, camps };
+      tsumCache.at = now;
+    }
+    return { status: 200, body: tsumCache.body, headers: { 'Cache-Control': 'no-store' } };
   },
 
   'GET /api/sync/pull': async (req, body, url) => {
@@ -4472,7 +4546,7 @@ const routes = {
     if (blocked && owner) return { status: 409, body: { error: 'Владельца площадки заблокировать нельзя' } };
     q.setBlocked.run(blocked ? 1 : 0, id);
     if (blocked) q.delUserSessions.run(id);
-    cardsCache.at = 0; lbCache.at = 0;
+    cardsCache.at = 0; lbCache.at = 0; tsumCache.at = 0;
     adminLog(req, blocked ? 'user-block' : 'user-unblock', 'user ' + id,
       (u.email || '') + (body.reason ? ' · ' + String(body.reason).slice(0, 200) : ''));
     return { status: 200, body: { ok: true, userId: id, blocked } };
@@ -4531,6 +4605,25 @@ const routes = {
     let who = '';
     if (ok) { try { const u = auth(req); who = (u && u.is_admin) ? String(u.email || '') : adminCookieWho(req); } catch (e) { who = ''; } }
     return { status: 200, body: { ok, until: 0, who } };
+  },
+
+  /* ── Полный доступ к сайту (как до переделки под More Views) ──
+     Кнопка в админке ставит в браузере флаг bp_full_access и открывает
+     сайт; сайт при старте спрашивает здесь, правда ли перед ним владелец.
+     Проверка та же, что у всех /api/admin/* (isAdmin): сессия-кука пульта
+     (на GET хватает её одной), аккаунт владельца или ключ. Ничего не
+     меняет и не кэшируется.
+     Отказ — 403, а не 401: на 401 с токеном приложение считает, что
+     кончился вход в аккаунт, и выкидывает человека из кассы. */
+  'GET /api/admin/full-access': async (req) => {
+    const nc = { 'Cache-Control': 'no-store, private' };
+    if (!rateLimit(req, 'fullacc', 60, 60000)) return { status: 429, body: tooOften.body, headers: nc };
+    if (!isAdmin(req)) {
+      return { status: 403, headers: nc,
+        body: { ok: false, code: 'not_admin', error: 'Полный доступ — только владельцу: войдите в админку /admin' } };
+    }
+    const c = adminCookieParse(req);
+    return { status: 200, headers: nc, body: { ok: true, full: true, until: c ? c.exp : 0 } };
   },
 
   'POST /api/admin/logout': async () => ({
@@ -6948,7 +7041,7 @@ setInterval(() => { vidSyncRound().catch(() => {}); }, 30 * 60 * 1000).unref();
    найти «моё место», но в ответ не попадают. Кэш на оффер — 60 секунд,
    сбрасывается, когда в задании что-то поменялось. */
 const vidBoards = new Map();
-function vidBoardDrop(campId) { vidBoards.delete(String(campId)); }
+function vidBoardDrop(campId) { vidBoards.delete(String(campId)); tsumCache.at = 0; }
 function vidPubName(s) {
   let t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
   /* Почта вместо имени — не показываем; номер Телеграма из имени по

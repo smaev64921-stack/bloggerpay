@@ -1684,10 +1684,50 @@ try {
   const jG3 = await api('POST', '/api/tasks/join', { campId: camps.brd }, G.token);
   ok(jG3.status === 200 && jG3.body.already === false && (await board(G, 'brd')).body.members === 3, 'вернулся в задание тем же /join');
 
+  /* ── Публичная сводка для карточек «Главной» (режим как у More Views) ──
+     «N видео · 👁 X» и «N ₽ из M ₽» на карточке задания: без входа, цифры
+     как в лидерборде, людей и названий в ответе нет, кэш — общий. */
+  console.log('\n— сводка заданий /api/tasks/summary');
+  const summary = (extra) => api('GET', '/api/tasks/summary', null, null, extra);
+  const s1 = await summary();
+  const sc1 = s1.body.camps || {};
+  const sBrd = sc1[camps.brd];
+  const bNow = (await board(G, 'brd')).body;
+  ok(s1.status === 200 && s1.body.ok === true && Number.isFinite(s1.body.at) && s1.body.at > 0 && !!sBrd,
+    'без входа — 200, задание в сводке есть', s1.body);
+  ok(/no-store/.test(s1.headers.get('cache-control') || ''), 'ответ сводки браузер не кэширует');
+  ok(!!sBrd && sBrd.videos === bNow.videos && sBrd.views === bNow.views && sBrd.paid === bNow.paid && sBrd.budget === bNow.budget,
+    'цифры сводки совпадают с лидербордом задания',
+    { sBrd, board: { videos: bNow.videos, views: bNow.views, paid: bNow.paid, budget: bNow.budget } });
+  ok(!!sBrd && sBrd.videos === 3 && sBrd.views === 16000 && sBrd.paid === 200 && sBrd.budget === 10000,
+    'brd: 3 видео, 16 000 просмотров, выплачено 200 ₽ из 10 000 ₽', sBrd);
+  ok(!!sBrd && Object.keys(sBrd).sort().join() === 'budget,paid,videos,views', 'в строке задания только четыре числа', sBrd);
+  ok(!(camps.paused in sc1), 'задание на паузе в сводку не попадает', Object.keys(sc1).length);
+  ok(camps.main in sc1 && camps.notif in sc1 && camps.noesc in sc1 && sc1[camps.noesc].budget === 0,
+    'активные задания в сводке есть, без заморозки — бюджет 0', sc1[camps.noesc]);
+  const rawS = s1.raw;
+  ok(![G, H, Y, ADV, A, N].some((u) => rawS.includes(u.email)) && !/chan-|UC-[A-Z]|@bloger|@ycanal/.test(rawS)
+    && !/"(uid|userId|bloggerId|ownerId|email|name|title|handle|avatar|card|external_id|externalId)"/.test(rawS)
+    && !/Галя|Игрек|Хасан|Лидерборд/.test(rawS),
+  'в сводке нет людей, ников, каналов и названий', rawS.slice(0, 300));
+  const s2 = await summary();
+  ok(s2.status === 200 && s2.body.at === s1.body.at, 'повторный запрос — из кэша (тот же снимок)', [s1.body.at, s2.body.at]);
+  const ipS = freshIp();
+  const burst = await Promise.all(Array.from({ length: 121 }, () => summary({ ip: ipS })));
+  ok(burst.filter((r) => r.status === 200).length === 120 && burst.filter((r) => r.status === 429).length === 1,
+    'лимит: 120 запросов в минуту с одного адреса, дальше 429', burst.map((r) => r.status).filter((x) => x !== 200));
+
   /* ══ Механика v3: загрузка с нуля, начисления по мере роста ══════════ */
   console.log('\n— v3: загрузка с 0 просмотров и сводка');
+  const sumOf = async (k) => ((await summary()).body.camps || {})[camps[k]] || null;
+  const sN0 = await sumOf('notif');
+  ok(!!sN0 && sN0.videos === 0 && sN0.views === 0 && sN0.paid === 0 && sN0.budget === 20000,
+    'сводка «Сводки» до загрузки: 0 видео, бюджет 20 000 ₽', sN0);
   const n0 = await bind(N, 'notif', link('blogern', ID.N0));
   const vN0 = n0.body.video || {};
+  const sN1 = await sumOf('notif');
+  ok(!!sN1 && sN1.videos === 1 && sN1.views === 0 && sN1.paid === 0,
+    'новое видео — кэш сводки сброшен сразу: 1 видео', sN1);
   ok(n0.status === 200 && vN0.status === 'review' && vN0.views === 0 && vN0.earned === 0 && vN0.reserved === 0
     && vN0.minViews === 1000 && vN0.viewsToMin === 1000 && vN0.maxPay === 3000 && vN0.riskHold === false && vN0.trackEndsAt === null,
   'ролик с НУЛЁМ просмотров принят сразу после публикации: начислено 0, резерв 0, до порога 1 000', n0.body);
@@ -1714,6 +1754,11 @@ try {
   ok(d2s.status === 200 && g2.paid === 150 && g2.earned === 150 && g2.paidViews === 1500 && g2.reserved === 0
     && (await bal(N)).available - nBal0 === 150,
   'сутки 2: обычный круг снял 1 500 просмотров — первое начисление +150 ₽', g2);
+  const sN2 = await sumOf('notif');
+  const bN2 = (await board(N, 'notif')).body;
+  ok(!!sN2 && sN2.views === 1500 && sN2.paid === 150 && sN2.videos === 1
+    && sN2.views === bN2.views && sN2.paid === bN2.paid && sN2.videos === bN2.videos,
+  'новый замер и выплата — сводка сразу: 1 500 просмотров, выплачено 150 ₽ (как в лидерборде)', { sN2, bN2 });
   await sleep(300);
   ok(nDm().length - nDm0 === 2 && /Видео засчитано — 150 ₽ на балансе/.test(nDm()[nDm().length - 1]),
     'блогеру: «Видео засчитано — 150 ₽ на балансе»', nDm());

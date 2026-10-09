@@ -18,6 +18,14 @@
   Разделы: Обзор · Выплаты · Верификация · Спорные деньги · Видео заданий ·
   Пользователи · Каталог · Поломки · Площадки · Журнал.
 
+  Сайт с полным доступом (09.10.2026). Обычные люди видят сайт в режиме
+  как у More Views: задания рекламодателей, без каталога карт блогеров и
+  сделок. Кнопка «Перейти на сайт с полным доступом» ставит в ЭТОМ
+  браузере флаг localStorage bp_full_access = '1' и открывает '/'. Сайт
+  сам спрашивает сервер (GET /api/admin/full-access) по той же куке
+  пульта; нет сессии (вышли, истекла, другой браузер) — флаг снимается,
+  и сайт открывается как у всех.
+
   Страница НЕ входит в мини-апп и не скачивается пользователям. Открывается
   по адресу /admin (или прежнему /operator). Вход — ключ владельца один
   раз (ADMIN_KEY из server/.env) или аккаунт из ADMIN_EMAIL; дальше сервер
@@ -308,6 +316,25 @@
   .msg.on{opacity:1;transform:translateX(-50%)}
   .msg.bad{border-color:rgba(255,107,107,.55);color:var(--bad)}
 
+  /* ── сайт с полным доступом ──
+     Карточка спокойная, вторичная: главное на «Обзоре» — деньги, поэтому
+     здесь не залитая кнопка, а обводка, и тон чуть светлее фона. */
+  .full{display:flex;align-items:center;gap:14px 18px;flex-wrap:wrap;margin-bottom:18px;padding:16px 18px;
+    background:linear-gradient(115deg,rgba(47,108,224,.13),rgba(47,108,224,0) 58%),var(--card);
+    border:1px solid rgba(91,147,245,.22);border-radius:var(--r)}
+  .full-ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--accbg);color:var(--acc2);flex-shrink:0}
+  .full-ic svg.i{width:21px;height:21px}
+  .full-tx{flex:1 1 300px;min-width:0}
+  .full-tx b{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:var(--fs-md);font-weight:600}
+  .full-tx p{margin:4px 0 0;color:var(--t2);font-size:var(--fs-sm);line-height:1.55;max-width:74ch}
+  .full-tx p span{display:block;color:var(--t3);margin-top:2px}
+  .full-acts{display:flex;align-items:center;justify-content:flex-end;gap:6px 14px;flex-wrap:wrap;flex-shrink:0}
+  .full-off{background:none;border:0;padding:6px 2px;color:var(--t3);font-size:var(--fs-sm);cursor:pointer;
+    text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:3px;transition:color .15s}
+  .full-off:hover{color:var(--t1)}
+  .side-foot svg.i{width:15px;height:15px}
+  .side-foot .sh{display:none}
+
   /* ── телефон: меню — лентой сверху ── */
   @media (max-width:960px){
     /* minmax(0,…): иначе колонка растягивается до полной ширины ленты
@@ -324,6 +351,11 @@
     .nav .sep{display:none}
     .side-foot{margin:0 0 0 auto;flex-direction:row;padding:0}
     .side-foot .btn{padding:7px 10px;font-size:var(--fs-sm)}
+    /* в ленте сверху места мало: «Сайт · полный доступ» → «Сайт» */
+    .side-foot .lg{display:none} .side-foot .sh{display:inline}
+    .full{padding:14px 15px}
+    .full-acts{width:100%;justify-content:flex-start}
+    .full-acts .btn{flex:1 1 auto}
     .main{padding:18px 14px 50px}
     .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
     .tile{padding:12px 13px}
@@ -363,6 +395,8 @@
     <nav class="nav" id="nav"></nav>
     <div class="side-foot">
       <div class="who" id="whoLine"></div>
+      <button type="button" class="btn ghost sm" data-act="fullsite" aria-label="Перейти на сайт с полным доступом"
+        title="Сайт как до переделки: каталог карт блогеров, сделки — откроется в новой вкладке"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span class="lg">Сайт · полный доступ</span><span class="sh">Сайт</span></button>
       <button type="button" class="btn ghost sm" data-act="leave">Выйти</button>
     </div>
   </aside>
@@ -429,6 +463,7 @@ var ICON = {
   videos:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.3v5.4l4.6-2.7z"/></svg>',
   pulse:'<svg class="i" viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>',
   ext:'<svg class="i" viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
+  site:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/><path d="M6.5 6.5h.01M9.5 6.5h.01"/><path d="M7 13h6M7 16h10"/></svg>',
 };
 
 var SECTIONS = [
@@ -539,6 +574,8 @@ function enter(){
   }).then(function(){ $('enter').disabled = false; });
 }
 function leave(){
+  /* без сессии пульта сайт полный доступ всё равно не даст — снимаем и флаг */
+  try{ localStorage.removeItem(FULL_KEY); localStorage.removeItem(FULL_UNTIL); }catch(e){}
   fetch('/api/admin/logout', { method:'POST', headers:{ 'X-Admin-Session':'1' }, credentials:'same-origin' })
     .catch(function(){})
     .then(function(){ location.hash = ''; location.reload(); });
@@ -669,6 +706,50 @@ function copyText(text){
     .catch(function(){ ask({ title:'Скопируйте вручную', input:'area', value:text, ok:'Закрыть', cancel:'Отмена' }); });
 }
 
+/* ─────────────────────────── сайт с полным доступом ─────────────────────────── */
+/* Флаг живёт в localStorage этого браузера, у сайта и пульта адрес один —
+   значит и хранилище общее. Сам флаг ничего не открывает: сайт проверяет
+   владельца на сервере по куке пульта (GET /api/admin/full-access) и без
+   неё флаг снимает. Поэтому чужой, поставивший флаг руками, увидит обычный
+   сайт. */
+var FULL_KEY = 'bp_full_access';
+/* срок куки пульта, который сайт запоминает после проверки (bp-mv): при
+   новом включении старый срок стираем — его заново назовёт сервер */
+var FULL_UNTIL = 'bp_full_access_until';
+function fullOn(){ try{ return localStorage.getItem(FULL_KEY) === '1'; }catch(e){ return false; } }
+function fullSite(){
+  try{ localStorage.removeItem(FULL_UNTIL); localStorage.setItem(FULL_KEY, '1'); }
+  catch(e){ say('Браузер не дал сохранить настройку — полный доступ не включится', true); return; }
+  paintFull();
+  var w = null;
+  try{ w = window.open('/', '_blank'); }catch(e){ w = null; }
+  /* всплывающее окно заблокировано — открываем сайт здесь же */
+  if(!w){ location.href = '/'; return; }
+  try{ w.opener = null; }catch(e){}
+}
+function fullOff(){
+  try{ localStorage.removeItem(FULL_KEY); localStorage.removeItem(FULL_UNTIL); }catch(e){}
+  paintFull();
+  say('Полный доступ на этом устройстве выключен — сайт откроется как у всех');
+}
+function fullCardHtml(){
+  var on = fullOn();
+  return '<section class="full" id="fullBox" aria-labelledby="fullT">'
+    + '<span class="full-ic">' + ICON.site + '</span>'
+    + '<div class="full-tx"><b id="fullT">Сайт с полным доступом'
+    + '<span class="st ' + (on ? 'on' : 'off') + '">' + (on ? 'включён на этом устройстве' : 'выключен') + '</span></b>'
+    + '<p>Сайт как до переделки: каталог карт блогеров, сделки — всё видно. Обычные пользователи видят режим как у More Views.'
+    + '<span>Откроется в новой вкладке. Работает в этом браузере, пока вы вошли в админку.</span></p></div>'
+    + '<div class="full-acts">'
+    + '<button type="button" class="btn ghost" data-act="fullsite">' + ICON.ext + 'Перейти на сайт с полным доступом</button>'
+    + (on ? '<button type="button" class="full-off" data-act="fulloff">Выключить полный доступ на этом устройстве</button>' : '')
+    + '</div></section>';
+}
+function paintFull(){ var b = $('fullBox'); if(b) b.outerHTML = fullCardHtml(); }
+/* сайт в соседней вкладке снял флаг сам (не владелец, «Выйти» в плашке) —
+   карточка на «Обзоре» сразу показывает правду */
+window.addEventListener('storage', function(e){ if(e.key === FULL_KEY || e.key === null) paintFull(); });
+
 /* ─────────────────────────── разделы ─────────────────────────── */
 var VIEWS = {};
 
@@ -714,7 +795,8 @@ VIEWS.home = function(){
           err.n ? ('Поломок за сутки: ' + err.n) : 'За сутки без поломок',
           err.n ? ('у ' + err.people + ' ' + plural(err.people, 'человека', 'человек', 'человек')) : 'и это хорошая новость');
     $('view').innerHTML =
-        '<div class="tiles">'
+        fullCardHtml()
+      + '<div class="tiles">'
       + tile(o.заявок_в_очереди || 0, 'Заявок на вывод в очереди', o.заявок_в_очереди ? 'warn' : '')
       + tile(money(o.сумма_к_выплате), 'К выплате сейчас', o.сумма_к_выплате ? 'warn' : '')
       + tile(o.взято_в_работу || 0, 'Взято в работу', '')
@@ -1477,6 +1559,8 @@ document.addEventListener('click', function(e){
 
   if(ds.go){ go(ds.go); return; }
   if(ds.act === 'leave'){ leave(); return; }
+  if(ds.act === 'fullsite'){ fullSite(); return; }
+  if(ds.act === 'fulloff'){ fullOff(); return; }
   if(ds.act === 'reload'){ if(SEC === 'plats') PLATS_FORCE = true; load(false); return; }
   if(ds.act === 'drclose'){ closeDrawer(); return; }
   if(ds.act === 'umore'){ t.disabled = true; usersFetch(false).then(paintUsers).catch(function(er){ say(er.message, true); t.disabled = false; }); return; }

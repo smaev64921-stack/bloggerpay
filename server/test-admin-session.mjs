@@ -40,8 +40,11 @@ async function api(method, p, body, opt) {
   remember(r);
   const txt = await r.text();
   let j = {}; try { j = JSON.parse(txt); } catch (e) { j = { _raw: txt.slice(0, 160) }; }
-  return { status: r.status, body: j };
+  return { status: r.status, body: j, headers: r.headers };
 }
+/* «Полный доступ» спрашивает сам сайт — как браузер: только кука, без
+   X-Admin-Session и без токена (fetch сайта их не ставит). */
+const fullAccess = (opt) => api('GET', '/api/admin/full-access', null, Object.assign({ session: false }, opt || {}));
 const dir = mkdtempSync(path.join(tmpdir(), 'bp-adm-'));
 const srv = spawn(process.execPath, ['server.js'], {
   cwd: fileURLToPath(new URL('.', import.meta.url)),
@@ -66,6 +69,9 @@ try {
   ok(closed.status === 403, 'без ключа и без сессии дверь закрыта', closed.body);
   const probe = await api('GET', '/api/admin/session');
   ok(probe.status === 200 && probe.body.ok === false, 'проверка «пустит ли» отвечает честно: нет', probe.body);
+  const fa0 = await fullAccess();
+  ok(fa0.status === 403 && fa0.body.ok === false && fa0.body.code === 'not_admin', 'полный доступ к сайту без сессии — 403', fa0.body);
+  ok(/no-store/.test(fa0.headers.get('cache-control') || ''), 'отказ в полном доступе не кэшируется');
 
   /* ── путь 1: ключ, один раз ── */
   const bad = await api('POST', '/api/admin/session', { key: 'не-тот-ключ' });
@@ -86,6 +92,20 @@ try {
     [wd.status, kyc.status, errs.status, dls.status]);
   const cardsAdmin = await api('GET', '/api/admin/cards');
   ok(cardsAdmin.status === 200, 'каталог в админке тоже открыт', cardsAdmin.body);
+
+  /* ── полный доступ к сайту: та же сессия пульта ── */
+  const fa1 = await fullAccess();
+  ok(fa1.status === 200 && fa1.body.ok === true && fa1.body.full === true && fa1.body.until > Date.now(),
+    'с сессией пульта сайт получает полный доступ (одна кука, без заголовков)', fa1.body);
+  ok(/no-store/.test(fa1.headers.get('cache-control') || ''), 'ответ про полный доступ не кэшируется');
+  const fa1b = await fullAccess();
+  ok(fa1b.status === 200 && (await api('GET', '/api/admin/overview')).status === 200, 'проверка ничего не меняет: повтор тот же, сессия жива');
+  const jarOk = jar;
+  jar = jarOk.replace(/[0-9a-f]{6}$/, '000000');
+  const faForged = await fullAccess();
+  ok(faForged.status === 403, 'подделанная кука полного доступа не даёт', faForged.body);
+  jar = jarOk;
+  ok((await api('POST', '/api/admin/full-access', {})).status === 404, 'только чтение: POST такого пути нет');
 
   /* ── подделка запроса с чужого сайта ──
      Кука уйдёт (браузер приложит её сам), но заголовок чужая страница
@@ -114,6 +134,7 @@ try {
   const out = await api('POST', '/api/admin/logout');
   ok(out.status === 200 && !jar, 'выход гасит сессию', out.body);
   ok((await api('GET', '/api/admin/overview')).status === 403, 'после выхода дверь снова закрыта');
+  ok((await fullAccess()).status === 403, 'после выхода из пульта полного доступа к сайту нет');
 
   /* ── путь 3: владелец вошёл своей почтой — ключ не нужен вовсе ──
      Но занять сам адрес владельца посторонний не может: аккаунт с этой
@@ -134,6 +155,8 @@ try {
   ok(who.body && who.body.isAdmin === true, 'аккаунт из ADMIN_EMAIL — владелец', who.body);
   const bySession = await api('POST', '/api/admin/session', {}, { token: reg.token });
   ok(bySession.status === 200 && bySession.body.by === 'аккаунт', 'вход по аккаунту, ключ не спрашивали', bySession.body);
+  ok((await fullAccess()).status === 200, 'после входа почтой — полный доступ по куке пульта');
+  ok((await fullAccess({ token: reg.token, cookie: false })).status === 200, 'аккаунт владельца с токеном — тоже 200');
   jar = '';                                            /* пульт в другом браузере */
   const tk2 = await api('POST', '/api/admin/session', { wantTicket: true }, { token: reg.token });
   jar = '';
@@ -149,6 +172,10 @@ try {
   const guestTry = await api('POST', '/api/admin/session', {}, { token: guest.token });
   ok(guestTry.status === 403 && !jar, 'обычному человеку сессия владельца не выдаётся', guestTry.body);
   ok((await api('GET', '/api/admin/overview', null, { token: guest.token })).status === 403, 'и разделы ему закрыты');
+  const faGuest = await fullAccess({ token: guest.token });
+  ok(faGuest.status === 403 && faGuest.body.code === 'not_admin',
+    'обычному человеку полного доступа нет — 403, а не 401 (401 выкинул бы его из кассы)', faGuest.body);
+  ok((await api('GET', '/api/me', null, { token: guest.token })).status === 200, 'и его вход после проверки цел');
 } catch (e) {
   failed++; console.log('  FAIL исключение: ' + e.message);
 } finally {
