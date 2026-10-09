@@ -93263,11 +93263,10 @@ html body .vb-card:focus,html body .vb-card:focus-visible,html body .vb-dd-menu:
 /* плитки сверху на «Заданиях» и «Моих заданиях» владелец убрал (09.10) */
 html body #pg-tasks > .tk-stats,html body #pg-mytasks > .tk-stats{display:none!important}
 /* «Все задания ⇄ Мои задания»: без въезда страницы и каскада — тёмной вспышки нет */
-html.vb-swing #pg-tasks.pg.on,html.vb-swing #pg-mytasks.pg.on,
-html.vb-swing #pg-tasks.pg.on > *,html.vb-swing #pg-mytasks.pg.on > *{animation:none!important}
-html.vb-swing .pg.vb-swin > :not(.cat-hd):not(.vb-sw){animation:vbSwIn .26s cubic-bezier(.22,1,.36,1) backwards!important}
+html body .pg.vb-swpg.on,html body .pg.vb-swpg.on > *{animation:none!important}
+html body .pg.vb-swpg.vb-swin.on > :not(.cat-hd):not(.vb-sw){animation:vbSwIn .26s cubic-bezier(.22,1,.36,1) backwards!important}
 @keyframes vbSwIn{from{opacity:.45;transform:translateY(5px)}}
-@media (prefers-reduced-motion:reduce){.vb-sw-th{transition:none}html.vb-swing .pg.vb-swin > *{animation:none!important}}
+@media (prefers-reduced-motion:reduce){.vb-sw-th{transition:none}html body .pg.vb-swpg.vb-swin.on > *{animation:none!important}}
 /* ── карточка «Моих заданий» ── */
 html body #pg-mytasks .tk-card.vb-mt2{display:block;padding:16px 16px 14px;border-radius:22px;background:linear-gradient(180deg,#161b25 0%,#131821 100%);border:1px solid rgba(255,255,255,.07);box-shadow:none;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:border-color .2s,transform .16s cubic-bezier(.22,1,.36,1)}
 html body #pg-mytasks .tk-card.vb-mt2 + .tk-card{margin-top:12px}
@@ -95547,20 +95546,27 @@ function paintSw(){
 }
 /* переход между «Все задания» и «Мои задания» — без въезда страницы и
    каскада (они давали тёмную вспышку): бегунок переезжает, список
-   мягко проявляется с 0.5, а не из нуля */
+   мягко проявляется с 0.45, а не из нуля.
+   Запрет въезда (vb-swpg) висит на САМОЙ странице, пока она открыта, и
+   снимается, только когда её скрыли (обёртка goTo ниже): если снять его
+   раньше, animation меняется с none на clPageEnter и браузер запускает
+   въезд заново — страница гасла до нуля через ~0.5 с (замер 09.10). */
 function swGo(to){
-  var from = to === 'mytasks' ? 'pg-tasks' : 'pg-mytasks', dest = to === 'mytasks' ? 'pg-mytasks' : 'pg-tasks';
+  var dest = to === 'mytasks' ? 'pg-mytasks' : 'pg-tasks';
   var y = 0; try{ y = window.scrollY || 0; }catch(_){}
-  document.documentElement.classList.add('vb-swing');
+  var pg = $(dest); if(pg) pg.classList.add('vb-swpg');
   if(typeof window.goTo === 'function') window.goTo(to);
-  var pg = $(dest), sw = pg && pg.querySelector(':scope > .vb-sw');
+  /* «Задания» перерисовываются, а переключатель на них ставит наблюдатель
+     микрозадачей — ставим сразу, иначе бегунок не успеет поехать */
+  paintSw();
+  var sw = pg && pg.querySelector(':scope > .vb-sw');
   if(sw){
     sw.classList.add('no-anim'); sw.classList.toggle('mine', to !== 'mytasks');
     void sw.offsetWidth; sw.classList.remove('no-anim'); sw.classList.toggle('mine', to === 'mytasks');
   }
   if(pg){ pg.classList.remove('vb-swin'); void pg.offsetWidth; pg.classList.add('vb-swin'); }
   try{ var hd = pg && pg.querySelector(':scope > .vb-sw'); if(y > 0 && hd){ var top = hd.getBoundingClientRect().top + (window.scrollY || 0) - 90; window.scrollTo(0, Math.max(0, Math.min(y, top))); } else window.scrollTo(0, 0); }catch(_){}
-  clearTimeout(swGo.t); swGo.t = setTimeout(function(){ document.documentElement.classList.remove('vb-swing'); if(pg) pg.classList.remove('vb-swin'); }, 420);
+  clearTimeout(swGo.t); swGo.t = setTimeout(function(){ if(pg) pg.classList.remove('vb-swin'); }, 700);
 }
 document.addEventListener('click', function(e){
   var b = e.target.closest && e.target.closest('.vb-sw [data-vb-go]'); if(!b) return;
@@ -95899,6 +95905,7 @@ function repaint(){
   window.goTo = function(id){
     var r = og.apply(this, arguments);
     var k = String(id);
+    ['pg-tasks', 'pg-mytasks'].forEach(function(pid){ var p = $(pid); if(p && !p.classList.contains('on')) p.classList.remove('vb-swpg', 'vb-swin'); });
     if(k === 'tasks' || k === 'mytasks' || k === 'campaigns'){ setTimeout(repaint, 60); load(false); }
     if(k === 'tasks') setTimeout(boot, 30);
     return r;
