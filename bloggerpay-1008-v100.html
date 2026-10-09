@@ -92042,6 +92042,7 @@ html body #pg-tasks .tk-card-joined.hx .hx-bank,html body #pg-mytasks .tk-card-j
   window.bpHxInner = function(c, joined){ return inner(c, joined); };
   window.bpHxPlat = function(c){ return platPills(c); };
   window.bpHxDays = function(c){ return daysLeft(c); };
+  window.bpHxBudget = function(c){ return budget(c); };
   var RX = /bpTaskOpen\('((?:[^'\\]|\\.)*)'\)/;
   function enhance(){
     var page = document.getElementById('pg-tasks'); if(!page) return;
@@ -93267,6 +93268,32 @@ html body .pg.vb-swpg.on,html body .pg.vb-swpg.on > *{animation:none!important}
 html body .pg.vb-swpg.vb-swin.on > :not(.cat-hd):not(.vb-sw){animation:vbSwIn .26s cubic-bezier(.22,1,.36,1) backwards!important}
 @keyframes vbSwIn{from{opacity:.45;transform:translateY(5px)}}
 @media (prefers-reduced-motion:reduce){.vb-sw-th{transition:none}html body .pg.vb-swpg.vb-swin.on > *{animation:none!important}}
+/* ── своя карточка в «Заданиях» ── */
+html body #pg-tasks .tk-card.vb-own2{display:block;padding:16px 16px 14px;border-radius:22px;background:linear-gradient(180deg,#141a26 0%,#121722 100%);border:1px solid rgba(91,147,245,.22)!important;box-shadow:none!important;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .16s cubic-bezier(.22,1,.36,1)}
+html body #pg-tasks .tk-card.vb-own2:active{transform:scale(.99)}
+.vb-own2 .ow-hd{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.vb-own2 .ow-tag{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:999px;background:rgba(47,108,224,.16);color:#8fb6ff;font-size:12.5px;font-weight:800}
+.vb-own2 .ow-tag svg{width:14px;height:14px}
+.vb-own2 .mt-due{flex:none;display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:999px;background:rgba(255,255,255,.05);color:#c3cad6;font-size:12.5px;font-weight:700;white-space:nowrap}
+.vb-own2 .mt-due svg{width:14px;height:14px;opacity:.8}
+.vb-own2 .mt-due.hot{background:rgba(245,165,36,.12);color:#f5c26b}
+.vb-own2 .ow-name{display:block;margin-top:12px;font-size:19px;font-weight:800;line-height:1.25;color:#f2f5fa;letter-spacing:-.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vb-own2 .ow-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:9px}
+.vb-own2 .ow-fmt{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:999px;background:rgba(255,255,255,.05);color:#c3cad6;font-size:12.5px;font-weight:700}
+.vb-own2 .ow-meta .hx-pl{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:#c3cad6}
+.vb-own2 .ow-meta .hx-pi{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center}
+.vb-own2 .ow-meta .hx-pi svg{width:13px;height:13px;fill:#fff}
+.vb-own2 .ow-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:14px;padding:12px 0;border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06)}
+.vb-own2 .ow-c{min-width:0;padding:0 10px}
+.vb-own2 .ow-c:first-child{padding-left:0}
+.vb-own2 .ow-c + .ow-c{border-left:1px solid rgba(255,255,255,.06)}
+.vb-own2 .ow-c span{display:block;font-size:12px;color:#8e98ab}
+.vb-own2 .ow-c b{display:block;margin-top:3px;font-size:16px;font-weight:800;color:#eef2f8;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb-own2 .ow-c i{display:block;margin-top:2px;font-style:normal;font-size:11px;color:#f5c26b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vb-own2 .ow-go{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:46px;margin-top:14px;border:1px solid rgba(91,147,245,.35);border-radius:14px;background:rgba(47,108,224,.12);color:#cfe0ff;font:inherit;font-size:14.5px;font-weight:800;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.vb-own2 .ow-go svg{width:16px;height:16px}
+.vb-own2 .ow-go:active{transform:scale(.98)}
+.vb-own2 .ow-go:focus-visible{outline:2px solid #8fb6ff;outline-offset:2px}
 /* ── карточка «Моих заданий» ── */
 html body #pg-mytasks .tk-card.vb-mt2{display:block;padding:16px 16px 14px;border-radius:22px;background:linear-gradient(180deg,#161b25 0%,#131821 100%);border:1px solid rgba(255,255,255,.07);box-shadow:none;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:border-color .2s,transform .16s cubic-bezier(.22,1,.36,1)}
 html body #pg-mytasks .tk-card.vb-mt2 + .tk-card{margin-top:12px}
@@ -94351,7 +94378,7 @@ function retryAcc(){
 function formHtml(c, url){
   var minV = terms(c).min;
   return hd('Загрузка видео')
-    + '<div class="vb-info">' + INFO + '<div><p>Загружайте видео сразу после публикации — даже с 0 просмотров. Сайт каждый день обновляет просмотры и сам начисляет деньги на баланс 30 дней.</p>'
+    + '<div class="vb-info">' + INFO + '<div><p>Загрузите видео — статистика вашего видео будет обновляться каждый день.</p>'
     + (minV ? '<p>Начисления начнутся с <b>' + fmt(minV) + ' ' + viewsW(minV) + '</b></p>' : '') + '</div></div>'
     + '<div class="vb-fld"><span class="vb-fld-k" id="vbAccK">Аккаунт</span>'
     + '<button type="button" class="vb-dd-btn" id="vbDd" data-vb="menu" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="vbAccK vbDd"></button></div>'
@@ -94360,10 +94387,7 @@ function formHtml(c, url){
     + '<button type="button" class="vb-paste" data-vb="paste">Вставить</button></span></label>'
     + '<div class="vb-hint" id="vbHint" role="status" aria-live="polite"></div>'
     + '<div id="vbFail"></div>'
-    + '<div class="vb-warn">' + WARN + '<div><b>Видео должно быть с рекламной интеграцией этого задания</b>'
-    + '<span>«' + esc(nameOf(c)) + '». Рекламодатель проверит ролик: реклама, маркировка erid и условия задания.</span></div></div>'
-    + '<div class="vb-btns"><button type="button" class="vb-go ghost" data-vb="close">Закрыть</button>'
-    + '<button type="button" class="vb-go" id="vbGo" data-vb="send" disabled><span class="lbl">Отправить</span></button></div>'
+    + '<div class="vb-btns"><button type="button" class="vb-go" id="vbGo" data-vb="send" disabled><span class="lbl">Отправить</span></button></div>'
     + (isMixed(c) && typeof window.__bpVbOrigSubmit === 'function' ? '<div class="vb-alt">Публикация не в TikTok и не в YouTube? <button type="button" class="vb-linkbtn" data-vb="old">Сдать по ссылке</button></div>' : '');
 }
 function paintAcc(){
@@ -95406,18 +95430,32 @@ function panelHtml(c){
     + '<span><b>' + rub(paid) + '</b>начислено</span></div>'
     + go('Загрузить ещё видео');
 }
-/* своя карточка в «Заданиях»: пометка «Ваше задание», вместо «Вы получите» —
-   пояснение, что вступить нельзя, и переход в оффер */
+/* своя карточка в «Заданиях» (09.10, по просьбе владельца): не карточка
+   участника с «Свободно в бюджете» на пол-экрана, а сводка автора —
+   пометка, название, три цифры и «Открыть мой оффер»; нажатие ведёт в оффер */
+function ownHtml(c){
+  var id = String(c.id), b = typeof window.bpHxBudget === 'function' ? window.bpHxBudget(c) : null;
+  var spent = num(c.stats && c.stats.totalSpent), vids = V.list.filter(function(v){ return v && String(v.campId) === id; });
+  var wait = vids.filter(function(v){ return v.status === 'review' || v.status === 'rejected'; }).length;
+  var paid = vids.reduce(function(a, v){ return a + num(v.paid); }, 0); if(paid > spent) spent = paid;
+  var pl = typeof window.bpHxPlat === 'function' ? window.bpHxPlat(c) : '';
+  var fmtL = c.formatLabel || c.format || '';
+  function cell(k, v, sub){ return '<div class="ow-c"><span>' + k + '</span><b>' + v + '</b>' + (sub ? '<i>' + sub + '</i>' : '') + '</div>'; }
+  return '<div class="ow-hd"><span class="ow-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Ваше задание</span>' + mtDays(c) + '</div>'
+    + '<b class="ow-name">' + esc(nameOf(c)) + '</b>'
+    + ((fmtL || pl) ? '<div class="ow-meta">' + (fmtL ? '<span class="ow-fmt">' + esc(fmtL) + '</span>' : '') + pl + '</div>' : '')
+    + '<div class="ow-grid">'
+    +   cell('Бюджет', b ? rub(b.v) : '—')
+    +   cell('Выплачено', rub(spent))
+    +   cell('Видео', String(vids.length), wait ? wait + ' ждут проверки' : '')
+    + '</div>'
+    + '<button type="button" class="ow-go" data-vb="own" data-camp="' + esc(id) + '">Открыть мой оффер<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg></button>';
+}
 function ownMark(card){
-  card.classList.add('vb-mine-card');
-  /* «Вы участвуете» у своего — запись старых версий, участия нет */
-  var tm = card.querySelector('.tk-mine'); if(tm) tm.remove();
-  if(card.classList.contains('tk-card-joined')) card.classList.remove('tk-card-joined');
-  if(card.querySelector('.vb-ownmark')) return;
-  var m = document.createElement('div'); m.className = 'vb-ownmark';
-  m.innerHTML = '<span class="vb-ownmark-t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Ваше задание</span>'
-    + '<span class="vb-ownmark-s">Вступить нельзя — его выполняют другие блогеры</span>';
-  card.insertBefore(m, card.firstChild);
+  var m = RX.exec(card.getAttribute('onclick') || ''), c = m && camp(m[1]); if(!c) return;
+  if(!card.classList.contains('vb-own2')){ card.classList.add('vb-own2'); card.classList.remove('tk-card-joined', 'vb-mine-card'); }
+  card.setAttribute('data-vb', 'own'); card.setAttribute('data-camp', String(c.id));
+  var h = ownHtml(c); if(card.__own !== h){ card.innerHTML = h; card.__own = h; }
 }
 function paintCards(){
   var pg = $('pg-tasks'); if(!pg) return;
@@ -95426,7 +95464,7 @@ function paintCards(){
       var m = RX.exec(card.getAttribute('onclick') || ''); if(!m) return;
       var c = camp(m[1]);
       if(c && ownTask(c.id)){ var op = card.querySelector('.vb-panel'); if(op){ op.remove(); var ob0 = card.querySelector('.hx-bank'); if(ob0) ob0.style.display = ''; } ownMark(card); return; }
-      if(card.classList.contains('vb-mine-card')){ card.classList.remove('vb-mine-card'); var om = card.querySelector('.vb-ownmark'); if(om) om.remove(); }
+      if(card.classList.contains('vb-own2')){ card.classList.remove('vb-own2'); card.removeAttribute('data-vb'); }
       if(!c || !isVidTask(c) || !joined(c.id) || !canUpload(c.id)) return;
       var bank = card.querySelector('.hx-bank');
       var p = card.querySelector('.vb-panel');
