@@ -93243,6 +93243,12 @@ html body .vb-card:focus,html body .vb-card:focus-visible,html body .vb-dd-menu:
   transition:background .16s,transform .16s cubic-bezier(.22,1,.36,1);-webkit-tap-highlight-color:transparent}
 .vb-go:active{transform:scale(.985)}
 .vb-go:disabled{background:rgba(47,108,224,.30);color:rgba(255,255,255,.55);cursor:default;transform:none}
+.vb-mine-card{position:relative;box-shadow:inset 0 0 0 1.5px rgba(47,108,224,.55)!important}
+html body #pg-tasks .tk-card.vb-mine-card .hx-earn{display:none!important}
+.vb-ownmark{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin:0 0 10px}
+.vb-ownmark-t{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;background:rgba(47,108,224,.16);color:#8fb6ff;font-size:12.5px;font-weight:800}
+.vb-ownmark-t svg{width:14px;height:14px}
+.vb-ownmark-s{font-size:12px;color:#8e98ab;line-height:1.35}
 .vb-ownnote{display:flex;flex-direction:column;gap:4px;margin:0 0 14px;padding:13px 15px;border-radius:16px;background:rgba(47,108,224,.10);border:1px solid rgba(91,147,245,.32)}
 .vb-ownnote b{font-size:14.5px;font-weight:800;color:#fff}
 .vb-ownnote span{font-size:13.5px;line-height:1.45;color:#b9c3d6}
@@ -93294,6 +93300,8 @@ html body #bpTaskSheet .tk-sheet-foot .tk-btn-ghost{flex:1 1 0}
 html body #bpTaskSheet.vb-fab .tk-sheet-foot{justify-content:center;pointer-events:none;padding:0!important;
   background:none!important;background-image:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;border:none!important;box-shadow:none!important}
 html body #bpTaskSheet.vb-fab .tk-sheet-foot .tk-btn-ghost{display:none!important}
+/* 09.10: липкие вкладки (z-index 4) наезжали на кнопку — кнопка выше всего в шторке */
+html body #bpTaskSheet .tk-sheet-foot{z-index:12!important}
 html body #bpTaskSheet.vb-fab .tk-sheet-foot::before{content:'';position:absolute;left:-12px;right:-12px;bottom:calc(-12px - env(safe-area-inset-bottom,0px));height:calc(80px + env(safe-area-inset-bottom,0px));
   background:linear-gradient(180deg,rgba(18,22,30,0),var(--bg2,#12161e) 72%);pointer-events:none;z-index:-1}
 html body #bpTaskSheet.vb-fab .tk-sheet-foot .tk-btn-main.vb-up{pointer-events:auto;flex:0 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:8px;
@@ -93397,6 +93405,11 @@ html body #bpTaskSheet .tk-sheet-body > .vb-pane:not(.on){display:none!important
 .vb-vc-top{display:flex;gap:11px;align-items:flex-start}
 .vb-vc-top .vb-thumb{width:50px;height:66px;border-radius:10px}
 .vb-vc-tx{flex:1;min-width:0}
+.vb-vc-amt{flex:none;max-width:42%;text-align:right;padding-top:1px}
+.vb-vc-amt b{display:block;font-size:17px;font-weight:800;line-height:1.2;color:#7ff0bd;font-variant-numeric:tabular-nums;white-space:nowrap}
+.vb-vc-amt.wait b{color:#eef2f8}
+.vb-vc-amt.z b{color:#8e98ab}
+.vb-vc-amt i{display:block;margin-top:3px;font-style:normal;font-size:11.5px;color:#8e98ab;white-space:nowrap}
 .vb-vc-tx b{display:block;font-size:14px;font-weight:700;color:#eef2f8;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .vb-vc-tx .vb-vc-h{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:12px;color:#8e98ab;white-space:nowrap;overflow:hidden}
 .vb-vc-tx .vb-pill{margin-top:7px}
@@ -93772,7 +93785,26 @@ function linkInfo(text){
     : (/^(www\.|m\.)?youtube\.com$/.test(host) || host === 'youtu.be') ? 'youtube' : '';
   var h = '';
   if(plat === 'tiktok'){ var mh = /\/@([\w.-]{1,40})/.exec(url); if(mh) h = mh[1].toLowerCase(); }
-  return { text:s, url:url, plat:plat, handle:h };
+  return { text:s, url:url, plat:plat, handle:h, vid:vidIdOf(url, plat) };
+}
+/* номер ролика из ссылки (короткие vm.tiktok.com номера не содержат — их
+   повтор ловит сервер: ответ «Это видео уже загружено») */
+function vidIdOf(url, plat){
+  var m;
+  if(plat === 'tiktok'){ m = /\/(?:video|photo)\/(\d{15,21})/.exec(url); return m ? m[1] : ''; }
+  if(plat === 'youtube'){
+    m = /[?&]v=([\w-]{11})/.exec(url) || /youtu\.be\/([\w-]{11})/.exec(url) || /\/(?:shorts|live|embed)\/([\w-]{11})/.exec(url);
+    return m ? m[1] : '';
+  }
+  return '';
+}
+/* этот ролик я уже загружал (в это или другое задание)? */
+function dupOf(li){
+  if(!li || !li.vid) return null;
+  var sid = mySrv();
+  return V.list.filter(function(v){
+    return v && String(v.videoId) === li.vid && vplat(v) === li.plat && (sid == null || Number(v.bloggerId) === sid);
+  })[0] || null;
 }
 function hnorm(h){ return String(h || '').replace(/^@/, '').toLowerCase(); }
 
@@ -94300,6 +94332,11 @@ function validate(){
     else if(al.indexOf(li.plat) < 0){
       hint = 'В этом задании принимаются видео только из ' + namesOf(al, ' и '); kind = 'bad';
       if(isMixed(c) && typeof window.__bpVbOrigSubmit === 'function'){ act = 'old'; lbl = 'Сдать работу по ссылке'; }
+    } else if(dupOf(li)){
+      /* одно видео — одна выплата: повтор не отправляем вовсе */
+      var dv = dupOf(li), same1 = String(dv.campId) === String(B.campId);
+      hint = 'Это видео вы уже загрузили' + (same1 ? ' в это задание' : ' в задание «' + nameOf(camp(dv.campId) || { name: dv.campName }) + '»') + ' — одно видео можно отправить только один раз. Загрузите другой ролик.';
+      kind = 'bad';
     } else if(!B.loading || B.all){
       var same = list.filter(function(x){ return x.platform === li.plat; });
       /* аккаунт подбираем сами, только когда ссылка новая (вставили или
@@ -94974,6 +95011,16 @@ function subNil(s, id){
   if(s === 'ok') return nil(OKI, 'Пока нет засчитанных видео', 'После зачёта 30 дней сайт сам считает просмотры и начисляет деньги — всё будет здесь.');
   return nil(NOPE, 'Отклонённых видео нет', 'Здесь будут ролики, которые не засчитали, с причиной.');
 }
+/* сумма справа сверху, без рамки: сколько уже начислено за ролик — растёт
+   раз в сутки до максимума; на проверке — сколько выйдет по текущим цифрам */
+function vcAmt(v, c){
+  var paid = num(v.paid), mx = maxOf(v, c), st = v.status, val, cls = 'ok', sub = '';
+  if(st === 'active' || st === 'paid'){ val = paid; if(st === 'active' && mx > 0) sub = 'из ' + rub(mx); }
+  else if(st === 'review' || st === 'rejected'){ val = needOf(v, c) ? 0 : nowAmt(v, c); cls = 'wait'; sub = mx > 0 ? 'до ' + rub(mx) : 'ожидает'; }
+  else if(paid > 0) val = paid;
+  else return '';
+  return '<div class="vb-vc-amt ' + (val > 0 ? cls : 'z') + '"><b>' + (cls === 'wait' && val > 0 ? '≈ ' : '') + rub(val) + '</b>' + (sub ? '<i>' + sub + '</i>' : '') + '</div>';
+}
 function vcard(v, c){
   var s = stOf(v), p = vplat(v), pay = '', paid = num(v.paid), live = v.status === 'review' || v.status === 'rejected';
   if(v.status === 'paid'){
@@ -95007,7 +95054,7 @@ function vcard(v, c){
     + '<button type="button" class="vb-mini" style="margin-top:10px" data-vb="act" data-act="reconn:' + p + ':' + esc(v.campId) + '">' + pi(p) + 'Переподключить ' + PN[p] + '</button>';
   return '<div class="vb-vc"><div class="vb-vc-top">' + thumb(v) + '<div class="vb-vc-tx"><b>' + esc(v.title || 'Видео ' + PN[p]) + '</b>'
     + '<span class="vb-vc-h">' + pi(p, 'sm') + esc(handleTxt(v) || PN[p]) + (v.postedAt ? ' · ' + esc(dsh(v.postedAt)) : '') + '</span>'
-    + '<span class="vb-pill is-' + s.c + '">' + s.t + '</span></div></div>'
+    + '<span class="vb-pill is-' + s.c + '">' + s.t + '</span></div>' + vcAmt(v, c) + '</div>'
     + stats(v) + pay + line + '</div>';
 }
 function setSub(btn){
@@ -95219,6 +95266,7 @@ function ensureJoin(cid){
 (function(){
   var o = window.bpTaskJoin; if(typeof o !== 'function') return;
   window.bpTaskJoin = function(id){
+    if(ownTask(id)){ toast('Это ваше задание — вступить в него нельзя', 'err'); openOwn(id); return; }
     var was = joined(id), r = o.apply(this, arguments);
     try{ if(!was && joined(id)) sendJoin(id); }catch(e){ E(e); }
     return r;
@@ -95285,13 +95333,24 @@ function panelHtml(c){
     + '<span><b>' + rub(paid) + '</b>начислено</span></div>'
     + go('Загрузить ещё видео');
 }
+/* своя карточка в «Заданиях»: пометка «Ваше задание», вместо «Вы получите» —
+   пояснение, что вступить нельзя, и переход в оффер */
+function ownMark(card){
+  card.classList.add('vb-mine-card');
+  if(card.querySelector('.vb-ownmark')) return;
+  var m = document.createElement('div'); m.className = 'vb-ownmark';
+  m.innerHTML = '<span class="vb-ownmark-t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Ваше задание</span>'
+    + '<span class="vb-ownmark-s">Вступить нельзя — его выполняют другие блогеры</span>';
+  card.insertBefore(m, card.firstChild);
+}
 function paintCards(){
   var pg = $('pg-tasks'); if(!pg) return;
   [].forEach.call(pg.querySelectorAll('.tk-list > .tk-card.hx'), function(card){
     try{
       var m = RX.exec(card.getAttribute('onclick') || ''); if(!m) return;
       var c = camp(m[1]);
-      if(c && ownTask(c.id)){ var op = card.querySelector('.vb-panel'); if(op){ op.remove(); var ob0 = card.querySelector('.hx-bank'); if(ob0) ob0.style.display = ''; } return; }
+      if(c && ownTask(c.id)){ var op = card.querySelector('.vb-panel'); if(op){ op.remove(); var ob0 = card.querySelector('.hx-bank'); if(ob0) ob0.style.display = ''; } ownMark(card); return; }
+      if(card.classList.contains('vb-mine-card')){ card.classList.remove('vb-mine-card'); var om = card.querySelector('.vb-ownmark'); if(om) om.remove(); }
       if(!c || !isVidTask(c) || !joined(c.id) || !canUpload(c.id)) return;
       var bank = card.querySelector('.hx-bank');
       var p = card.querySelector('.vb-panel');
