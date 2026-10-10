@@ -827,6 +827,31 @@ db.exec(`CREATE TABLE IF NOT EXISTS admin_log (
   detail  TEXT
 )`);
 
+/* Витрина карт блогеров (10.10.2026): владелец снимает все карты разом
+   (POST /api/admin/cards/unpublish-all) — с переходом на задания «как у
+   More Views» карта блогера больше не услуга. Это снятие, а не удаление:
+   работа людей остаётся, «Вернуть все» возвращает.
+   cards.hidden: 0 — на витрине; 1 — скрыта владельцем по одной (решение
+   по конкретной карте, «Вернуть все» её НЕ трогает); 2 — снята общей
+   кнопкой. Пока витрина закрыта (флаг cards_closed), новая карта тоже
+   ложится снятой: иначе приложение (старая версия, второй телефон)
+   вернуло бы её на витрину при следующей синхронизации.
+   card_tombs — снятая карта, которую автор удалил: если тот же номер
+   приедет снова (второй телефон хранит её у себя и шлёт заново), она
+   ляжет снятой, а не на витрину. В строке только номер, владелец и
+   отметка — ни имени, ни данных карты. */
+db.exec(`CREATE TABLE IF NOT EXISTS server_flags (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  at    TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec(`CREATE TABLE IF NOT EXISTS card_tombs (
+  id      TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  hidden  INTEGER NOT NULL,
+  at      TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+
 /* Картинки заданий (05.10.2026): баннеры, фото товара, обложки. Раньше
    они ехали внутри задания строкой base64, и запись задания упиралась в
    предел 400 КБ (POST /api/sync/put): задание с крупной обложкой молча
@@ -964,10 +989,36 @@ const q = {
     ORDER BY ver DESC LIMIT ?`),
   cardGet: db.prepare('SELECT * FROM cards WHERE id = ?'),
   cardsMine: db.prepare('SELECT id FROM cards WHERE user_id = ?'),
-  cardIns: db.prepare('INSERT INTO cards (id, user_id, data) VALUES (?,?,?)'),
+  cardIns: db.prepare('INSERT INTO cards (id, user_id, data, hidden) VALUES (?,?,?,?)'),
   cardUpd: db.prepare("UPDATE cards SET data = ?, updated_at = datetime('now') WHERE id = ?"),
   cardDel: db.prepare('DELETE FROM cards WHERE id = ? AND user_id = ?'),
   cardHide: db.prepare("UPDATE cards SET hidden = ?, updated_at = datetime('now') WHERE id = ?"),
+  /* Общая кнопка витрины: updated_at не трогаем — порядок в пульте и
+     «обновлена …» остаются про работу автора, а не про нажатие владельца. */
+  cardsUnpublishAll: db.prepare('UPDATE cards SET hidden = 2 WHERE hidden = 0'),
+  cardsRestoreAll: db.prepare('UPDATE cards SET hidden = 0 WHERE hidden = 2'),
+  cardsStats: db.prepare(`SELECT COUNT(*) AS total,
+      COALESCE(SUM(CASE WHEN c.hidden = 0 THEN 1 ELSE 0 END), 0) AS visible,
+      COALESCE(SUM(CASE WHEN c.hidden = 0 AND u.is_blocked = 0 THEN 1 ELSE 0 END), 0) AS listed,
+      COALESCE(SUM(CASE WHEN c.hidden = 1 THEN 1 ELSE 0 END), 0) AS hidden,
+      COALESCE(SUM(CASE WHEN c.hidden = 2 THEN 1 ELSE 0 END), 0) AS unpublished
+    FROM cards c JOIN users u ON u.id = c.user_id`),
+  cardTombGet: db.prepare('SELECT hidden FROM card_tombs WHERE id = ?'),
+  cardTombPut: db.prepare(`INSERT INTO card_tombs (id, user_id, hidden) VALUES (?,?,?)
+    ON CONFLICT(id) DO UPDATE SET user_id = excluded.user_id, hidden = excluded.hidden, at = datetime('now')`),
+  cardTombDel: db.prepare('DELETE FROM card_tombs WHERE id = ?'),
+  cardTombsRestoreAll: db.prepare('DELETE FROM card_tombs WHERE hidden = 2'),
+  /* Скрытие по одной — решение владельца об авторе, а не о номере карты:
+     у автора есть карта или след удалённой со скрытием по одной — новая
+     его карта ложится скрытой (hidden = 1) при любой витрине, и «Вернуть
+     все» её не публикует. Снимает отметку «Вернуть» у его карты в пульте. */
+  cardAuthorHid: db.prepare(`SELECT 1 AS x FROM cards WHERE user_id = ? AND hidden = 1
+    UNION ALL SELECT 1 FROM card_tombs WHERE user_id = ? AND hidden = 1 LIMIT 1`),
+  cardTombsAuthorClear: db.prepare('DELETE FROM card_tombs WHERE user_id = ? AND hidden = 1'),
+  flagGet: db.prepare('SELECT value, at FROM server_flags WHERE key = ?'),
+  flagSet: db.prepare(`INSERT INTO server_flags (key, value) VALUES (?,?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, at = datetime('now')`),
+  flagDel: db.prepare('DELETE FROM server_flags WHERE key = ?'),
   cardsPublic: db.prepare(`SELECT c.id, c.user_id, c.data, c.updated_at
     FROM cards c JOIN users u ON u.id = c.user_id
     WHERE c.hidden = 0 AND u.is_blocked = 0
@@ -1054,6 +1105,9 @@ const q = {
       expires_at = excluded.expires_at, updated_at = datetime('now')`),
   getToken: db.prepare('SELECT * FROM channel_tokens WHERE user_id = ? AND platform = ? AND external_id = ?'),
   delToken: db.prepare('DELETE FROM channel_tokens WHERE user_id = ? AND platform = ? AND external_id = ?'),
+  /* Снимки статистики канала — тоже данные площадки: отвязали канал —
+     удаляем вместе с доступом (политика конфиденциальности, раздел 6). */
+  delStats: db.prepare('DELETE FROM channel_stats WHERE user_id = ? AND platform = ? AND external_id = ?'),
   chanNums: db.prepare(`UPDATE channels SET username = ?, verified = ?, following = ?,
       likes_total = ?, videos_total = ?, stats_at = datetime('now')
     WHERE user_id = ? AND platform = ? AND external_id = ?`),
@@ -2009,6 +2063,65 @@ function cleanCard(raw) {
 /* Каталог отдаём из памяти: страница главной открывается часто, а список
    меняется редко. Любая правка карточки сбрасывает срок. */
 const cardsCache = { at: 0, rows: null };
+/* Витрина карт закрыта общей кнопкой «Снять все» (флаг cards_closed). */
+function cardsClosed() {
+  try { const f = q.flagGet.get('cards_closed'); return f && f.value === '1' ? f : null; }
+  catch (e) { return null; }
+}
+/* Счётчики витрины для пульта — по всей таблице. visible — с отметкой
+   «на витрине» (их и снимет «Снять все»), listed — из них реально видны
+   в каталоге (владелец не заблокирован), hidden — скрыты по одной,
+   unpublished — сняты общей кнопкой. */
+function cardsStatsBody() {
+  const s = q.cardsStats.get() || {};
+  const f = cardsClosed();
+  return {
+    total: Number(s.total) || 0, visible: Number(s.visible) || 0, listed: Number(s.listed) || 0,
+    hidden: Number(s.hidden) || 0, unpublished: Number(s.unpublished) || 0,
+    closed: !!f, closedAt: f ? f.at : null,
+  };
+}
+/* Разовый перенос (10.10.2026, решение владельца «Снять»): карты блогеров,
+   опубликованные до перехода на задания, при первом запуске этой версии
+   снимаются с витрины сами — так же, как кнопкой «Снять все» в пульте
+   (hidden 0 → 2, витрина закрыта, запись в журнале). Политика
+   конфиденциальности говорит «сняты» как о факте, и это не должно зависеть
+   от того, нажмёт ли кто-то кнопку после выкладки. Делается один раз
+   (отметка cards_unpub_1010): «Вернуть все» в пульте потом не отменяется
+   перезапуском. На пустой базе (новая установка, тесты) снимать нечего —
+   витрина остаётся открытой. */
+try {
+  if (!q.flagGet.get('cards_unpub_1010')) {
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      const vis = Number((q.cardsStats.get() || {}).visible) || 0;
+      let n = 0;
+      if (vis > 0) {
+        n = Number(q.cardsUnpublishAll.run().changes) || 0;
+        q.flagSet.run('cards_closed', '1');
+        q.insAdminLog.run('сервер', 'cards-unpublish-all', 'витрина карт',
+          'разовый перенос 10.10.2026: снято ' + n + ' · витрина закрыта, новые карты ложатся снятыми');
+      }
+      q.flagSet.run('cards_unpub_1010', vis > 0 ? 'снято ' + n : 'нечего снимать');
+      db.exec('COMMIT');
+      if (n) console.log('[cards] разовый перенос: снято с витрины ' + n + ' карт');
+    } catch (e) {
+      try { db.exec('ROLLBACK'); } catch (_) {}
+      throw e;
+    }
+  }
+} catch (e) { console.error('[cards] разовый перенос не удался —', e && e.message); }
+/* Доступ к площадке и снимки статистики канала, у которого больше нет
+   строки в channels (отвязан оператором до этой версии — тогда доступ
+   оставался), удаляем при старте: «доступ хранится, пока аккаунт
+   подключён». */
+try {
+  const orphan = (tb) => `DELETE FROM ${tb} WHERE NOT EXISTS (SELECT 1 FROM channels c
+    WHERE c.user_id = ${tb}.user_id AND c.platform = ${tb}.platform AND c.external_id = ${tb}.external_id)`;
+  const t = db.prepare(orphan('channel_tokens')).run();
+  const s = db.prepare(orphan('channel_stats')).run();
+  if (t.changes || s.changes) console.log('[channels] убраны доступы и снимки отвязанных каналов: ' + t.changes + ' / ' + s.changes);
+} catch (e) { console.error('[channels] уборка отвязанных не удалась —', e && e.message); }
 
 /* Рейтинг пересчитывается не чаще раза в минуту: запрос групповой, а ручка открытая. */
 const lbCache = { at: 0, rows: null, total: 0 };
@@ -2808,10 +2921,22 @@ const routes = {
     if (data.length > 400 * 1024) return { status: 413, body: { error: 'Карточка слишком большая' } };
     const ex = q.cardGet.get(id);
     if (ex && ex.user_id !== u.id) return { status: 403, body: { error: 'Это чужая карточка' } };
+    /* Правка своей карты меняет только данные: снятие с витрины (hidden)
+       — решение владельца площадки, синхронизация из приложения его не
+       отменяет. */
     if (ex) q.cardUpd.run(data, id);
     else {
       if (q.cardsMine.all(u.id).length >= 3) return { status: 409, body: { error: 'Больше трёх карточек на аккаунт нельзя' } };
-      q.cardIns.run(id, u.id, data);
+      /* Новая строка: снятая и удалённая автором карта с тем же номером
+         ложится снятой, как была; пока витрина закрыта — любая новая
+         тоже (см. card_tombs и cards_closed у таблиц). */
+      const tomb = q.cardTombGet.get(id);
+      /* Автор, чью карту владелец скрыл по одной, новой картой (под новым
+         номером) это решение не обходит — ни сразу, ни через «Вернуть все». */
+      const hidden = q.cardAuthorHid.get(u.id, u.id) ? 1
+        : tomb ? (Number(tomb.hidden) === 2 ? 2 : 1) : (cardsClosed() ? 2 : 0);
+      q.cardIns.run(id, u.id, data, hidden);
+      if (tomb) q.cardTombDel.run(id);
     }
     cardsCache.at = 0;
     return { status: 200, body: { ok: true, id } };
@@ -2821,6 +2946,11 @@ const routes = {
     const u = auth(req);
     if (!u) return { status: 401, body: { error: 'Нужен вход' } };
     const id = cardStr(body.id, 64);
+    /* Удалить свою карту автор может всегда, но снятая не должна вернуться
+       на витрину, если тот же номер пришлёт второй телефон: запоминаем
+       отметку (только номер и отметку, без данных карты). */
+    const ex = q.cardGet.get(id);
+    if (ex && ex.user_id === u.id && Number(ex.hidden)) q.cardTombPut.run(id, u.id, Number(ex.hidden));
     const r = q.cardDel.run(id, u.id);
     cardsCache.at = 0;
     return { status: 200, body: { ok: true, removed: Number(r.changes) || 0 } };
@@ -2831,20 +2961,77 @@ const routes = {
   'POST /api/admin/cards/hide': async (req, body) => {
     if (!isAdmin(req)) return { status: 403, body: { error: 'Только владелец площадки' } };
     const id = cardStr(body.id, 64);
-    if (!q.cardGet.get(id)) return { status: 404, body: { error: 'Карточка не найдена' } };
+    const card = q.cardGet.get(id);
+    if (!card) return { status: 404, body: { error: 'Карточка не найдена' } };
     q.cardHide.run(body.hidden === false ? 0 : 1, id);
+    /* «Вернуть» у карты автора снимает и отметку об авторе (следы его
+       удалённых карт, скрытых по одной): владелец ему снова доверяет. */
+    if (body.hidden === false) q.cardTombsAuthorClear.run(card.user_id);
     cardsCache.at = 0;
     adminLog(req, body.hidden === false ? 'card-show' : 'card-hide', 'карточка ' + id, null);
     return { status: 200, body: { ok: true, id, hidden: body.hidden !== false } };
   },
 
+  /* hidden в строке: 0 — на витрине, 1 — скрыта по одной, 2 — снята общей
+     кнопкой. stats — по всей таблице (строк в ответе не больше 300). */
   'GET /api/admin/cards': async (req) => {
     if (!isAdmin(req)) return { status: 403, body: { error: 'Только владелец площадки' } };
-    return { status: 200, body: { rows: q.cardsAll.all().map((c) => ({
+    return { status: 200, body: { stats: cardsStatsBody(), rows: q.cardsAll.all().map((c) => ({
       id: c.id, user_id: c.user_id, hidden: c.hidden, updated_at: c.updated_at, owner: c.owner,
       owner_email: c.owner_email, owner_blocked: c.owner_blocked,
       card: Object.assign(cardBrief(c.data), { hasAvatar: !!c.has_avatar }),
     })) } };
+  },
+
+  /* Снять все карты с витрины разом (10.10.2026, решение владельца:
+     модель как у More Views, карта блогера больше не услуга). Обратимо:
+     карты остаются у авторов и в пульте со своей отметкой (hidden = 2).
+     Витрина закрывается: пока не нажато «Вернуть все», новые карты и
+     повторно присланные приложением тоже ложатся снятыми. Скрытые раньше
+     по одной (hidden = 1) остаются при своей отметке. Повторное нажатие
+     безопасно: снимать уже нечего — unpublished: 0. */
+  'POST /api/admin/cards/unpublish-all': async (req) => {
+    if (!isAdmin(req)) return { status: 403, body: { error: 'Только владелец площадки' } };
+    let n = 0;
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      n = Number(q.cardsUnpublishAll.run().changes) || 0;
+      q.flagSet.run('cards_closed', '1');
+      db.exec('COMMIT');
+    } catch (e) {
+      try { db.exec('ROLLBACK'); } catch (_) {}
+      throw e;
+    }
+    cardsCache.at = 0; cardsCache.rows = null;
+    try { vidBoards.clear(); } catch (e) { /* доски заданий соберутся заново */ }
+    const stats = cardsStatsBody();
+    adminLog(req, 'cards-unpublish-all', 'витрина карт',
+      'снято ' + n + ' · витрина закрыта, новые карты ложатся снятыми · скрытых по одной: ' + stats.hidden);
+    return { status: 200, body: { ok: true, unpublished: n, closed: true, stats } };
+  },
+
+  /* Вернуть все карты, снятые общей кнопкой, и открыть витрину. Скрытые
+     по одной (hidden = 1) не возвращаются — это отдельные решения; их
+     «Вернуть» — по одной, через /api/admin/cards/hide. */
+  'POST /api/admin/cards/restore-all': async (req) => {
+    if (!isAdmin(req)) return { status: 403, body: { error: 'Только владелец площадки' } };
+    let n = 0;
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      n = Number(q.cardsRestoreAll.run().changes) || 0;
+      q.cardTombsRestoreAll.run();
+      q.flagDel.run('cards_closed');
+      db.exec('COMMIT');
+    } catch (e) {
+      try { db.exec('ROLLBACK'); } catch (_) {}
+      throw e;
+    }
+    cardsCache.at = 0; cardsCache.rows = null;
+    try { vidBoards.clear(); } catch (e) { /* доски заданий соберутся заново */ }
+    const stats = cardsStatsBody();
+    adminLog(req, 'cards-restore-all', 'витрина карт',
+      'возвращено ' + n + ' · витрина открыта · скрытыми по одной остались: ' + stats.hidden);
+    return { status: 200, body: { ok: true, restored: n, closed: false, stats } };
   },
 
   /* ── Рейтинг блогеров ──
@@ -2859,7 +3046,11 @@ const routes = {
     if (!rateLimit(req, 'lb', 60, 60000)) return tooOften;
     const now = Date.now();
     if (!lbCache.rows || now - lbCache.at > 60000) {
-      lbCache.rows = q.lbTop.all(10).map((r) => ({ id: r.id, name: r.name, deals: Number(r.deals) || 0 }));
+      /* Имя — как в лидерборде задания (vidPubName): почта вместо имени и
+         номер Телеграма из имени по умолчанию наружу не уходят. id —
+         служебный номер аккаунта (по нему приложение находит свою строку);
+         он назван в политике конфиденциальности. */
+      lbCache.rows = q.lbTop.all(10).map((r) => ({ id: r.id, name: vidPubName(r.name), deals: Number(r.deals) || 0 }));
       lbCache.total = Number((q.lbTotal.get() || {}).n) || 0;
       lbCache.at = now;
     }
@@ -4240,6 +4431,7 @@ const routes = {
     q.delChannel.run(u.id, platform, externalId);
     /* Отвязали — доступ к площадке держать не за чем и незачем. */
     try { q.delToken.run(u.id, platform, externalId); } catch (e) { /* мог не сохраниться */ }
+    try { q.delStats.run(u.id, platform, externalId); } catch (e) { /* снимков могло не быть */ }
     /* Ролики с этого канала, которые ещё ждут проверки, снимаем; засчитанные
        остаются в работе (их решит владелец, если доступ не вернётся). */
     vidRevoke(u.id, platform, externalId, 'self');
@@ -4254,6 +4446,13 @@ const routes = {
     const rows = q.channelsByExt.all(platform, externalId);
     if (!rows.length) return { status: 404, body: { error: 'Такой канал не подтверждён' } };
     q.delChannelEverywhere.run(platform, externalId);
+    /* Доступ к площадке и снимки статистики — у каждого, от кого канал
+       отвязан: раньше они оставались на сервере бессрочно, хотя канала
+       уже не было (политика обещает удаление при отвязке). */
+    for (const r of rows) {
+      try { q.delToken.run(r.user_id, platform, externalId); } catch (e) { /* мог не сохраниться */ }
+      try { q.delStats.run(r.user_id, platform, externalId); } catch (e) { /* снимков могло не быть */ }
+    }
     for (const r of rows) vidRevoke(r.user_id, platform, externalId, 'admin');
     adminLog(req, 'channel-unlink', platform + ':' + externalId, 'у ' + rows.map((r) => 'user ' + r.user_id).join(', '));
     return { status: 200, body: { ok: true, freedFrom: rows.map((r) => r.user_id) } };
@@ -4550,6 +4749,79 @@ const routes = {
     adminLog(req, blocked ? 'user-block' : 'user-unblock', 'user ' + id,
       (u.email || '') + (body.reason ? ' · ' + String(body.reason).slice(0, 200) : ''));
     return { status: 200, body: { ok: true, userId: id, blocked } };
+  },
+
+  /* Удаление данных пользователя по его обращению (10.10.2026; политика
+     конфиденциальности, раздел 7 — для проверки Google и TikTok нужен
+     работающий путь удаления). Строку users не стираем — на неё ссылаются
+     журнал денег, выводы и проверка личности, которые закон велит хранить, —
+     а обезличиваем: почта, имя, пароль, входы через Telegram и Google
+     стираются, вход закрыт навсегда. Удаляются: сессии, подписки на
+     уведомления, подключённые каналы с доступом к площадкам и снимками
+     статистики, карты блогера и их следы, личные конверты (профиль,
+     настройки, свободные дни) и личные сообщения в обе стороны, участие в
+     заданиях; у его роликов — ссылка, название и ник (цифры и суммы
+     остаются в расчётах заданий). Задания, которые он создал, пропадают из
+     общего списка вместе с аккаунтом (конверты заблокированных не
+     показываются), а их условия остаются в записях о выплатах блогерам.
+     Нельзя, пока на счёте есть деньги или по его роликам либо заданиям
+     идут проверка и подсчёт — сначала вывод, возврат, конец подсчёта.
+     confirm: 'erase' — защита от случайного нажатия. */
+  'POST /api/admin/users/erase': async (req, body) => {
+    if (!isAdmin(req)) return { status: 403, body: { error: 'Только владелец площадки' } };
+    const id = Number(body.userId);
+    if (!Number.isInteger(id) || id <= 0) return { status: 400, body: { error: 'Нужен номер пользователя' } };
+    if (body.confirm !== 'erase') return { status: 400, body: { error: 'Нужно подтверждение: confirm = "erase"' } };
+    const u = q.userById.get(id);
+    if (!u) return { status: 404, body: { error: 'Нет такого пользователя' } };
+    if (u.is_admin || ADMIN_EMAILS.includes(String(u.email || '').toLowerCase())) {
+      return { status: 409, body: { error: 'Аккаунт владельца площадки так не удаляется' } };
+    }
+    if (/@erased\.invalid$/.test(String(u.email || ''))) {
+      return { status: 409, body: { error: 'Данные этого пользователя уже удалены', code: 'already' } };
+    }
+    const b = q.balance.get(id) || {};
+    if (Number(b.available) || Number(b.hold)) {
+      return { status: 409, body: { error: 'На счёте остались деньги: доступно ' + (Number(b.available) || 0) + ' ₽, в заморозке '
+        + (Number(b.hold) || 0) + ' ₽. Сначала вывод или возврат — потом удаление.', code: 'money' } };
+    }
+    const live = Number(db.prepare(`SELECT COUNT(*) AS n FROM task_videos
+      WHERE (blogger_id = ? OR owner_id = ?) AND status IN ('review','active','rejected')`).get(id, id).n) || 0;
+    if (live) {
+      return { status: 409, body: { error: 'По роликам этого человека или его заданиям ещё идут проверка или подсчёт ('
+        + live + '). Удалить можно, когда подсчёт закончится.', code: 'videos_live' } };
+    }
+    const n = {};
+    const run = (k, sql, ...a) => { n[k] = Number(db.prepare(sql).run(...a).changes) || 0; };
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      run('sessions', 'DELETE FROM sessions WHERE user_id = ?', id);
+      run('push', 'DELETE FROM push_subs WHERE user_id = ?', id);
+      run('tokens', 'DELETE FROM channel_tokens WHERE user_id = ?', id);
+      run('stats', 'DELETE FROM channel_stats WHERE user_id = ?', id);
+      run('channels', 'DELETE FROM channels WHERE user_id = ?', id);
+      run('cards', 'DELETE FROM cards WHERE user_id = ?', id);
+      run('tombs', 'DELETE FROM card_tombs WHERE user_id = ?', id);
+      run('self', `DELETE FROM sync WHERE a_id = ? AND kind IN ('prof','mine','slot')`, id);
+      run('dm', `DELETE FROM sync WHERE kind = 'dm' AND (a_id = ? OR b_id = ?)`, id, id);
+      run('members', 'DELETE FROM task_members WHERE user_id = ?', id);
+      run('videos', 'UPDATE task_videos SET url = NULL, title = NULL, handle = NULL WHERE blogger_id = ?', id);
+      run('errors', 'UPDATE errors SET user_id = NULL WHERE user_id = ?', id);
+      db.prepare(`UPDATE users SET email = ?, name = ?, pass_salt = ?, pass_hash = ?, is_blocked = 1,
+        tg_id = NULL, google_sub = NULL WHERE id = ?`)
+        .run('erased-' + id + '@erased.invalid', 'Удалённый пользователь',
+          crypto.randomBytes(16).toString('hex'), crypto.randomBytes(32).toString('hex'), id);
+      db.exec('COMMIT');
+    } catch (e) {
+      try { db.exec('ROLLBACK'); } catch (_) {}
+      throw e;
+    }
+    cardsCache.at = 0; cardsCache.rows = null; lbCache.at = 0; tsumCache.at = 0;
+    try { vidBoards.clear(); } catch (e) { /* доски соберутся заново */ }
+    adminLog(req, 'user-erase', 'user ' + id,
+      'данные удалены по обращению' + (body.reason ? ' · ' + String(body.reason).slice(0, 200) : '')
+      + ' · ' + Object.keys(n).map((k) => k + ' ' + n[k]).join(', '));
+    return { status: 200, body: { ok: true, userId: id, removed: n } };
   },
 
   /* Журнал действий владельца — кто и что сделал в пульте. */
@@ -4868,6 +5140,29 @@ const routes = {
     } };
   },
 
+  /* «Чат» у участника задания (10.10.2026): в строках доски номера
+     аккаунта нет (кроме ответа автору задания), есть только who. Номер
+     для доставки сообщения приложение спрашивает здесь — в момент, когда
+     человек нажал «Чат», а не для всех строк сразу. Ищем только среди
+     участников этого задания; частота ограничена. */
+  'POST /api/tasks/peer': async (req, body) => {
+    const u = auth(req);
+    if (!u) return vidFail('auth');
+    if (!rateLimit(req, 'vpeer:' + u.id, 30, 60000)) return vidFail('often');
+    const campId = String(body.campId || '').slice(0, 80);
+    const who = String(body.who || '');
+    if (!campId || !/^[A-Za-z0-9_-]{10,40}$/.test(who)) return { status: 400, body: { error: 'Нужны campId и who' } };
+    if (!vidCamp(campId)) return vidFail('no_camp');
+    let uid = null;
+    for (const r of vidPeerIds.all(campId, campId)) {
+      if (vidWhoKey(r.id) === who) { uid = Number(r.id); break; }
+    }
+    const p = uid != null ? q.userById.get(uid) : null;
+    if (!p || p.is_blocked) return { status: 404, body: { error: 'Участник не найден', code: 'no_peer' } };
+    if (p.id === u.id) return { status: 400, body: { error: 'Это вы', code: 'self' } };
+    return { status: 200, body: { ok: true, uid: p.id } };
+  },
+
   /* Список: автору оффера — все ролики оффера, блогеру — свои. */
   'GET /api/tasks/videos': async (req, body, url) => {
     const u = auth(req);
@@ -4936,7 +5231,7 @@ const routes = {
       if (!info.changes) return { status: 409, body: { error: 'Это видео уже проверено', code: 'state' } };
       tgAlert('vid:rej:' + row.id,
         '↩️ Рекламодатель вернул видео (' + vidPlatName(row.platform) + ')\n\nПричина: ' + reason
-        + '\nОффер: «' + name + '» (' + row.camp_id + ')'
+        + '\nЗадание: «' + name + '» (' + row.camp_id + ')'
         + '\nРекламодатель: ' + vidWho(row.owner_id)
         + '\nБлогер: ' + vidWho(row.blogger_id)
         + '\nВидео: ' + (row.url || '')
@@ -6430,7 +6725,7 @@ function vidJudge(row) {
     tgAlert('vid:risk:' + row.id + ':' + res.level,
       '🚩 Видео по заданию (' + vidPlatName(plat) + '): цифры выбиваются\n\n'
       + 'Оценка: ' + riskWord(res.level) + ' (' + res.risk + ' из 100)\n'
-      + 'Оффер: «' + vidCampName(ci) + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n'
+      + 'Задание: «' + vidCampName(ci) + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n'
       + 'Просмотров ' + row.views + ', лайков ' + row.likes + ', комментариев ' + row.comments
       + ', репостов ' + row.shares + '\n' + (row.url || '') + '\n\n'
       + 'Что выбилось:\n• ' + res.reasons.join('\n• ') + '\n\n'
@@ -6584,7 +6879,7 @@ function vidHoldAlert(row, why) {
   if (!vidOnce(vidHoldSeen, row.id)) return;
   tgAlert('vid:hold:' + row.id,
     '⏸ Начисления за видео ждут вашего решения\n\n' + why + '\n'
-    + 'Оффер: «' + vidCampName(vidCamp(row.camp_id)) + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n'
+    + 'Задание: «' + vidCampName(vidCamp(row.camp_id)) + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n'
     + 'Площадка: ' + vidPlatName(row.platform) + '\n'
     + 'Начислено по цифрам: ' + vidEst(row) + ' ₽, выплачено: ' + (row.paid || 0) + ' ₽\n' + (row.url || '')
     + '\n\nРешение: ' + PUBLIC_URL + '/admin',
@@ -6598,7 +6893,7 @@ function vidPayHoldSet(row, why, now, blogMsg) {
   if (!q.vidPayHold.run('money', why, now, row.id).changes) return false;
   tgAlert('vid:payhold:' + row.id,
     '⏸ Начисления за видео ждут вашего решения\n\n' + why + '\n'
-    + 'Оффер: «' + vidCampName(vidCamp(row.camp_id)) + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n'
+    + 'Задание: «' + vidCampName(vidCamp(row.camp_id)) + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n'
     + 'Начислено: ' + (row.earned || 0) + ' ₽, выплачено: ' + (row.paid || 0) + ' ₽\n' + (row.url || '')
     + '\n\nРешение: ' + PUBLIC_URL + '/admin', 'server', true);
   if (blogMsg) vidNotify(row.blogger_id, 'Выплата за видео задерживается', blogMsg, '/?go=tasks');
@@ -6738,7 +7033,7 @@ async function vidAccrueRun(id, o) {
       note = 'Подсчёт закрыт по последнему замеру' + (row.stats_at ? ' от ' + vidDate(row.stats_at) : '')
         + ': ' + P + ' не отдал цифры ' + tries + ' раза подряд после конца срока (' + m.fail + ')';
       tgAlert('vid:lastknown:' + id, '⚠️ Подсчёт видео закрыт без финального замера\n\n' + note
-        + '\nОффер: «' + name + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n' + (row.url || '')
+        + '\nЗадание: «' + name + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n' + (row.url || '')
         + '\n\nПроверить: ' + PUBLIC_URL + '/admin', 'server');
       q.vidFreeze.run(now, id);
     } else {
@@ -6947,7 +7242,7 @@ function vidPayStep(row, earned, owe, views, now, name) {
     if (r.status === 409 && /уже|спор|меньше/.test(err)) return { state: 'skip', why: 'race', paid: 0, total: before, earned };
     console.error('[видео] начисление не прошло:', row.id, r.status, err);
     tgAlert('vid:payfail:' + row.id, '💥 Начисление за видео не прошло\n\nРолик #' + row.id
-      + ', оффер «' + name + '»\n' + err, 'server', true);
+      + ', задание «' + name + '»\n' + err, 'server', true);
     return { state: 'fail', paid: 0, total: before, earned };
   }
   if (r.body.repeated) return { credited: 0 };
@@ -6956,7 +7251,7 @@ function vidPayStep(row, earned, owe, views, now, name) {
   if (short > 0) {
     /* pay_hold уже поставлен в той же транзакции, что и выплата. */
     tgAlert('vid:short:' + row.id, '⚠️ За видео заплачено меньше начисленного\n\n'
-      + 'Оффер: «' + name + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n'
+      + 'Задание: «' + name + '»\nБлогер: ' + vidWho(row.blogger_id) + '\n'
       + 'Начислено ' + earned + ' ₽, выплачено ' + after + ' ₽ — в заморозке не хватило ' + short + ' ₽. Остаток ждёт решения: '
       + PUBLIC_URL + '/admin', 'server', true);
     vidNotify(row.blogger_id, 'Выплата за видео задерживается', msgShort(paid, short), '/?go=tasks');
@@ -7099,6 +7394,28 @@ function vidBoardAgg(campId) {
    написать участнику без карточки; номера участников его роликов он и
    так видит в /api/tasks/videos. Внутренние номера держим рядом, в uids. */
 function vidCardOf(uid) { const r = q.cardPubOf.get(uid); return r ? String(r.id) : ''; }
+/* who — постоянный ключ участника для «Профиль» и «Чат» (10.10.2026).
+   Раньше единственным ключом у всех, кроме автора задания, была открытая
+   карта каталога: когда карты сняли с витрины, кнопки «Профиль» и «Чат»
+   у других участников пропали. who от каталога не зависит и номера
+   аккаунта не раскрывает (HMAC по секрету сервера). Номер для чата
+   приложение спрашивает отдельно (POST /api/tasks/peer) — только когда
+   человек нажал «Чат». Секрет лежит в server_flags и наружу не уходит. */
+let vidWhoSecret = '';
+function vidWhoKey(uid) {
+  if (!vidWhoSecret) {
+    try {
+      const f = q.flagGet.get('who_secret');
+      if (f && /^[a-f0-9]{64}$/.test(f.value)) vidWhoSecret = f.value;
+      else { vidWhoSecret = crypto.randomBytes(32).toString('hex'); q.flagSet.run('who_secret', vidWhoSecret); }
+    } catch (e) { if (!vidWhoSecret) vidWhoSecret = crypto.randomBytes(32).toString('hex'); }
+  }
+  return crypto.createHmac('sha256', vidWhoSecret).update('who:' + uid).digest('base64url').slice(0, 22);
+}
+/* Кто может стоять в лидерборде или списке участников задания: вступившие
+   (в том числе вышедшие — их ролики остаются в лидерборде) и авторы роликов. */
+const vidPeerIds = db.prepare(`SELECT user_id AS id FROM task_members WHERE camp_id = ?
+  UNION SELECT blogger_id FROM task_videos WHERE camp_id = ?`);
 function vidBoardSorted(agg, sort) {
   if (agg.sorted[sort]) return agg.sorted[sort];
   const list = sort === 'views' ? agg.ranked.slice() : agg.ranked.slice().sort((a, b) =>
@@ -7106,7 +7423,7 @@ function vidBoardSorted(agg, sort) {
   const mine = new Map(list.map((r, i) => [r.uid, Object.assign({}, r, { rank: i + 1 })]));
   const top = list.slice(0, 50);
   const leaders = top.map((r, i) => Object.assign({ rank: i + 1, name: vidPubName(r.name) },
-    vidPubChan(agg.key, r.uid), { card: vidCardOf(r.uid), videos: r.videos, views: r.views, earned: r.earned }));
+    vidPubChan(agg.key, r.uid), { card: vidCardOf(r.uid), who: vidWhoKey(r.uid), videos: r.videos, views: r.views, earned: r.earned }));
   agg.sorted[sort] = { leaders, uids: top.map((r) => r.uid), mine };
   return agg.sorted[sort];
 }
@@ -7117,7 +7434,7 @@ function vidBoardPage(agg, campId, offset, limit) {
   const rows = ms.map((m, i) => {
     const r = agg.byUid.get(m.user_id);
     return Object.assign({ rank: offset + i + 1, name: vidPubName(m.name) }, vidPubChan(campId, m.user_id),
-      { card: vidCardOf(m.user_id), videos: r ? r.videos : 0, joinedAt: m.joined_at });
+      { card: vidCardOf(m.user_id), who: vidWhoKey(m.user_id), videos: r ? r.videos : 0, joinedAt: m.joined_at });
   });
   const page = { rows, uids: ms.map((m) => m.user_id) };
   if (agg.pages.size < 50) agg.pages.set(k, page);

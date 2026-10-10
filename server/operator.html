@@ -196,6 +196,18 @@
   .pchip.youtube i{background:#ff3b3b} .pchip.tiktok i{background:#e5e7ea} .pchip.telegram i{background:#29a9eb} .pchip.instagram i{background:#e1306c} .pchip.vk i{background:#4c75a3}
   .ccard .price{font-family:var(--mono);font-size:var(--fs-lg);font-weight:600;letter-spacing:-.5px}
   .ccard .row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:auto}
+  /* витрина карт целиком: состояние и две общие кнопки над сеткой */
+  .vit{display:flex;align-items:center;gap:12px 18px;flex-wrap:wrap;margin-bottom:14px;padding:14px 16px;
+    background:var(--card);border:1px solid var(--line);border-radius:var(--r)}
+  .vit.closed{border-color:rgba(245,165,36,.32)}
+  .vit-tx{flex:1 1 320px;min-width:0}
+  .vit-tx > b{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:var(--fs-md);font-weight:600}
+  .vit-tx p b{color:var(--t1);font-weight:600}
+  .vit-tx p{margin:4px 0 0;color:var(--t2);font-size:var(--fs-sm);line-height:1.55;max-width:78ch}
+  .vit-tx p span{display:block;color:var(--t3);margin-top:2px}
+  .vit-acts{display:flex;gap:8px;flex-wrap:wrap;flex-shrink:0}
+  .st.closed{background:var(--warnbg);color:var(--warn)}
+  @media (max-width:560px){ .vit-acts{width:100%} .vit-acts .btn{flex:1 1 auto} }
 
   /* ── площадки ── */
   .plats{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
@@ -478,7 +490,7 @@ var SECTIONS = [
     tool:'<button type="button" class="btn ghost sm" data-act="vidsync" title="Спросить TikTok и YouTube о свежих цифрах сейчас, не дожидаясь суточного круга">' + ICON.pulse + 'Обновить данные сейчас</button>' },
   'sep',
   { id:'users',  t:'Пользователи',   sub:'Все аккаунты на сервере: баланс, проверка личности, каналы, блокировка.' },
-  { id:'cards',  t:'Каталог',        sub:'Карточки блогеров в общем каталоге. Скрытая карточка пропадает у всех, но остаётся у автора.' },
+  { id:'cards',  t:'Каталог',        sub:'Карточки блогеров в общем каталоге. Снятая карточка пропадает у всех, но остаётся у автора.' },
   'sep',
   { id:'errors', t:'Поломки',        sub:'Что сломалось у людей в приложении.', badge:'errors' },
   { id:'plats',  t:'Площадки',       sub:'Подключение входа через TikTok и YouTube: ключи и адреса возврата.' },
@@ -1282,7 +1294,7 @@ document.addEventListener('input', function(e){
 });
 
 /* ── Каталог ── */
-var C = { q:'', f:'', rows:[] };
+var C = { q:'', f:'', rows:[], stats:null };
 var PL = { youtube:'YouTube', tiktok:'TikTok', telegram:'Telegram', instagram:'Instagram', vk:'VK' };
 function subsShort(n){ n = Number(n) || 0; return n >= 1e6 ? (Math.round(n / 1e5) / 10 + 'M') : n >= 1e3 ? (Math.round(n / 100) / 10 + 'K') : String(n); }
 function cardTile(c){
@@ -1302,10 +1314,36 @@ function cardTile(c){
     + '<div class="mute">обновлена ' + when(c.updated_at) + '</div></div>'
     + '<div class="acts" style="justify-content:flex-end">'
     + (c.owner_blocked ? '<span class="st blocked">владелец в блоке</span>' : '')
-    + (c.hidden ? '<span class="st off">скрыта</span><button type="button" class="btn ghost sm" data-cardhide="' + esc(c.id) + '" data-hidden="0">Вернуть</button>'
+    + (c.hidden ? '<span class="st off" title="' + (c.hidden === 2 ? 'Снята кнопкой «Снять все карты с витрины»' : 'Скрыта вами по одной') + '">'
+                    + (c.hidden === 2 ? 'снята' : 'скрыта') + '</span><button type="button" class="btn ghost sm" data-cardhide="' + esc(c.id) + '" data-hidden="0">Вернуть</button>'
                 : '<button type="button" class="btn warn sm" data-cardhide="' + esc(c.id) + '" data-hidden="1">Скрыть</button>')
     + '</div></div></div>';
 }
+/* Витрина целиком: «Снять все» и «Вернуть все» (10.10.2026). Числа — из
+   stats сервера по всей таблице, а не по загруженным 300 строкам. */
+function cardWord(n){ return plural(n, 'карту', 'карты', 'карт'); }
+function vitHtml(){
+  var s = C.stats || { total:0, visible:0, listed:0, hidden:0, unpublished:0, closed:false };
+  var parts = ['на витрине: <b>' + s.listed + '</b>'];
+  if(s.visible > s.listed) parts.push('владелец в блоке: ' + (s.visible - s.listed));
+  if(s.unpublished) parts.push('снято общей кнопкой: ' + s.unpublished);
+  if(s.hidden) parts.push('скрыто по одной: ' + s.hidden);
+  var canOff = !(s.closed && !s.visible);
+  var canOn = s.closed || s.unpublished > 0;
+  return '<section class="vit' + (s.closed ? ' closed' : '') + '" id="vitBox" aria-labelledby="vitT">'
+    + '<div class="vit-tx"><b id="vitT">Витрина карт блогеров'
+    + '<span class="st ' + (s.closed ? 'closed' : 'on') + '">' + (s.closed ? 'закрыта' : 'открыта') + '</span></b>'
+    + '<p>' + parts.join(' · ') + ' · всего карт: ' + s.total
+    + '<span>' + (s.closed
+        ? 'Закрыта ' + when(s.closedAt) + '. Новые карты и присланные приложением заново тоже ложатся снятыми, пока вы не нажмёте «Вернуть все».'
+        : 'Задания работают как у More Views — карта блогера больше не услуга. Снять все разом можно одной кнопкой, это обратимо.')
+    + '</span></p></div>'
+    + '<div class="vit-acts">'
+    + (canOn ? '<button type="button" class="btn ghost" data-act="cardson">Вернуть все</button>' : '')
+    + (canOff ? '<button type="button" class="btn bad" data-act="cardsoff">Снять все карты с витрины</button>' : '')
+    + '</div></section>';
+}
+function paintVit(){ var b = $('vitBox'); if(b) b.outerHTML = vitHtml(); }
 function paintCards(){
   var box = $('cardsGrid'); if(!box) return;
   var q = C.q.toLowerCase();
@@ -1323,16 +1361,21 @@ function paintCards(){
 }
 VIEWS.cards = function(first){
   if(first || !$('cardsGrid')){
-    $('view').innerHTML = '<div class="head" style="margin-bottom:12px"><label class="search">' + ICON.search
+    $('view').innerHTML = vitHtml() + '<div class="head" style="margin-bottom:12px"><label class="search">' + ICON.search
       + '<input class="inp" id="cq" type="search" placeholder="Имя на карточке или владелец" value="' + esc(C.q) + '" autocomplete="off"></label>'
       + '<span class="mute" id="cardsCount" style="margin-left:auto"></span></div>'
-      + '<div class="chips">' + [['','Все'],['shown','На витрине'],['hidden','Скрытые'],['blocked','Владелец в блоке']].map(function(t){
+      + '<div class="chips">' + [['','Все'],['shown','На витрине'],['hidden','Не на витрине'],['blocked','Владелец в блоке']].map(function(t){
           return '<button type="button" class="chip' + (t[0] === C.f ? ' on' : '') + '" data-cfilter="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>'
       + '<div class="cgrid" id="cardsGrid"><div class="box" style="grid-column:1/-1"><div class="empty">Загружаем…</div></div></div>'
-      + '<p class="note">Скрытая карточка исчезает из каталога у всех, но остаётся у автора — это снятие с витрины, а не удаление. '
+      + '<p class="note">Снятая или скрытая карточка исчезает из каталога у всех, но остаётся у автора — это снятие с витрины, а не удаление. '
+      + '«Снята» — убрана кнопкой «Снять все», «Вернуть все» её вернёт; «скрыта» — убрана вами по одной, её возвращайте тоже по одной. '
+      + 'Приложение снятую карточку на витрину не вернёт, даже если пришлёт её заново. '
       + 'Карточки заблокированных людей из каталога убираются сами.</p>';
   }
-  return api('GET', '/api/admin/cards').then(function(j){ C.rows = j.rows || []; if(SEC === 'cards') paintCards(); });
+  return api('GET', '/api/admin/cards').then(function(j){
+    C.rows = j.rows || []; C.stats = j.stats || null;
+    if(SEC === 'cards'){ paintVit(); paintCards(); }
+  });
 };
 
 /* ── Поломки ── */
@@ -1445,9 +1488,13 @@ function paintUser(id){
     var d = document.querySelector('.drawer'); if(!d || DR.id !== id) return;
     var u = j.user || {}, b = j.balance || { available:0, hold:0 }, k = j.kyc;
     var flags = userFlags({ is_blocked:u.is_blocked, is_admin:u.is_admin, kyc:k && k.status, tg:u.tg, google:u.google });
+    /* Обезличенный (данные удалены по обращению) — ни блокировки, ни удаления: вход закрыт навсегда. */
+    var erased = /@erased\.invalid$/.test(String(u.email || ''));
     var act = u.is_admin ? '<span class="mute">Владельца заблокировать нельзя</span>'
+      : erased ? '<span class="mute">Данные удалены по обращению · вход закрыт</span>'
       : (u.is_blocked ? '<button type="button" class="btn ghost sm" data-block="' + u.id + '" data-to="0" data-name="' + esc(u.name) + '">Разблокировать</button>'
-                      : '<button type="button" class="btn bad sm" data-block="' + u.id + '" data-to="1" data-name="' + esc(u.name) + '">Заблокировать</button>');
+                      : '<button type="button" class="btn bad sm" data-block="' + u.id + '" data-to="1" data-name="' + esc(u.name) + '">Заблокировать</button>')
+        + '<button type="button" class="btn ghost sm" data-erase="' + u.id + '" data-name="' + esc(u.name) + '" data-email="' + esc(u.email) + '">Удалить данные</button>';
     var head = '<div class="dr-head">' + ava(u.name, u.email) + '<div style="min-width:0"><h2>' + esc(u.name) + '</h2>'
       + '<p>' + esc(u.email) + ' · id ' + u.id + ' · ' + roleRu(u.role) + ' · с ' + when(u.created_at) + '</p>' + flags
       + '<div class="acts" style="margin-top:10px">' + act
@@ -1474,7 +1521,7 @@ function paintUser(id){
           var kk = c.card || {};
           return '<div class="lrow"><div class="l"><b>' + esc(kk.name || c.id) + '</b><span>'
             + esc((kk.platforms || []).map(function(p){ return PL[p.id] || p.id; }).join(', ') || 'без площадок')
-            + (kk.priceFrom ? ' · от ' + money(kk.priceFrom) : '') + ' · ' + (c.hidden ? 'скрыта' : 'на витрине') + '</span></div>'
+            + (kk.priceFrom ? ' · от ' + money(kk.priceFrom) : '') + ' · ' + (c.hidden === 2 ? 'снята со всей витриной' : c.hidden ? 'скрыта' : 'на витрине') + '</span></div>'
             + (c.hidden ? '<button type="button" class="btn ghost sm" data-cardhide="' + esc(c.id) + '" data-hidden="0">Вернуть</button>'
                         : '<button type="button" class="btn warn sm" data-cardhide="' + esc(c.id) + '" data-hidden="1">Скрыть</button>') + '</div>';
         }).join('')) + '</div>';
@@ -1545,6 +1592,42 @@ function doSettle(dealId, left, payeeId){
   });
 }
 
+/* «Снять все карты с витрины» / «Вернуть все». Перед окном берём свежие
+   числа с сервера: в окне должно стоять ровно то, что сейчас снимется. */
+function vitAll(off, btn){
+  if(btn) btn.disabled = true;
+  return api('GET', '/api/admin/cards').then(function(j){
+    C.rows = j.rows || []; C.stats = j.stats || C.stats;
+    if(SEC === 'cards'){ paintVit(); paintCards(); }
+    var s = C.stats || {};
+    var n = off ? (Number(s.visible) || 0) : (Number(s.unpublished) || 0);
+    var hid = Number(s.hidden) || 0;
+    var o = off
+      ? { title:'Снять все карты с витрины',
+          html:(n ? 'С витрины уйдут <b>' + n + ' ' + cardWord(n) + '</b> блогеров — их перестанут видеть все, включая гостей.'
+                  : 'Сейчас на витрине карт нет — снимать нечего.')
+            + '\nКарты не удаляются: остаются у авторов и здесь, в разделе, с отметкой «снята».'
+            + '\nПока витрина закрыта, новые карты и присланные приложением заново тоже не появятся.'
+            + '\nВернуть можно в любой момент: «Вернуть все» или по одной.',
+          ok: n ? 'Снять ' + n + ' ' + cardWord(n) : 'Закрыть витрину', danger:true }
+      : { title:'Вернуть все карты на витрину',
+          html:(n ? 'Вернутся <b>' + n + ' ' + cardWord(n) + '</b>, снятых кнопкой «Снять все», и витрина откроется для новых карт.'
+                  : 'Снятых общей кнопкой карт нет — витрина просто откроется для новых карт.')
+            + (hid ? '\nСкрытые вами по одной (' + hid + ') останутся скрытыми — их возвращайте по одной.' : ''),
+          ok: n ? 'Вернуть ' + n + ' ' + cardWord(n) : 'Открыть витрину', okClass:'ok' };
+    if(btn) btn.disabled = false;
+    return ask(o).then(function(r){
+      if(!r.ok) return;
+      return api('POST', off ? '/api/admin/cards/unpublish-all' : '/api/admin/cards/restore-all', {})
+        .then(function(res){
+          var k = off ? (Number(res.unpublished) || 0) : (Number(res.restored) || 0);
+          after(off ? (k ? 'Снято с витрины: ' + k + ' ' + plural(k, 'карта', 'карты', 'карт') + '. Витрина закрыта' : 'Витрина закрыта')
+                    : (k ? 'Вернулось на витрину: ' + k + ' ' + plural(k, 'карта', 'карты', 'карт') : 'Витрина открыта'));
+        });
+    });
+  }).catch(function(er){ if(btn) btn.disabled = false; say(er.message, true); });
+}
+
 document.addEventListener('keydown', function(e){
   if(e.key !== 'Escape') return;
   if(document.querySelector('.zoom')){ document.querySelector('.zoom').remove(); return; }
@@ -1569,6 +1652,7 @@ document.addEventListener('click', function(e){
   if(ds.errdays){ ERR_DAYS = Number(ds.errdays) || 7; load(true); return; }
   if(ds.vidtab !== undefined){ VID.tab = ds.vidtab; load(true); return; }
   if(ds.act === 'vidsync'){ vidSync(t); return; }
+  if(ds.act === 'cardsoff' || ds.act === 'cardson'){ vitAll(ds.act === 'cardsoff', t); return; }
   if(ds.viddo){ vidDecide(t).catch(function(er){ say(er.message, true); t.disabled = false; after(); }); return; }
   if(ds.ufilter !== undefined){ U.f = ds.ufilter; Array.prototype.forEach.call(document.querySelectorAll('[data-ufilter]'), function(c){ c.classList.toggle('on', c === t); });
     usersFetch(true).then(paintUsers).catch(function(er){ say(er.message, true); }); return; }
@@ -1645,6 +1729,22 @@ document.addEventListener('click', function(e){
         if(!r.ok) return;
         return api('POST', '/api/admin/users/block', { userId: Number(ds.block), blocked: toBlock, reason: r.value || '' })
           .then(function(){ after(toBlock ? 'Заблокирован' : 'Разблокирован'); });
+      }).catch(function(er){ say(er.message, true); });
+    return;
+  }
+  /* Удаление данных по обращению человека (политика конфиденциальности,
+     раздел 7). Сервер откажет, пока на счёте деньги или идёт подсчёт роликов. */
+  if(ds.erase){
+    ask({ title:'Удалить данные пользователя',
+          html:'Удалить данные <b>' + esc(ds.name) + '</b> (' + esc(ds.email) + ')?\n'
+            + 'Сотрутся: почта, имя, пароль и входы через Telegram и Google, профиль, личные сообщения, подключённые каналы с доступом к TikTok и YouTube, карты блогера, участие в заданиях, ссылки и названия его роликов. '
+            + 'Журнал денег, выводы и проверка личности останутся — их хранят по закону. Вход закроется навсегда, отменить нельзя.',
+          input:'area', required:'Напишите основание — например, «письмо с почты аккаунта от 10.10»',
+          placeholder:'Основание — для журнала', sugg:['Письмо с почты аккаунта', 'Обращение в поддержку'], ok:'Удалить данные', danger:true })
+      .then(function(r){
+        if(!r.ok) return;
+        return api('POST', '/api/admin/users/erase', { userId: Number(ds.erase), confirm: 'erase', reason: r.value || '' })
+          .then(function(){ after('Данные удалены'); });
       }).catch(function(er){ say(er.message, true); });
     return;
   }
