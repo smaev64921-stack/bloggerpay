@@ -1035,6 +1035,9 @@ const q = {
   deal: db.prepare('SELECT * FROM deals WHERE id = ?'),
   updDeal: db.prepare(`UPDATE deals SET status = ?, payee_id = ?, updated_at = datetime('now') WHERE id = ?`),
   payDeal: db.prepare(`UPDATE deals SET paid = paid + ?, status = ?, updated_at = datetime('now') WHERE id = ?`),
+  /* бюджет задания: пополнение и частичный возврат (11.10.2026) */
+  growDeal: db.prepare(`UPDATE deals SET amount = amount + ?, updated_at = datetime('now') WHERE id = ? AND status = 'held'`),
+  cutDeal: db.prepare(`UPDATE deals SET amount = amount - ?, updated_at = datetime('now') WHERE id = ? AND status = 'held'`),
   insWd: db.prepare('INSERT INTO withdrawals (user_id, amount, fee, net, requisites, status) VALUES (?,?,?,?,?,?)'),
   wd: db.prepare('SELECT * FROM withdrawals WHERE id = ?'),
   updWd: db.prepare(`UPDATE withdrawals SET status = ?, note = ?, updated_at = datetime('now') WHERE id = ?`),
@@ -2857,6 +2860,11 @@ const routes = {
         rate: pubNum(d.rate),
         maxPayout: pubNum(d.maxPayout || d.payMax),
         minViews: pubNum(d.minViews),
+        /* и правила, которые гость читает в задании (11.10.2026): без
+           них страница задания показывала «Минимальная длина: любая» */
+        minDuration: pubNum(d.minDuration || d.videoMinSec),
+        language: cardStr(d.language, 40),
+        hashtags: cardStr(d.hashtags, 300),
         deadline: Number.isFinite(Date.parse(d.deadline)) ? new Date(Date.parse(d.deadline)).toISOString() : '',
         at: r.updated_at,
       });
@@ -2868,11 +2876,12 @@ const routes = {
      Карточка задания показывает «N видео · 👁 X» и «N ₽ из M ₽». Эти же
      цифры любой вошедший и так видит в шторке задания (/api/tasks/board),
      поэтому ручка открыта всем, гостю тоже. Наружу — только номер задания
-     и четыре числа: ни людей, ни ников, ни каналов, ни названий.
+     и пять чисел: ни людей, ни ников, ни каналов, ни названий.
        videos — роликов в статусах лидерборда (review, rejected, active, paid);
        views  — их просмотры (v.views, как в лидерборде);
        paid   — выплачено блогерам из заморозки задания;
-       budget — заморожено под задание всего.
+       budget — заморожено под задание всего;
+       reserved — держится под живые ролики (как reserved доски).
      Кэш общий на 60 секунд (tsumCache). Ключи — Object.create(null):
      номер задания пишет клиент, и «__proto__» иначе ушёл бы в прототип. */
   'GET /api/tasks/summary': async (req) => {
@@ -2884,6 +2893,9 @@ const routes = {
         camps[String(r.id).slice(0, 80)] = {
           videos: Number(r.videos) || 0, views: Number(r.views) || 0,
           paid: Number(r.paid) || 0, budget: Number(r.budget) || 0,
+          /* резерв живых роликов — как на доске: без него гость видел
+             «Осталось» больше, чем есть (11.10.2026) */
+          reserved: vidReserved(r.id),
         };
       }
       tsumCache.body = { ok: true, at: now, camps };
@@ -3930,6 +3942,42 @@ const routes = {
     if (!isAdmin(req) && q.refundBlocked.get(dealId, d.payee_id, dealId)) {
       return { status: 409, body: { error: 'Идёт спор — возврат заморожен до решения арбитра', dispute: true } };
     }
+    /* Часть бюджета задания (11.10.2026, «Вернуть остаток» на странице
+       задания): раньше кнопка двигала только числа в браузере, касса о
+       возврате не знала. Только хозяин заморозки camp:<id>. Вернуть можно
+       свободное — vidReturnable: остаток минус будущие выплаты живым
+       роликам (у ролика с максимумом — максимум минус выплаченное, без
+       максимума — весь остаток). Заморозка остаётся открытой, бюджет
+       задания (amount) уменьшается на вернувшееся. Вернули всё, и живых
+       роликов нет — это обычный полный возврат (refunded). */
+    if (body.amount != null && body.amount !== '') {
+      if (!dealId.startsWith('camp:')) return { status: 400, body: { error: 'Вернуть часть можно только из бюджета задания' } };
+      if (d.payer_id !== u.id) return { status: 403, body: { error: 'Вернуть часть бюджета может только автор задания' } };
+      const sum = body.amount;
+      if (!amountOk(sum)) return { status: 400, body: { error: 'Сумма — целое число от 1 до 100 000 000' } };
+      const cid = dealId.slice(5);
+      const left = d.amount - d.paid;
+      const live = q.vidLive.all(cid).length;
+      const free = vidReturnable(cid);
+      if (sum > free) {
+        return { status: 409, body: {
+          error: free > 0
+            ? 'Свободно в бюджете задания ' + free + ' ₽ — остальное держат видео на проверке и в подсчёте просмотров'
+            : (live ? 'Весь остаток бюджета держат видео на проверке и в подсчёте просмотров — вернуть можно, когда подсчёт закончится'
+                    : 'Свободного остатка в бюджете задания нет'),
+          code: live ? (free > 0 ? 'videos_reserved' : 'videos_live') : 'no_free', free } };
+      }
+      if (!userKey(body.opKey)) return badKey;
+      const all = sum >= left && !live;
+      return moneyOp(String(body.opKey || ''), u.id, 'refund', (add) => {
+        add(d.payer_id, 'hold', -sum, 'refund', dealId);
+        add(d.payer_id, 'available', sum, 'refund', dealId);
+        if (all) q.updDeal.run('refunded', d.payee_id, dealId);
+        else q.cutDeal.run(sum, dealId);
+        vidBoardDrop(cid);
+        return { ok: true, dealId, refunded: sum, left: left - sum, closed: all };
+      });
+    }
     /* Пока по заданию есть ролики на проверке или в подсчёте просмотров
        (засчитанные: 30 дней сервер доначисляет по мере роста), бюджет —
        это их будущие выплаты: вернув его себе, рекламодатель оставил бы
@@ -3949,7 +3997,40 @@ const routes = {
       add(d.payer_id, 'hold', -rest, 'refund', dealId);
       add(d.payer_id, 'available', rest, 'refund', dealId);
       q.updDeal.run('refunded', d.payee_id, dealId);
+      /* доска задания держит бюджет минуту — после возврата он другой */
+      if (dealId.startsWith('camp:')) vidBoardDrop(dealId.slice(5));
       return { ok: true, dealId, refunded: rest };
+    });
+  },
+
+  /* Пополнение бюджета задания (11.10.2026): кошелёк → заморозка
+     camp:<id>, сумма прибавляется к бюджету (amount). Раньше «Пополнить»
+     на странице задания двигал только числа в браузере: после
+     перезагрузки деньги «возвращались», а местный журнал расходился с
+     кассой навсегда. Только хозяин задания и только открытая заморозка
+     (запуск задания её создаёт — /api/deals/hold). */
+  'POST /api/deals/topup': async (req, body) => {
+    if (!rateLimit(req, 'deal', 60, 60000)) return tooOften;
+    const u = auth(req);
+    if (!u) return { status: 401, body: { error: 'Нужен вход' } };
+    const dealId = String(body.dealId || '').slice(0, 80);
+    const m = /^camp:(.+)$/.exec(dealId);
+    if (!m) return { status: 400, body: { error: 'Пополнить можно только бюджет задания' } };
+    const amount = body.amount;
+    if (!amountOk(amount)) return { status: 400, body: { error: 'Сумма — целое число от 1 до 100 000 000' } };
+    const env = q.syncGet.get('camp', m[1]);
+    if (env && env.a_id !== u.id) return { status: 403, body: { error: 'Это бюджет чужой кампании' } };
+    const d = q.deal.get(dealId);
+    if (!d) return { status: 404, body: { error: 'Бюджет задания ещё не заморожен — сначала запустите задание', code: 'no_deal' } };
+    if (d.payer_id !== u.id) return { status: 403, body: { error: 'Это бюджет чужой кампании' } };
+    if (d.status !== 'held') return { status: 409, body: { error: 'Сделка уже закрыта: ' + d.status } };
+    if (!userKey(body.opKey)) return badKey;
+    return moneyOp(String(body.opKey || ''), u.id, 'hold', (add) => {
+      add(u.id, 'available', -amount, 'hold', dealId);
+      add(u.id, 'hold', amount, 'hold', dealId);
+      q.growDeal.run(amount, dealId);
+      vidBoardDrop(m[1]);
+      return { ok: true, dealId, added: amount, budget: d.amount + amount, balance: q.balance.get(u.id) };
     });
   },
 
@@ -5129,6 +5210,8 @@ const routes = {
       ok: true, campId, sort,
       members: agg.members, videos: agg.videos, views: agg.views,
       paid: agg.paid, reserved: agg.reserved, budget: agg.budget, left: agg.left,
+      /* автору — сколько можно вернуть в кошелёк сейчас (не из кэша доски) */
+      free: isOwn ? vidReturnable(campId) : undefined,
       leaders: vidBoardOut(board.leaders, board.uids, u.id, isOwn),
       participants: vidBoardOut(page.rows, page.uids, u.id, isOwn), offset, limit,
       more: offset + page.rows.length < agg.members,
@@ -6570,6 +6653,19 @@ function vidOwed(campId) {
     s += Math.max(vidHoldOf(r), m - (r.paid || 0));
   }
   return s;
+}
+/* Сколько автор может вернуть себе из бюджета задания прямо сейчас
+   (11.10.2026): остаток открытой заморозки минус будущие выплаты живым
+   роликам (vidOwed; ролик без потолка держит весь остаток). Это же
+   правило — у частичного возврата (/api/deals/refund с amount) и у
+   ручной выплаты (/api/deals/release), а число автор видит на доске
+   (free) — чтобы шторка «Вернуть в кошелёк» не обещала больше. */
+function vidReturnable(campId) {
+  const d = q.deal.get('camp:' + campId);
+  if (!d || d.status !== 'held') return 0;
+  const left = Math.max(0, d.amount - d.paid);
+  const owed = vidOwed(campId);
+  return owed === Infinity ? 0 : Math.max(0, left - owed);
 }
 /* Свободно в бюджете задания: остаток заморозки минус резервы. */
 function vidFree(campId) {

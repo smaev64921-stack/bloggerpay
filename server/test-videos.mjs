@@ -118,6 +118,7 @@ const ID = {
   N4: '7412345678901234705', N5: '7412345678901234706', N6: '7412345678901234707', N7: '7412345678901234708',
   N9: '7412345678901234710', N10: '7412345678901234711', N11: '7412345678901234712', N12: '7412345678901234713',
   R1: '7412345678901234721', R2: '7412345678901234722',
+  N13: '7412345678901234714',
 };
 const V = new Map();
 function vid(id, owner, o) {
@@ -184,7 +185,7 @@ vid(ID.P1, 'chan-P', { views: 2000, likes: 200 });
 /* Ролики Эн и Эр: пока каналы подтверждаются, у них обычные цифры (база
    канала считается по ним), перед загрузкой их «только что опубликовали» —
    ноль просмотров. */
-for (const k of ['N0', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6', 'N7', 'N9', 'N10', 'N11', 'N12']) vid(ID[k], 'chan-N');
+for (const k of ['N0', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6', 'N7', 'N9', 'N10', 'N11', 'N12', 'N13']) vid(ID[k], 'chan-N');
 vid(ID.R1, 'chan-R');
 vid(ID.R2, 'chan-R');
 const fresh0 = (id) => Object.assign(V.get(id), { views: 0, likes: 0, comments: 0, shares: 0 });
@@ -640,7 +641,7 @@ try {
   ok(await linkYouTube(Q, 'ycode-Q'), 'Кью подтвердил YouTube (Google потом не обменяет доступ)');
   ok(await linkTikTok(N, 'code-N') && await linkTikTok(R, 'code-R'), 'Эн и Эр подтвердили TikTok');
   await sleep(1100);          /* первый разбор канала идёт в стороне; короткие доступы протухают */
-  for (const k of ['N0', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6', 'N7', 'N9', 'N10', 'N11', 'N12', 'R1', 'R2']) fresh0(ID[k]);
+  for (const k of ['N0', 'N1', 'N2', 'N3', 'N4', 'N5', 'N6', 'N7', 'N9', 'N10', 'N11', 'N12', 'N13', 'R1', 'R2']) fresh0(ID[k]);
 
   const top = await api('POST', '/api/topup', { amount: 200000, opKey: 'topup-' + tag }, ADV.token);
   ok(top.status === 200, 'рекламодатель пополнил баланс', top.body);
@@ -1696,12 +1697,13 @@ try {
   ok(s1.status === 200 && s1.body.ok === true && Number.isFinite(s1.body.at) && s1.body.at > 0 && !!sBrd,
     'без входа — 200, задание в сводке есть', s1.body);
   ok(/no-store/.test(s1.headers.get('cache-control') || ''), 'ответ сводки браузер не кэширует');
-  ok(!!sBrd && sBrd.videos === bNow.videos && sBrd.views === bNow.views && sBrd.paid === bNow.paid && sBrd.budget === bNow.budget,
-    'цифры сводки совпадают с лидербордом задания',
-    { sBrd, board: { videos: bNow.videos, views: bNow.views, paid: bNow.paid, budget: bNow.budget } });
+  ok(!!sBrd && sBrd.videos === bNow.videos && sBrd.views === bNow.views && sBrd.paid === bNow.paid && sBrd.budget === bNow.budget
+    && sBrd.reserved === bNow.reserved,
+    'цифры сводки совпадают с лидербордом задания (и резерв — гость видит тот же остаток)',
+    { sBrd, board: { videos: bNow.videos, views: bNow.views, paid: bNow.paid, budget: bNow.budget, reserved: bNow.reserved } });
   ok(!!sBrd && sBrd.videos === 3 && sBrd.views === 16000 && sBrd.paid === 200 && sBrd.budget === 10000,
     'brd: 3 видео, 16 000 просмотров, выплачено 200 ₽ из 10 000 ₽', sBrd);
-  ok(!!sBrd && Object.keys(sBrd).sort().join() === 'budget,paid,videos,views', 'в строке задания только четыре числа', sBrd);
+  ok(!!sBrd && Object.keys(sBrd).sort().join() === 'budget,paid,reserved,videos,views', 'в строке задания только пять чисел', sBrd);
   ok(!(camps.paused in sc1), 'задание на паузе в сводку не попадает', Object.keys(sc1).length);
   ok(camps.main in sc1 && camps.notif in sc1 && camps.noesc in sc1 && sc1[camps.noesc].budget === 0,
     'активные задания в сводке есть, без заморозки — бюджет 0', sc1[camps.noesc]);
@@ -2100,6 +2102,71 @@ try {
   ok(both.every((r) => r.status === 200) && row(vN0.id).paid === 1200 && (await bal(N)).available - nM0 === 300
     && opsOf('sys:vidpay:' + vN0.id + ':1200') === 1,
   'два процесса замерили 12 000 одновременно: +300 ровно один раз (ключ на накопленную сумму :1200)', both.map((r) => r.body));
+
+  /* ── Бюджет задания: пополнение и часть назад (11.10.2026) ──
+     Кнопки «Пополнить» и «Вернуть остаток» на странице задания раньше
+     двигали только числа в браузере. Теперь — касса: /api/deals/topup и
+     /api/deals/refund с amount; вернуть можно только свободное (free на
+     доске автора): остаток минус будущие выплаты живым роликам. */
+  console.log('\n— бюджет задания: пополнение и частичный возврат');
+  {
+  ok(await camp('bud', Object.assign({}, tt, { name: 'Бюджет', maxPayout: 3000 }), 10000, ADV), 'оффер «Бюджет» с заморозкой 10 000 ₽');
+  const bb0 = await bal(ADV);
+  const tu1 = await api('POST', '/api/deals/topup', { dealId: 'camp:' + camps.bud, amount: 4000, opKey: 'tu1-' + tag }, ADV.token);
+  const bb1 = await bal(ADV);
+  const bd1 = (await board(ADV, 'bud')).body;
+  ok(tu1.status === 200 && tu1.body.added === 4000 && tu1.body.budget === 14000
+    && bb1.available === bb0.available - 4000 && bb1.hold === bb0.hold + 4000,
+  'пополнение: 4 000 ₽ из кошелька в заморозку задания, бюджет 14 000 ₽', { tu1: tu1.body, bb0, bb1 });
+  ok(bd1.budget === 14000 && bd1.left === 14000 && bd1.free === 14000, 'доска сразу с новым бюджетом; автору — «можно вернуть 14 000»', bd1);
+  const tuRep = await api('POST', '/api/deals/topup', { dealId: 'camp:' + camps.bud, amount: 4000, opKey: 'tu1-' + tag }, ADV.token);
+  ok(tuRep.status === 200 && tuRep.body.repeated === true && (await bal(ADV)).available === bb1.available,
+    'повтор с тем же ключом второй раз не списывает', tuRep.body);
+  const tuN = await api('POST', '/api/deals/topup', { dealId: 'camp:' + camps.bud, amount: 100, opKey: 'tun-' + tag }, N.token);
+  ok(tuN.status === 403, 'чужой бюджет пополнить нельзя', tuN.body);
+  const tuX = await api('POST', '/api/deals/topup', { dealId: 'deal-x' + tag, amount: 100, opKey: 'tux-' + tag }, ADV.token);
+  ok(tuX.status === 400, 'пополнить можно только бюджет задания (camp:…)', tuX.body);
+  const tuBig = await api('POST', '/api/deals/topup', { dealId: 'camp:' + camps.bud, amount: bb1.available + 1, opKey: 'tub-' + tag }, ADV.token);
+  ok(tuBig.status === 409 && (await bal(ADV)).available === bb1.available, 'больше, чем в кошельке, — 409, деньги на месте', tuBig.body);
+  const tuNo = await api('POST', '/api/deals/topup', { dealId: 'camp:' + camps.noesc, amount: 100, opKey: 'tuno-' + tag }, ADV.token);
+  ok(tuNo.status === 404 && tuNo.body.code === 'no_deal', 'задание без заморозки пополнить нельзя — сначала запуск', tuNo.body);
+  ok((await board(N, 'bud')).body.free === undefined, 'блогеру «можно вернуть» не отдаётся');
+  setV(ID.N13, 1000);
+  const n13 = await bind(N, 'bud', link('blogern', ID.N13));
+  const bd2 = (await board(ADV, 'bud')).body;
+  ok(n13.status === 200 && bd2.reserved === 100 && bd2.free === 11000,
+    'ролик на проверке держит бюджет до максимума за него: вернуть можно 11 000 из 14 000', { bind: n13.body, bd2 });
+  const rp1 = await api('POST', '/api/deals/refund', { dealId: 'camp:' + camps.bud, amount: 12000, opKey: 'rp1-' + tag }, ADV.token);
+  ok(rp1.status === 409 && rp1.body.code === 'videos_reserved' && rp1.body.free === 11000, 'больше свободного — 409 и сколько можно', rp1.body);
+  const bb2 = await bal(ADV);
+  const rp2 = await api('POST', '/api/deals/refund', { dealId: 'camp:' + camps.bud, amount: 5000, opKey: 'rp2-' + tag }, ADV.token);
+  const bb3 = await bal(ADV);
+  const bd3 = (await board(ADV, 'bud')).body;
+  ok(rp2.status === 200 && rp2.body.refunded === 5000 && rp2.body.closed === false
+    && bb3.available === bb2.available + 5000 && bb3.hold === bb2.hold - 5000,
+  'вернули 5 000 ₽ в кошелёк, заморозка открыта', { rp2: rp2.body, bb2, bb3 });
+  ok(bd3.budget === 9000 && bd3.free === 6000 && bd3.left === 8900, 'бюджет задания стал 9 000, вернуть можно ещё 6 000', bd3);
+  const rpN = await api('POST', '/api/deals/refund', { dealId: 'camp:' + camps.bud, amount: 100, opKey: 'rpn-' + tag }, N.token);
+  ok(rpN.status === 403, 'блогер часть чужого бюджета не вернёт', rpN.body);
+  const rpX = await api('POST', '/api/deals/refund', { dealId: 'camp:' + camps.bud, amount: 0, opKey: 'rpx-' + tag }, ADV.token);
+  ok(rpX.status === 400, 'сумма — целое больше нуля', rpX.body);
+  const rpAll = await api('POST', '/api/deals/refund', { dealId: 'camp:' + camps.bud, opKey: 'rpa-' + tag }, ADV.token);
+  ok(rpAll.status === 409 && rpAll.body.code === 'videos_live', 'весь бюджет при живом ролике — по-прежнему нельзя', rpAll.body);
+  const sB = ((await summary()).body.camps || {})[camps.bud] || null;
+  ok(!!sB && sB.budget === 9000 && sB.paid === 0 && sB.reserved === 100, 'сводка: бюджет 9 000 и резерв 100 — как на доске', sB);
+  await review(n13.body.video.id, ADV, false, 'Нет рекламы в ролике');
+  await adm('POST', '/api/admin/task-videos/decide', { id: n13.body.video.id, decision: 'decline', note: 'Нет рекламы' });
+  const bd4 = (await board(ADV, 'bud')).body;
+  ok(bd4.free === 9000 && bd4.reserved === 0, 'ролик не засчитан — свободен весь остаток 9 000', bd4);
+  const bb4 = await bal(ADV);
+  const rp3 = await api('POST', '/api/deals/refund', { dealId: 'camp:' + camps.bud, amount: 9000, opKey: 'rp3-' + tag }, ADV.token);
+  const bb5 = await bal(ADV);
+  ok(rp3.status === 200 && rp3.body.closed === true && bb5.available === bb4.available + 9000 && bb5.hold === bb4.hold - 9000
+    && dbx().prepare('SELECT status FROM deals WHERE id = ?').get('camp:' + camps.bud).status === 'refunded',
+  'вернули всё свободное без живых роликов — заморозка закрыта (refunded)', { rp3: rp3.body, bb4, bb5 });
+  const tuDone = await api('POST', '/api/deals/topup', { dealId: 'camp:' + camps.bud, amount: 100, opKey: 'tud-' + tag }, ADV.token);
+  ok(tuDone.status === 409, 'закрытую заморозку пополнить нельзя', tuDone.body);
+  }
 
   /* ── Сервер с ключом YouTube API ── */
   console.log('\n— YouTube по ключу API');
