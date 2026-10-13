@@ -100960,5 +100960,2575 @@ window.bpCampCashRest = function(campId, btn){
 try{ install(); }catch(e){ E(e); }
 })();
 </script>
+<style id="bp-mv-me-css">
+/* ══ ПРОФИЛЬ «КАК У MORE VIEWS» · вид (bp-mv-me, 13.10.2026) ═══════════
+   Владелец: «сделай профиль по стилю как море вьюз, подключение соцсети
+   тоже также». Образец — мобильный app.moreviews.ru (замеры их стилей):
+   · вкладка «Профиль» = их /account: карточка с аватаром 88, ник, роль
+     таблеткой, градиентная «Мой профиль · Перейти к настройкам»,
+     «Профиль заполнен на N%», «Статус аккаунта», «Возможности»,
+     «Поддержка», красная «Выйти из аккаунта»;
+   · экран «Мой профиль» = их /profile: шапка-карточка 64 + роль +
+     карандаш, плитки «Видео уже создано / Всего просмотров / Всего
+     заработано», «Описание», тематика и город, «Заполнить профиль»,
+     «Подключенные аккаунты» + «Подключить»;
+   · окно «Подключить аккаунт»: голубая пунктирная плашка, площадки
+     карточками, «Отмена / Подключить». Шторки «Подключаем TikTok» нет:
+     вход на площадке идёт в этой же вкладке и возвращается сам.
+   Общие детали (кнопки, поля, плашки, окна) — классы mx-*, ими же
+   пользуется кошелёк (bp-mv-wal). Всё только под html.bp-mv.
+   Ловушки файла: без :has(), без backdrop-filter, без contain:layout и
+   overscroll-behavior; въезд — только при открытии; fill-mode backwards.
+   Откат: удалить style#bp-mv-me-css и script#bp-mv-me.                */
+
+html.bp-mv{
+  --mx-bg:#141415; --mx-s1:#1d1e20; --mx-s2:#272829; --mx-s3:#26272b;
+  --mx-line:rgba(255,255,255,.05); --mx-div:rgba(255,255,255,.06);
+  --mx-t1:#fff; --mx-t2:#cbcbcd; --mx-t3:#999; --mx-t4:#838385;
+  --mx-blue:#508aff; --mx-blue2:#3765f6; --mx-blue3:#3c67f6;
+  --mx-green:#35d670; --mx-emer:#00bc7d; --mx-info:#0fb3fa; --mx-orange:#ff801f;
+  --mx-purple:#8b5cf6; --mx-red:#ff6b6b; --mx-focus:#b7c1ff;
+}
+
+/* ═══ 1 · общие детали ═══ */
+html.bp-mv .mx-b{
+  position:relative; isolation:isolate; display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  box-sizing:border-box; min-height:46px; margin:0; padding:12px 16px; border:0; border-radius:9999px;
+  font-weight:500; font-size:16px; line-height:22px; font-family:inherit; color:#fff; text-decoration:none; white-space:nowrap;
+  cursor:pointer; -webkit-tap-highlight-color:transparent; transition:opacity .15s ease, background-color .15s ease;
+}
+html.bp-mv .mx-b svg{ width:20px; height:20px; flex:none }
+html.bp-mv .mx-b.mx-bs{ min-height:36px; padding:8px 12px; font-size:14px; line-height:20px }
+html.bp-mv .mx-b.mx-bs svg{ width:18px; height:18px }
+html.bp-mv .mx-b.mx-bp{
+  background:linear-gradient(180deg,#508aff 0%,#3765f6 50%,#7185ff 100%);
+  box-shadow:0 4px 4px rgba(0,0,0,.25);
+}
+html.bp-mv .mx-b.mx-bp::before{
+  content:''; position:absolute; inset:-2px; z-index:-1; border-radius:inherit; pointer-events:none;
+  background:linear-gradient(180deg,#92a1ff,#3d55ed,#7185ff);
+}
+html.bp-mv .mx-b.mx-bg{ background:var(--mx-s2); box-shadow:inset 0 -4px 12px 1px rgba(255,255,255,.1) }
+html.bp-mv .mx-b.mx-bw{ background:#fff; color:#000 }
+html.bp-mv .mx-b.mx-bfull{ width:100% }
+html.bp-mv .mx-b:active:not(:disabled){ opacity:.86 }
+html.bp-mv .mx-b:disabled{ cursor:not-allowed; opacity:.6 }
+html.bp-mv .mx-b:focus-visible{ outline:2px solid var(--mx-focus)!important; outline-offset:2px!important }
+
+/* поле: подпись 14/18, коробка 54 px, радиус 16 */
+html.bp-mv .mx-fld{ display:flex; flex-direction:column; gap:12px; min-width:0 }
+html.bp-mv .mx-lbl{ font-size:14px; line-height:18px; font-weight:500; color:#fff }
+html.bp-mv .mx-ctl{
+  position:relative; display:flex; align-items:center; gap:8px; box-sizing:border-box;
+  min-height:54px; padding:0 16px; border-radius:16px;
+  background:var(--mx-s1); border:1px solid var(--mx-line); transition:border-color .15s ease;
+}
+html.bp-mv .mx-ctl:focus-within{ border-color:var(--mx-t4) }
+html.bp-mv .mx-ctl.bad{ border-color:#fb2c36 }
+html.bp-mv .mx-ctl input, html.bp-mv .mx-ctl textarea{
+  flex:1; min-width:0; width:100%; margin:0; padding:15px 0; border:0!important; outline:0; background:transparent!important;
+  box-shadow:none!important; font-weight:500; font-size:16px; line-height:22px; font-family:inherit; color:#fff; caret-color:#fff;
+}
+html.bp-mv .mx-ctl textarea{ resize:none; min-height:112px; line-height:22px }
+html.bp-mv .mx-ctl input::placeholder, html.bp-mv .mx-ctl textarea::placeholder{ color:var(--mx-t3) }
+html.bp-mv .mx-ctl input:disabled{ opacity:.5; cursor:not-allowed }
+html.bp-mv .mx-ctl .mx-suf{ flex:none; font-size:16px; font-weight:500; color:#fff }
+html.bp-mv .mx-hint{ font-size:13px; line-height:18px; color:var(--mx-t4) }
+html.bp-mv .mx-err{ font-size:14px; line-height:18px; color:#ff6467 }
+html.bp-mv .mx-err:empty{ display:none }
+
+/* плашки: голубая и оранжевая пунктиром, нейтральная */
+html.bp-mv .mx-pl{
+  display:flex; flex-direction:column; gap:12px; box-sizing:border-box; padding:16px; border-radius:16px;
+  font-size:14px; line-height:20px; color:rgba(255,255,255,.9); text-wrap:pretty;
+}
+html.bp-mv .mx-pl.blue{ border:1px dashed var(--mx-info); background:rgba(15,179,250,.1) }
+html.bp-mv .mx-pl.orange{ border:1px dashed var(--mx-orange); background:rgba(255,128,31,.1) }
+html.bp-mv .mx-pl.neutral{ border:1px solid rgba(255,255,255,.1); background:rgba(29,30,32,.6) }
+html.bp-mv .mx-pl.red{ border:1px solid rgba(251,44,54,.3); background:rgba(251,44,54,.1); color:#ff6467 }
+html.bp-mv .mx-pl b{ color:#fff; font-weight:600 }
+html.bp-mv .mx-pl .mx-b{ align-self:flex-start }
+
+/* таблетки */
+html.bp-mv .mx-role{
+  display:inline-flex; align-items:center; height:28px; padding:0 12px; box-sizing:border-box; border-radius:9999px;
+  background:#1b2d36; color:var(--mx-info); font-size:13px; line-height:18px; font-weight:500; white-space:nowrap; flex:none;
+}
+html.bp-mv .mx-cnt{
+  display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:24px; padding:0 6px; box-sizing:border-box;
+  border-radius:9999px; background:rgba(255,255,255,.1); color:rgba(255,255,255,.9); font-size:14px; line-height:20px;
+  font-variant-numeric:tabular-nums;
+}
+html.bp-mv .mx-chip{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:38px; padding:8px 16px; box-sizing:border-box;
+  border:1px solid transparent; border-radius:9999px; background:var(--mx-s2); color:#fff;
+  font-weight:500; font-size:15px; line-height:22px; font-family:inherit; cursor:default; -webkit-tap-highlight-color:transparent;
+}
+html.bp-mv button.mx-chip{ cursor:pointer; color:var(--mx-t4); background:var(--mx-s1) }
+html.bp-mv button.mx-chip.on{ border-color:rgba(80,138,255,.55); background:rgba(80,138,255,.14); color:#fff; box-shadow:inset 0 0 0 1px rgba(80,138,255,.16) }
+
+/* окно: снизу шторкой на телефоне, по центру на широком; без размытия */
+html.bp-mv .mx-ov{
+  position:fixed; inset:0; z-index:590; display:flex; align-items:flex-end; justify-content:center;
+  padding:0; box-sizing:border-box;
+}
+html.bp-mv .mx-ov.mid{ align-items:center; padding:16px }
+html.bp-mv .mx-ov::before{ content:''; position:absolute; inset:0; background:rgba(0,0,0,.8); animation:mxFade .2s ease backwards }
+html.bp-mv .mx-dlg{
+  position:relative; z-index:1; display:flex; flex-direction:column; box-sizing:border-box;
+  width:100%; max-width:520px; max-height:90vh; max-height:90dvh; overflow:hidden;
+  border:1px solid var(--mx-s1); border-bottom:0; border-radius:24px 24px 0 0;
+  background:var(--mx-bg); color:#fff; box-shadow:0 -12px 40px rgba(0,0,0,.4);
+  animation:mxUp .26s cubic-bezier(.22,1,.36,1) backwards;
+}
+html.bp-mv .mx-ov.mid .mx-dlg{ max-width:500px; border-bottom:1px solid var(--mx-line); border-color:var(--mx-line); border-radius:24px; animation-name:mxPop }
+@media (min-width:768px){
+  html.bp-mv .mx-ov{ align-items:center; padding:16px }
+  html.bp-mv .mx-dlg{ border-radius:32px; border-bottom:1px solid var(--mx-s1); animation-name:mxPop }
+}
+html.bp-mv .mx-ov.out{ pointer-events:none }
+html.bp-mv .mx-ov.out::before{ animation:mxFadeOut .18s ease forwards }
+html.bp-mv .mx-ov.out .mx-dlg{ animation:mxDown .2s cubic-bezier(.4,0,1,1) forwards }
+@keyframes mxFade{ from{ opacity:0 } }
+@keyframes mxFadeOut{ to{ opacity:0 } }
+@keyframes mxUp{ from{ transform:translateY(40px); opacity:0 } }
+@keyframes mxPop{ from{ transform:translateY(10px) scale(.98); opacity:0 } }
+@keyframes mxDown{ to{ transform:translateY(40px); opacity:0 } }
+html.bp-mv .mx-hd{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex:none;
+  padding:16px; border-bottom:1px solid var(--mx-s1);
+}
+@media (min-width:768px){ html.bp-mv .mx-hd{ padding:20px 24px } }
+html.bp-mv .mx-hd h2{ flex:1; min-width:0; margin:0; font-size:20px; line-height:26px; font-weight:600; color:#fff; letter-spacing:0 }
+html.bp-mv .mx-ib{
+  flex:none; display:grid; place-items:center; width:32px; height:32px; margin:0; padding:0; border:0; border-radius:10px;
+  background:none; color:#999; cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+html.bp-mv .mx-ib svg{ width:24px; height:24px }
+html.bp-mv .mx-ib:active{ color:#fff }
+html.bp-mv .mx-ib:focus-visible{ outline:2px solid var(--mx-focus)!important; outline-offset:0!important }
+html.bp-mv .mx-bd{ flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:16px; display:flex; flex-direction:column; gap:20px }
+@media (min-width:768px){ html.bp-mv .mx-bd{ padding:24px } }
+html.bp-mv .mx-ft{ flex:none; display:flex; justify-content:flex-end; gap:12px; padding:16px calc(16px) calc(16px + env(safe-area-inset-bottom,0px)); border-top:1px solid var(--mx-s1) }
+html.bp-mv .mx-ft.c{ justify-content:center }
+html.bp-mv .mx-ft .mx-b.mx-bgrow{ flex:1 }
+html.bp-mv .mx-bd + .mx-ft{ margin-top:0 }
+html.bp-mv .mx-txt{ margin:0; font-size:14px; line-height:20px; color:var(--mx-t2); text-wrap:pretty }
+html.bp-mv .mx-q{ margin:0; font-size:16px; line-height:22px; color:#fff }
+
+/* экран во весь рост (свой «Назад»): «Мой профиль», «Редактировать», «Верификация» */
+html.bp-mv .mx-scr{
+  position:fixed; inset:0; z-index:360; display:flex; justify-content:center;
+  background:var(--mx-bg); color:#fff; overflow:hidden;
+}
+html.bp-mv .mx-scr > .mx-in{
+  position:relative; width:100%; max-width:520px; height:100%; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  box-sizing:border-box;
+}
+html.bp-mv .mx-scr.in{ animation:mxFade .18s ease backwards }
+html.bp-mv .mx-scr.in > .mx-in{ animation:mxScrIn .24s cubic-bezier(.22,1,.36,1) backwards }
+html.bp-mv .mx-scr.out{ pointer-events:none; animation:mxFadeOut .18s ease forwards }
+@keyframes mxScrIn{ from{ opacity:0; transform:translateY(14px) } }
+html.bp-mv .mx-shd{
+  position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:10px;
+  min-height:calc(56px + env(safe-area-inset-top,0px)); box-sizing:border-box;
+  padding:calc(env(safe-area-inset-top,0px) + 6px) 16px 6px; background:var(--mx-bg);
+  box-shadow:0 1px 0 transparent; transition:box-shadow .2s ease;
+}
+html.bp-mv .mx-scr.sc .mx-shd{ box-shadow:0 1px 0 rgba(255,255,255,.08) }
+html.bp-mv .mx-back{
+  position:relative; flex:none; width:44px; height:44px; margin:0; padding:0; border:0; border-radius:9999px;
+  display:grid; place-items:center; background:none; color:#fff; cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+html.bp-mv .mx-back::before{ content:''; position:absolute; left:0; right:0; top:4px; bottom:4px; border-radius:9999px; background:var(--mx-s2); transition:background .15s ease }
+html.bp-mv .mx-back svg{ position:relative; width:22px; height:22px }
+html.bp-mv .mx-back:active::before{ background:#333436 }
+html.bp-mv .mx-back:focus-visible{ outline:2px solid var(--mx-focus)!important; outline-offset:0!important }
+html.bp-mv .mx-shd h1{ flex:1; min-width:0; margin:0; font-size:18px; line-height:24px; font-weight:600; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:0 }
+html.bp-mv .mx-sbd{ display:flex; flex-direction:column; gap:20px; padding:4px 16px calc(40px + env(safe-area-inset-bottom,0px)) }
+
+/* ═══ 2 · вкладка «Профиль» (их /account) ═══ */
+/* прежние блоки прячем, только когда наша вкладка уже нарисована (гость, выход — прежнее) */
+html.bp-mv #pg-profile.mvh-on > :not(#mvHub){ display:none!important }
+html.bp-mv #pg-profile.mvh-on{ padding-bottom:0!important }
+html.bp-mv #pg-profile:not(.mvh-on) > #mvHub{ display:none }
+html.bp-mv #mvHub{ width:100%; max-width:430px; margin:0 auto; box-sizing:border-box; padding:18px 16px calc(120px + env(safe-area-inset-bottom,0px)); color:#fff }
+html.bp-mv .mvh-hero{
+  position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; box-sizing:border-box;
+  min-height:260px; padding:28px 20px 24px; border-radius:20px; border:1px solid var(--mx-line); background:var(--mx-s1); text-align:center;
+}
+html.bp-mv .mvh-gear{
+  position:absolute; top:18px; right:18px; display:grid; place-items:center; width:44px; height:44px; margin:0; padding:0;
+  border:0; border-radius:16px; background:rgba(255,255,255,.06); color:var(--mx-t3); cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+html.bp-mv .mvh-gear svg{ width:22px; height:22px }
+html.bp-mv .mvh-gear:active{ background:rgba(255,255,255,.1) }
+html.bp-mv .mx-ava{
+  position:relative; flex:none; display:grid; place-items:center; overflow:hidden; box-sizing:border-box;
+  width:88px; height:88px; border-radius:50%; border:2px solid rgba(255,255,255,.12); background:var(--mx-s1);
+  font-size:28px; font-weight:600; color:#fff;
+}
+html.bp-mv .mx-ava img{ width:100%; height:100%; object-fit:cover; display:block }
+html.bp-mv .mx-ava.ini{ background:var(--mx-ava,linear-gradient(135deg,#3c67f6,#2142b7)) }
+html.bp-mv .mvh-name{ margin:16px 0 0; max-width:100%; font-size:20px; line-height:28px; font-weight:600; color:#fff; overflow-wrap:anywhere }
+html.bp-mv .mvh-user{ margin:4px 0 0; font-size:14px; line-height:20px; color:var(--mx-t3); font-variant-numeric:tabular-nums }
+html.bp-mv .mvh-pill{ margin-top:12px; padding:6px 12px; border-radius:9999px; background:rgba(60,103,246,.16); font-size:13px; line-height:18px; font-weight:500; color:var(--mx-blue) }
+html.bp-mv .mvh-pbtn{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; box-sizing:border-box;
+  width:100%; height:64px; margin:14px 0 0; padding:0 20px; border:0; border-radius:16px; text-align:left; cursor:pointer;
+  background:linear-gradient(180deg,#508aff,#3765f6); box-shadow:0 4px 12px rgba(55,101,246,.24);
+  font-family:inherit; color:#fff; -webkit-tap-highlight-color:transparent;
+}
+html.bp-mv .mvh-pbtn:active{ transform:scale(.99) }
+html.bp-mv .mvh-pbtn b{ display:block; font-size:16px; line-height:22px; font-weight:600 }
+html.bp-mv .mvh-pbtn i{ display:block; margin-top:2px; font-style:normal; font-size:14px; line-height:20px; color:rgba(255,255,255,.72) }
+html.bp-mv .mvh-pbtn svg{ flex:none; width:22px; height:22px; opacity:.95 }
+html.bp-mv .mvh-prog{
+  margin-top:14px; min-height:132px; box-sizing:border-box; padding:22px 20px; border-radius:24px;
+  border:1px solid var(--mx-line); background:var(--mx-s1); cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+html.bp-mv .mvh-prog-h{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px }
+html.bp-mv .mvh-prog-h b{ font-size:16px; line-height:22px; font-weight:600 }
+html.bp-mv .mvh-prog-h span{ flex:none; padding:4px 10px; border-radius:9999px; background:rgba(60,103,246,.16); font-size:13px; line-height:18px; font-weight:600; color:var(--mx-blue); font-variant-numeric:tabular-nums }
+html.bp-mv .mvh-prog p{ margin:6px 0 0; font-size:14px; line-height:20px; color:var(--mx-t3) }
+html.bp-mv .mvh-trk{ margin-top:16px; height:7px; overflow:hidden; border-radius:9999px; background:rgba(255,255,255,.08) }
+html.bp-mv .mvh-trk i{ display:block; height:100%; border-radius:9999px; background:linear-gradient(90deg,#ff7a2f 0%,#d879b8 48%,#508aff 100%); transition:width .4s ease }
+html.bp-mv .mvh-prog .mvh-foot{ margin-top:12px; line-height:1.4; color:var(--mx-t4) }
+html.bp-mv .mvh-st{ margin:16px 0 8px; font-size:18px; line-height:24px; font-weight:600; color:#fff; letter-spacing:0 }
+html.bp-mv .mvh-card{ overflow:hidden; border-radius:24px; border:1px solid var(--mx-line); background:var(--mx-s1) }
+html.bp-mv .mvh-row{
+  display:flex; align-items:center; gap:14px; box-sizing:border-box; width:100%; min-height:82px; margin:0; padding:14px 18px;
+  border:0; background:transparent; text-align:left; font-family:inherit; color:inherit; cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+html.bp-mv .mvh-row + .mvh-row{ border-top:1px solid var(--mx-div) }
+html.bp-mv .mvh-row:active{ background:rgba(255,255,255,.03) }
+html.bp-mv .mvh-row:focus-visible{ outline:2px solid var(--mx-focus)!important; outline-offset:-2px!important }
+html.bp-mv .mvh-ic{ flex:none; display:grid; place-items:center; width:50px; height:50px; border-radius:16px; background:rgba(255,255,255,.05); color:var(--mx-t4) }
+html.bp-mv .mvh-ic svg{ width:24px; height:24px }
+html.bp-mv .mvh-ic.purple{ background:rgba(122,88,255,.14); color:#8f73ff }
+html.bp-mv .mvh-ic.blue{ background:rgba(60,103,246,.14); color:var(--mx-blue3) }
+html.bp-mv .mvh-ic.green{ background:rgba(53,214,112,.14); color:var(--mx-green) }
+html.bp-mv .mvh-tx{ flex:1; min-width:0 }
+html.bp-mv .mvh-tx b{ display:block; font-size:16px; line-height:22px; font-weight:500; color:#fff }
+html.bp-mv .mvh-tx em{ display:block; margin-top:2px; font-style:normal; font-size:14px; line-height:20px; font-weight:500; color:var(--mx-t3) }
+html.bp-mv .mvh-tx em.ok{ color:var(--mx-green) }
+html.bp-mv .mvh-tx em.wait{ color:#f5a524 }
+html.bp-mv .mvh-tx em.bad{ color:#ff6b6b }
+html.bp-mv .mvh-tx i{ display:block; margin-top:2px; font-style:normal; font-size:14px; line-height:20px; color:var(--mx-t3); text-wrap:pretty }
+html.bp-mv .mvh-tr{ flex:none; display:flex; align-items:center; color:var(--mx-t4) }
+html.bp-mv .mvh-tr svg{ width:22px; height:22px }
+html.bp-mv .mvh-tr.ok{ color:var(--mx-green) }
+html.bp-mv .mvh-out{
+  display:flex; align-items:center; justify-content:center; box-sizing:border-box; width:100%; min-height:56px; margin:14px 0 0;
+  padding:14px 18px; border-radius:24px; border:1px solid rgba(255,90,90,.28); background:rgba(255,90,90,.08);
+  font-weight:500; font-size:16px; line-height:22px; font-family:inherit; color:#ff6b6b; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .2s ease;
+}
+html.bp-mv .mvh-out:active{ background:rgba(255,90,90,.14) }
+
+/* ═══ 3 · экран «Мой профиль» (их /profile) ═══ */
+html.bp-mv .mvp-head{ position:relative; display:flex; align-items:flex-start; gap:12px; padding:12px 16px; border-radius:16px; background:var(--mx-s1) }
+html.bp-mv .mvp-head .mx-ava{ width:64px; height:64px; border:0; font-size:24px }
+html.bp-mv .mvp-hi{ flex:1; min-width:0; display:flex; flex-direction:column; gap:8px }
+html.bp-mv .mvp-hn{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-width:0 }
+html.bp-mv .mvp-hn b{ min-width:0; max-width:100%; font-size:20px; line-height:26px; font-weight:600; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+html.bp-mv .mvp-hm{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:16px; line-height:22px; color:var(--mx-t4); font-variant-numeric:tabular-nums }
+html.bp-mv .mvp-hm i{ width:4px; height:4px; flex:none; border-radius:50%; background:#3e3f40 }
+html.bp-mv .mvp-hm span{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+html.bp-mv .mvp-head .mx-b{ flex:none; min-height:36px; padding:8px 12px }
+html.bp-mv .mvp-stats{ display:flex; flex-direction:column; gap:12px }
+html.bp-mv .mvp-stat{ display:flex; flex-direction:column; gap:4px; padding:12px; border-radius:16px; background:var(--mx-s1) }
+html.bp-mv .mvp-stat b{ display:flex; align-items:center; gap:8px; font-size:26px; line-height:36px; font-weight:700; color:#fff; font-variant-numeric:tabular-nums }
+html.bp-mv .mvp-stat b svg{ width:28px; height:28px; flex:none }
+html.bp-mv .mvp-stat span{ font-size:16px; line-height:22px; color:var(--mx-t2) }
+html.bp-mv .mvp-sec h2{ margin:0 0 8px; font-size:18px; line-height:24px; font-weight:600; color:#fff; letter-spacing:0 }
+html.bp-mv .mvp-sec p{ margin:0; font-size:14px; line-height:20px; color:var(--mx-t2); white-space:pre-wrap; overflow-wrap:anywhere }
+html.bp-mv .mvp-box{ display:flex; flex-direction:column; gap:16px; padding:16px; border-radius:20px; border:1px solid var(--mx-line); background:var(--mx-s1) }
+html.bp-mv .mvp-box h3{ margin:0 0 8px; font-size:16px; line-height:22px; font-weight:500; color:#f4f5f7; letter-spacing:0 }
+html.bp-mv .mvp-box p{ margin:0; font-size:14px; line-height:20px; color:#a5a7ae }
+html.bp-mv .mvp-box p.v{ font-size:15px; line-height:22px; color:#f4f5f7 }
+html.bp-mv .mvp-chips{ display:flex; flex-wrap:wrap; gap:8px }
+/* «Заполнить профиль» — тёплая карточка с пунктами */
+html.bp-mv .mvp-fill{
+  overflow:hidden; padding:20px; border-radius:24px; border:1px solid rgba(255,128,31,.3);
+  background:linear-gradient(135deg,#2a1f14 0%,#1d1e20 50%,#141821 100%);
+}
+html.bp-mv .mvp-fill h2{ margin:0; font-size:22px; line-height:28px; font-weight:600; color:#fff; letter-spacing:0 }
+html.bp-mv .mvp-fill > p{ margin:8px 0 0; font-size:14px; line-height:20px; color:var(--mx-t3) }
+html.bp-mv .mvp-fill > p + p{ margin-top:8px; color:#b2b2b3 }
+html.bp-mv .mvp-fp{ display:flex; flex-direction:column; align-items:flex-start; gap:8px; margin-top:16px }
+html.bp-mv .mvp-fp b{ font-size:32px; line-height:1; font-weight:600; color:#fff; font-variant-numeric:tabular-nums }
+html.bp-mv .mvp-fp .mvh-trk{ width:100%; height:8px; margin:0; background:rgba(255,255,255,.1) }
+html.bp-mv .mvp-fp .mvh-trk i{ background:linear-gradient(90deg,#ff801f,#508aff) }
+html.bp-mv .mvp-fl{ display:flex; flex-direction:column; gap:8px; margin-top:20px }
+html.bp-mv .mvp-fi{
+  display:flex; align-items:center; gap:12px; box-sizing:border-box; width:100%; margin:0; padding:12px 16px; border-radius:16px;
+  border:1px solid rgba(255,255,255,.08); background:rgba(0,0,0,.2); text-align:left; font-family:inherit; color:#fff;
+  cursor:pointer; -webkit-tap-highlight-color:transparent; transition:border-color .15s ease, background-color .15s ease;
+}
+html.bp-mv .mvp-fi:active{ border-color:rgba(255,128,31,.4); background:rgba(255,255,255,.05) }
+html.bp-mv .mvp-fi > i{ flex:none; display:grid; place-items:center; width:28px; height:28px; box-sizing:border-box; border-radius:50%; border:1px solid rgba(255,128,31,.5); font-style:normal; font-size:14px; color:var(--mx-orange) }
+html.bp-mv .mvp-fi b{ display:block; font-size:15px; line-height:20px; font-weight:500 }
+html.bp-mv .mvp-fi span{ display:block; margin-top:2px; font-size:13px; line-height:18px; color:var(--mx-t3) }
+/* «Подключенные аккаунты» */
+html.bp-mv .mvp-acc{ display:flex; flex-direction:column; gap:16px }
+html.bp-mv .mvp-acc-h{ display:flex; align-items:center; gap:12px }
+html.bp-mv .mvp-acc-h h2{ margin:0; font-size:18px; line-height:24px; font-weight:600; color:#fff; letter-spacing:0 }
+html.bp-mv .mvp-acl{ display:grid; grid-template-columns:1fr; gap:16px }
+html.bp-mv .mvp-ac{ position:relative; display:flex; flex-direction:column; gap:12px; padding:12px; border-radius:16px; background:var(--mx-s1) }
+html.bp-mv .mvp-ac a, html.bp-mv .mvp-ac .mvp-acm{ display:flex; align-items:center; gap:8px; min-width:0; padding-right:40px; color:inherit; text-decoration:none; -webkit-tap-highlight-color:transparent }
+html.bp-mv .mvp-aci{ position:relative; flex:none; display:grid; place-items:center; width:38px; height:38px; overflow:hidden; border-radius:50%; background:var(--mx-s3) }
+html.bp-mv .mvp-aci img{ width:100%; height:100%; object-fit:cover; display:block }
+html.bp-mv .mvp-aci svg{ width:22px; height:22px }
+html.bp-mv .mvp-act{ min-width:0 }
+html.bp-mv .mvp-act b{ display:block; font-size:14px; line-height:20px; font-weight:500; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+html.bp-mv .mvp-act span{ display:block; font-size:13px; line-height:18px; color:var(--mx-t2) }
+html.bp-mv .mvp-acx{
+  position:absolute; top:6px; right:6px; display:grid; place-items:center; width:44px; height:44px; margin:0; padding:0; border:0;
+  background:none; color:var(--mx-t4); cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+html.bp-mv .mvp-acx svg{ width:20px; height:20px }
+html.bp-mv .mvp-acx:active{ color:#fff }
+html.bp-mv .mvp-acs{ display:flex; flex-wrap:wrap; align-items:center; gap:12px; font-size:14px; line-height:20px; color:#fff; font-variant-numeric:tabular-nums }
+html.bp-mv .mvp-acs span{ display:inline-flex; align-items:center; gap:4px }
+html.bp-mv .mvp-acs svg{ width:18px; height:18px; color:var(--mx-t4) }
+html.bp-mv .mvp-ace{ padding:32px 24px; border-radius:16px; border:1px dashed rgba(255,255,255,.1); text-align:center; font-size:14px; line-height:20px; color:var(--mx-t2) }
+html.bp-mv .mvp-acb{ display:flex; justify-content:center }
+html.bp-mv .mvp-acn{ margin:0 }
+html.bp-mv .mvp-load{ display:flex; justify-content:center; padding:24px 0 }
+html.bp-mv .mvp-load i{ width:28px; height:28px; box-sizing:border-box; border-radius:50%; border:3px solid var(--mx-orange); border-top-color:transparent; animation:mxSpin .9s linear infinite }
+@keyframes mxSpin{ to{ transform:rotate(360deg) } }
+/* окно «Подключить аккаунт»: площадки карточками */
+html.bp-mv .mvc-pls{ display:flex; flex-direction:column; gap:12px }
+html.bp-mv .mvc-pl{
+  position:relative; display:flex; align-items:center; gap:16px; box-sizing:border-box; width:100%; margin:0; padding:16px; padding-right:36px;
+  border-radius:12px; border:1px solid rgba(255,255,255,.1); background:var(--mx-s1); text-align:left; font-family:inherit; color:#fff;
+  cursor:pointer; -webkit-tap-highlight-color:transparent; transition:border-color .15s ease, background-color .15s ease;
+}
+html.bp-mv .mvc-pl.on{ border-color:#ff6900; background:rgba(255,105,0,.1) }
+html.bp-mv .mvc-pl.on::after{ content:''; position:absolute; top:50%; right:16px; width:8px; height:8px; margin-top:-4px; border-radius:50%; background:#ff6900 }
+html.bp-mv .mvc-pl:disabled{ cursor:not-allowed; opacity:.5 }
+html.bp-mv .mvc-pl:focus-visible{ outline:2px solid var(--mx-focus)!important; outline-offset:2px!important }
+html.bp-mv .mvc-ic{ flex:none; display:grid; place-items:center; width:48px; height:48px; border-radius:50%; background:var(--mx-s3) }
+html.bp-mv .mvc-ic svg{ width:32px; height:32px }
+html.bp-mv .mvc-tx{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:4px }
+html.bp-mv .mvc-tx > span{ display:flex; flex-wrap:wrap; align-items:center; gap:8px }
+html.bp-mv .mvc-tx b{ font-size:16px; line-height:22px; font-weight:500 }
+html.bp-mv .mvc-tx em{ padding:2px 8px; border-radius:9999px; background:rgba(5,223,114,.2); font-style:normal; font-size:12px; line-height:16px; color:#05df72 }
+html.bp-mv .mvc-tx i{ font-style:normal; font-size:13px; line-height:18px; color:var(--mx-t2) }
+/* удаление аккаунта */
+html.bp-mv .mvd-acc{ display:flex; flex-direction:column; gap:12px; padding:12px; border-radius:16px; background:var(--mx-s1) }
+html.bp-mv .mvd-q{ margin:0; font-size:18px; line-height:24px; color:#fff }
+
+/* ═══ 4 · «Редактировать профиль» ═══ */
+html.bp-mv .mve-ava{ display:flex; flex-direction:column; align-items:center; gap:12px }
+html.bp-mv .mve-ava .mx-ava{ width:128px; height:128px; border:0; font-size:40px }
+html.bp-mv .mve-ava h3{ margin:0; font-size:18px; line-height:24px; font-weight:600; color:#fff }
+html.bp-mv .mve-fix{
+  position:sticky; bottom:0; z-index:4; margin:0 -16px; padding:24px 16px calc(16px + env(safe-area-inset-bottom,0px));
+  display:flex; justify-content:center; background:linear-gradient(to top,var(--mx-bg) 55%,rgba(20,20,21,0));
+}
+html.bp-mv .mve-fix .mx-b{ padding-left:32px; padding-right:32px; min-width:180px }
+html.bp-mv .mve-cnt{ font-size:13px; line-height:18px; color:var(--mx-t4); font-variant-numeric:tabular-nums }
+html.bp-mv .mve-row{ display:flex; align-items:center; justify-content:space-between; gap:12px }
+html.bp-mv .mve-row h4{ margin:0; font-size:16px; line-height:22px; font-weight:500; color:#fff }
+html.bp-mv .mve-box{ display:flex; flex-direction:column; gap:16px; padding:16px; border-radius:16px; background:var(--mx-s1) }
+html.bp-mv .mve-box h3{ margin:0; font-size:18px; line-height:24px; font-weight:600; color:#fff }
+html.bp-mv .mve-box > p{ margin:-8px 0 0; font-size:14px; line-height:20px; color:var(--mx-t4) }
+html.bp-mv .mve-box .mx-ctl{ background:var(--mx-bg) }
+html.bp-mv .mve-roles{ display:grid; gap:12px }
+html.bp-mv .mve-role{
+  display:block; box-sizing:border-box; width:100%; margin:0; padding:16px; border-radius:16px; border:1px solid rgba(255,255,255,.1);
+  background:var(--mx-s1); text-align:left; font-family:inherit; color:#fff; cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+html.bp-mv .mve-box .mve-role{ background:var(--mx-bg) }
+html.bp-mv .mve-role.on{ border-color:var(--mx-blue3); background:rgba(60,103,246,.1) }
+html.bp-mv .mve-role b{ display:block; font-size:16px; line-height:22px; font-weight:600 }
+html.bp-mv .mve-role span{ display:block; margin-top:4px; font-size:14px; line-height:20px; color:var(--mx-t3) }
+
+@media (max-width:360px){
+  html.bp-mv #mvHub{ padding-left:12px; padding-right:12px }
+  html.bp-mv .mvh-row{ padding:12px 14px; gap:12px }
+  html.bp-mv .mvh-ic{ width:44px; height:44px; border-radius:14px }
+  html.bp-mv .mx-sbd{ padding-left:12px; padding-right:12px }
+}
+@media (prefers-reduced-motion:reduce){
+  html.bp-mv .mx-dlg, html.bp-mv .mx-ov::before, html.bp-mv .mx-scr, html.bp-mv .mx-scr > .mx-in{ animation:none!important }
+}
+
+/* мелочи окон и экранов */
+html.bp-mv .mvc-tx em.off{ background:rgba(255,255,255,.08); color:var(--mx-t3) }
+html.bp-mv .mvp-box .mvo-tbl{ background:var(--mx-bg) }
+html.bp-mv .mvp-ac.flash{ animation:mxFlash 1.5s ease 2 }
+@keyframes mxFlash{ 0%,100%{ box-shadow:0 0 0 0 rgba(80,138,255,0) } 40%{ box-shadow:0 0 0 2px rgba(80,138,255,.75) } }
+html.bp-mv .mx-pl > span{ display:block }
+html.bp-mv .mx-pl b{ display:inline }
+html.bp-mv .mx-pl > b:first-child{ display:block; font-size:16px; line-height:22px }
+html.bp-mv .mvh-prog:focus-visible{ outline:2px solid var(--mx-focus)!important; outline-offset:2px!important }
+html.bp-mv .mx-b.mx-bs:not([aria-label]) svg{ margin-left:-2px }
+html.bp-mv .mx-dlg:focus, html.bp-mv .mx-in:focus{ outline:none }
+html.bp-mv .mve-box button.mx-chip{ background:var(--mx-bg); color:var(--mx-t2) }
+html.bp-mv .mve-box button.mx-chip.on{ background:rgba(80,138,255,.14); color:#fff }
+</style>
+<style id="bp-mv-wal-css">
+/* ══ КОШЕЛЁК «КАК У MORE VIEWS» · вид (bp-mv-wal, 13.10.2026) ═════════
+   Владелец: «переделать баланс в стиле как у море вьюз: пополнение,
+   вывод, проверка, ввод данных». Образец — их /wallet и окна:
+   · «Кошелёк»: синий кошелёк 343×236 с тремя цветными карточками,
+     торчащими из кармана («Доступно» оранжевая, «В заданиях / Ждёт»
+     зелёная, «Всего» синяя), в кармане «Текущий баланс» крупно; плитки
+     «Заработано всего / Средняя выплата / Всего просмотров» лентой;
+     таблетка «История операций», операции по месяцам карточками,
+     нажатие — окно «Операция»;
+   · «Пополнение кошелька»: «Как вы хотите пополнить кошелёк?» —
+     плитки «Банковская карта · Физ. лица» и «По счёту · Компании»,
+     дальше сумма и «К зачислению» пунктиром (касса — прежняя);
+   · «Вывод средств»: «Доступно к выводу», «Куда вывести средства?»,
+     плитка «Рубли (₽) · Для граждан РФ», реквизиты, «Сколько вывести»,
+     «Комиссия 4%», «Вы получите» голубым пунктиром, «Закрыть / Вывести»;
+   · «Верификация»: щит, «Шаги верификации» с номерами и пунктиром,
+     кнопки-таблетки, справка снизу (шаги — прежние шторки bp-kyc-js).
+   Кнопки, поля, плашки и окна — общие mx-* из bp-mv-me-css.
+   Откат: удалить style#bp-mv-wal-css и script#bp-mv-wal.              */
+
+/* ═══ 1 · страница «Кошелёк» ═══ */
+html.bp-mv #pg-balance.mvw-on > :not(#mvWal){ display:none!important }
+html.bp-mv #pg-balance:not(.mvw-on) > #mvWal{ display:none }
+html.bp-mv #mvWal{ width:100%; max-width:520px; margin:0 auto; box-sizing:border-box; padding:14px 16px calc(110px + env(safe-area-inset-bottom,0px)); color:#fff }
+html.bp-mv .mvw-top{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 8px }
+html.bp-mv .mvw-top h1{ margin:0; min-width:0; font-size:28px; line-height:1.2; font-weight:800; letter-spacing:-.6px; color:#fff }
+html.bp-mv .mvw-acts{ display:flex; gap:8px; flex:none }
+html.bp-mv .mvw-acts .mx-b{ min-height:40px; padding:9px 14px; font-size:15px; line-height:20px }
+/* кошелёк: карман с балансом и карточки над ним */
+html.bp-mv .mvw-card{
+  position:relative; width:343px; max-width:100%; height:236px; margin:44px auto 0; border-radius:32px;
+}
+html.bp-mv .mvw-body{
+  position:absolute; inset:0; border-radius:32px;
+  background:linear-gradient(180deg,#508aff 0%,#3765f6 50%,#7185ff 100%);
+  box-shadow:0 14px 40px rgba(55,101,246,.38), inset 0 1px 0 rgba(255,255,255,.28);
+}
+html.bp-mv .mvw-stack{ position:absolute; left:14px; right:14px; bottom:110px; display:flex; flex-direction:column }
+html.bp-mv .mvw-cc{
+  position:relative; display:flex; align-items:center; justify-content:space-between; gap:10px; box-sizing:border-box;
+  height:60px; margin:0; padding:0 16px 13px; border:0; border-top:.5px solid #fff; border-radius:20px 20px 0 0;
+  font-family:inherit; color:#fff; text-align:left; cursor:pointer; -webkit-tap-highlight-color:transparent;
+  transition:transform .3s cubic-bezier(.22,1,.36,1), filter .2s ease;
+}
+html.bp-mv .mvw-cc + .mvw-cc{ margin-top:-13px }
+html.bp-mv .mvw-cc:nth-child(1){ background:#ef531b; z-index:0 }
+html.bp-mv .mvw-cc:nth-child(2){ background:#1f9054; z-index:2 }
+html.bp-mv .mvw-cc:nth-child(3){ background:#0a79aa; z-index:4 }
+html.bp-mv .mvw-cc span{ font-size:13px; line-height:16px; font-weight:400 }
+html.bp-mv .mvw-cc b{ display:inline-flex; align-items:center; gap:4px; font-size:13px; line-height:16px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap }
+html.bp-mv .mvw-cc b svg{ width:16px; height:16px }
+html.bp-mv .mvw-cc:active{ filter:brightness(1.08) }
+html.bp-mv .mvw-cc:focus-visible{ outline:2px solid #fff!important; outline-offset:-3px!important }
+html.bp-mv .mvw-pocket{ position:absolute; left:8px; right:8px; bottom:8px; height:118px; z-index:9; pointer-events:none }
+html.bp-mv .mvw-pocket svg{ display:block; width:100%; height:100% }
+html.bp-mv .mvw-bal{ position:absolute; left:24px; bottom:24px; z-index:10; display:flex; flex-direction:column; gap:4px; pointer-events:none; max-width:calc(100% - 96px) }
+html.bp-mv .mvw-bal span{ font-size:14px; line-height:20px; color:#fff }
+html.bp-mv .mvw-bal b{ font-size:26px; line-height:36px; font-weight:700; color:#fff; font-variant-numeric:tabular-nums; white-space:nowrap }
+html.bp-mv .mvw-mark{ position:absolute; right:24px; bottom:26px; z-index:10; width:40px; height:40px; border-radius:50%; overflow:hidden; box-shadow:0 0 0 2px rgba(255,255,255,.55); background:#0b0d12; pointer-events:none }
+html.bp-mv .mvw-mark img{ width:100%; height:100%; object-fit:cover; display:block }
+@media (max-width:380px){
+  html.bp-mv .mvw-card{ width:100%; height:200px; margin-top:40px }
+  html.bp-mv .mvw-body{ border-radius:24px }
+  html.bp-mv .mvw-stack{ left:10px; right:10px; bottom:92px }
+  html.bp-mv .mvw-cc{ height:50px; padding:0 12px 10px; border-radius:16px 16px 0 0 }
+  html.bp-mv .mvw-cc + .mvw-cc{ margin-top:-10px }
+  html.bp-mv .mvw-cc span, html.bp-mv .mvw-cc b{ font-size:11px; line-height:14px }
+  html.bp-mv .mvw-pocket{ left:10px; right:10px; bottom:6px; height:100px }
+  html.bp-mv .mvw-bal{ left:16px; bottom:16px; gap:2px }
+  html.bp-mv .mvw-bal span{ font-size:12px; line-height:16px }
+  html.bp-mv .mvw-bal b{ font-size:20px; line-height:28px }
+  html.bp-mv .mvw-mark{ right:16px; bottom:18px; width:32px; height:32px }
+}
+/* плитки лентой */
+html.bp-mv .mvw-stats{ display:flex; gap:12px; margin:22px -16px 0; padding:0 16px 4px; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch }
+html.bp-mv .mvw-stats::-webkit-scrollbar{ display:none }
+html.bp-mv .mvw-st{ position:relative; flex:none; display:flex; flex-direction:column; gap:8px; box-sizing:border-box; width:160px; padding:12px; border-radius:16px; background:var(--mx-s1) }
+html.bp-mv .mvw-st > span{ padding-right:30px; font-size:11px; line-height:15px; color:#cbcbcd }
+html.bp-mv .mvw-st > svg{ position:absolute; top:12px; right:12px; width:24px; height:24px; color:#fff }
+html.bp-mv .mvw-st b{ font-size:16px; line-height:22px; font-weight:600; color:#fff; font-variant-numeric:tabular-nums; white-space:nowrap }
+html.bp-mv .mvw-st i{ display:block; margin-top:-6px; font-style:normal; font-size:11px; line-height:15px; color:#999 }
+html.bp-mv .mvw-pls{ display:flex; flex-direction:column; gap:6px; margin-top:2px }
+html.bp-mv .mvw-pls div{ display:flex; align-items:center; gap:6px; font-size:11px; line-height:15px; color:#999; font-variant-numeric:tabular-nums; white-space:nowrap }
+html.bp-mv .mvw-pls em{ flex:none; display:grid; place-items:center; width:16px; height:16px; border-radius:50% }
+html.bp-mv .mvw-pls em svg{ width:10px; height:10px; fill:#fff }
+html.bp-mv .mvw-pls em.yt{ background:#f00 }
+html.bp-mv .mvw-pls em.tt{ background:#000; box-shadow:0 0 0 1px rgba(255,255,255,.18) }
+@media (max-width:380px){
+  html.bp-mv .mvw-stats{ gap:8px }
+  html.bp-mv .mvw-st{ width:140px; padding:10px; gap:6px }
+  html.bp-mv .mvw-st b{ font-size:14px; line-height:20px }
+}
+/* история */
+html.bp-mv .mvw-tabs{ display:flex; gap:8px; margin:24px 0 0 }
+html.bp-mv .mvw-tab{
+  display:inline-flex; align-items:center; height:38px; padding:0 16px; box-sizing:border-box; border-radius:9999px;
+  border:1px solid rgba(80,138,255,.55); background:rgba(80,138,255,.14); box-shadow:inset 0 0 0 1px rgba(80,138,255,.16);
+  font-size:16px; line-height:22px; font-weight:500; color:#fff;
+}
+html.bp-mv .mvw-hist{ display:flex; flex-direction:column; gap:32px; margin-top:24px }
+html.bp-mv .mvw-mon{ display:flex; flex-direction:column; gap:16px }
+html.bp-mv .mvw-mon h3{ margin:0; font-size:20px; line-height:26px; font-weight:600; color:#fff; letter-spacing:0 }
+html.bp-mv .mvw-rows{ display:flex; flex-direction:column; gap:4px }
+html.bp-mv .mvw-op{
+  display:flex; flex-direction:column; gap:8px; box-sizing:border-box; width:100%; margin:0; padding:12px; border:0; border-radius:16px;
+  background:var(--mx-s1); text-align:left; font-family:inherit; color:#fff; cursor:pointer; -webkit-tap-highlight-color:transparent;
+  transition:background-color .15s ease;
+}
+html.bp-mv .mvw-op:active{ background:var(--mx-s2) }
+html.bp-mv .mvw-op:focus-visible{ outline:2px solid var(--mx-focus)!important; outline-offset:0!important }
+html.bp-mv .mvw-op-r{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px }
+html.bp-mv .mvw-op-l{ flex:1; min-width:0; display:flex; flex-direction:column; gap:4px }
+html.bp-mv .mvw-op-k{ display:flex; align-items:center; gap:4px; font-size:14px; line-height:20px; color:var(--mx-t4) }
+html.bp-mv .mvw-op-k svg{ width:16px; height:16px; flex:none }
+html.bp-mv .mvw-op-k svg.in{ color:#fff }
+html.bp-mv .mvw-op-k svg.out{ color:#ff801f }
+html.bp-mv .mvw-op-t{ font-size:14px; line-height:20px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+html.bp-mv .mvw-op-v{ flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:4px }
+html.bp-mv .mvw-op-v b{ font-size:14px; line-height:20px; font-weight:700; color:#fff; font-variant-numeric:tabular-nums; white-space:nowrap }
+html.bp-mv .mvw-op-v b.pos{ color:var(--mx-emer) }
+html.bp-mv .mx-st{ display:inline-flex; align-items:center; height:20px; padding:0 8px; border-radius:9999px; font-size:12px; line-height:16px; font-weight:500; white-space:nowrap; background:rgba(15,179,250,.1); color:var(--mx-info) }
+html.bp-mv .mx-st.ok{ background:rgba(0,188,125,.1); color:var(--mx-emer) }
+html.bp-mv .mx-st.bad{ background:rgba(251,44,54,.1); color:#ff6467 }
+html.bp-mv .mvw-op-d{ font-size:13px; line-height:18px; color:#999; font-variant-numeric:tabular-nums }
+html.bp-mv .mvw-empty{ padding:40px 16px; border-radius:16px; border:1px solid rgba(255,255,255,.1); text-align:center; font-size:15px; line-height:22px; color:rgba(255,255,255,.7) }
+html.bp-mv .mvw-more{ display:flex; justify-content:center; margin-top:16px }
+/* окно «Операция» */
+html.bp-mv .mvo-sum{ display:flex; flex-direction:column; align-items:center; gap:6px; padding:8px 0 4px; text-align:center }
+html.bp-mv .mvo-sum b{ font-size:30px; line-height:38px; font-weight:700; font-variant-numeric:tabular-nums }
+html.bp-mv .mvo-sum b.pos{ color:var(--mx-emer) }
+html.bp-mv .mvo-sum span{ font-size:15px; line-height:22px; color:var(--mx-t2) }
+html.bp-mv .mvo-tbl{ display:flex; flex-direction:column; border-radius:16px; background:var(--mx-s1); overflow:hidden }
+html.bp-mv .mvo-tr{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:13px 16px; font-size:14px; line-height:20px }
+html.bp-mv .mvo-tr + .mvo-tr{ border-top:1px solid var(--mx-div) }
+html.bp-mv .mvo-tr span{ flex:none; color:var(--mx-t4) }
+html.bp-mv .mvo-tr b{ min-width:0; font-weight:500; color:#fff; text-align:right; overflow-wrap:anywhere; font-variant-numeric:tabular-nums }
+
+/* ═══ 2 · окна денег: плитки выбора, суммы, итог пунктиром ═══ */
+html.bp-mv .mvm-opts{ display:flex; flex-direction:column; gap:12px }
+html.bp-mv .mvm-sec{ display:flex; flex-direction:column; gap:12px }
+html.bp-mv .mvm-sec h3{ margin:0; font-size:20px; line-height:26px; font-weight:600; color:#fff; letter-spacing:0 }
+html.bp-mv .mvm-opt{
+  position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; box-sizing:border-box;
+  width:100%; margin:0; padding:16px; border-radius:16px; border:1px solid transparent; background:var(--mx-s1);
+  text-align:center; font-family:inherit; color:#fff; cursor:pointer; -webkit-tap-highlight-color:transparent;
+  transition:border-color .15s ease, box-shadow .15s ease;
+}
+html.bp-mv .mvm-opt:active{ border-color:rgba(255,255,255,.1) }
+html.bp-mv .mvm-opt.on{ border-color:rgba(255,255,255,.2); box-shadow:0 0 0 2px rgba(255,255,255,.1) }
+html.bp-mv .mvm-opt:disabled{ cursor:not-allowed; opacity:.5 }
+html.bp-mv .mvm-opt:focus-visible{ outline:2px solid var(--mx-focus)!important; outline-offset:2px!important }
+html.bp-mv .mvm-ico{ display:grid; place-items:center; width:64px; height:64px }
+html.bp-mv .mvm-ico svg{ width:64px; height:64px }
+html.bp-mv .mvm-opt b{ font-size:16px; line-height:22px; font-weight:500 }
+html.bp-mv .mvm-opt > span{ display:flex; flex-direction:column; align-items:center; gap:6px }
+html.bp-mv .mvm-opt i{ font-style:normal; font-size:14px; line-height:20px; font-weight:500; color:var(--mx-t4) }
+html.bp-mv .mvm-opt i.ok{ display:inline-flex; align-items:center; gap:6px; color:#fff }
+html.bp-mv .mvm-tag{ padding:4px 10px; border-radius:9999px; border:1px solid rgba(80,138,255,.3); background:rgba(55,101,246,.2); font-size:11px; line-height:1.2; font-weight:500; color:#92a1ff }
+html.bp-mv .mvm-av{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:18px; line-height:24px; color:#b2b2b3 }
+html.bp-mv .mvm-av b{ font-weight:600; color:#fff; font-variant-numeric:tabular-nums }
+html.bp-mv .mvm-who{ display:flex; align-items:center; justify-content:space-between; gap:8px }
+html.bp-mv .mvm-who > div{ min-width:0; display:flex; flex-direction:column; gap:4px }
+html.bp-mv .mvm-who b{ font-size:18px; line-height:24px; font-weight:600; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+html.bp-mv .mvm-who span{ font-size:16px; line-height:22px; color:#b2b2b3; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+html.bp-mv .mvm-who span em{ font-style:normal; font-weight:500; color:#fff }
+html.bp-mv .mvm-who .mx-b{ flex:none }
+html.bp-mv .mvm-k{ font-size:18px; line-height:24px; font-weight:600; color:#fff }
+html.bp-mv .mvm-sum{ display:flex; flex-direction:column; gap:12px }
+html.bp-mv .mvm-ctl input{ font-size:20px!important; font-weight:600!important; font-variant-numeric:tabular-nums }
+html.bp-mv .mvm-pre{ display:flex; flex-wrap:wrap; gap:8px }
+html.bp-mv .mvm-pre button{ min-height:36px; padding:0 14px; border:1px solid rgba(255,255,255,.08); border-radius:9999px; background:var(--mx-s1); font-weight:500; font-size:14px; line-height:20px; font-family:inherit; color:#fff; cursor:pointer; -webkit-tap-highlight-color:transparent; font-variant-numeric:tabular-nums }
+html.bp-mv .mvm-pre button.on{ border-color:rgba(80,138,255,.55); background:rgba(80,138,255,.14) }
+html.bp-mv .mvm-fee{ display:flex; align-items:center; gap:6px; font-size:14px; line-height:20px; color:#b2b2b3 }
+html.bp-mv .mvm-fee svg{ width:20px; height:20px; color:var(--mx-t4) }
+html.bp-mv .mvm-get{
+  display:flex; align-items:center; justify-content:space-between; gap:8px; padding:16px 20px; border-radius:16px;
+  border:1px dashed var(--mx-info); background:rgba(15,179,250,.1);
+}
+html.bp-mv .mvm-get span{ font-size:18px; line-height:24px; color:#fff }
+html.bp-mv .mvm-get b{ font-size:22px; line-height:28px; font-weight:700; color:#fff; font-variant-numeric:tabular-nums; white-space:nowrap }
+html.bp-mv .mvm-steps{ display:flex; flex-direction:column; gap:20px }
+html.bp-mv .mvm-step{ display:flex; flex-direction:column; gap:8px }
+html.bp-mv .mvm-step > div{ display:flex; align-items:flex-start; gap:12px }
+html.bp-mv .mvm-n{ flex:none; display:grid; place-items:center; width:32px; height:32px; border-radius:50%; background:var(--mx-s1); font-size:18px; line-height:22px; font-weight:600; color:#fff }
+html.bp-mv .mvm-step h4{ margin:4px 0 0; font-size:18px; line-height:24px; font-weight:400; color:#fff }
+html.bp-mv .mvm-step p{ margin:4px 0 0; font-size:16px; line-height:22px; color:var(--mx-t4) }
+html.bp-mv .mvm-tg{
+  display:flex; align-items:center; justify-content:space-between; gap:8px; box-sizing:border-box; width:100%; margin:0; padding:16px 20px;
+  border:0; border-radius:16px; background:#29a9ea; font-family:inherit; color:#fff; text-decoration:none; cursor:pointer; -webkit-tap-highlight-color:transparent;
+}
+html.bp-mv .mvm-tg span{ display:inline-flex; align-items:center; gap:8px; font-size:16px; line-height:22px }
+html.bp-mv .mvm-tg b{ display:inline-flex; align-items:center; gap:6px; font-size:16px; line-height:22px; font-weight:500 }
+html.bp-mv .mvm-tg svg{ width:22px; height:22px }
+html.bp-mv .mvm-ok{ display:flex; flex-direction:column; align-items:center; gap:12px; padding:12px 0 4px; text-align:center }
+html.bp-mv .mvm-ok > i{ display:grid; place-items:center; width:72px; height:72px; border-radius:50%; background:rgba(53,214,112,.14); color:var(--mx-green) }
+html.bp-mv .mvm-ok > i svg{ width:36px; height:36px }
+html.bp-mv .mvm-ok h3{ margin:0; font-size:20px; line-height:28px; font-weight:600 }
+html.bp-mv .mvm-ok p{ margin:0; max-width:320px; font-size:14px; line-height:20px; color:var(--mx-t3) }
+/* код подтверждения вывода — клетки как у них (72×56, радиус 16) */
+html.bp-mv .mvm-code{ display:flex; gap:8px; justify-content:center }
+html.bp-mv .mvm-code input{
+  width:46px; height:56px; box-sizing:border-box; margin:0; padding:0; border-radius:16px; border:1px solid var(--mx-line);
+  background:var(--mx-s1); text-align:center; font-weight:600; font-size:24px; line-height:32px; font-family:inherit; color:#fff; outline:0;
+  font-variant-numeric:tabular-nums; caret-color:#fff;
+}
+html.bp-mv .mvm-code input:focus{ border-color:var(--mx-blue3); box-shadow:0 0 0 2px rgba(60,103,246,.5) }
+html.bp-mv .mvm-code.bad input{ border-color:rgba(251,44,54,.5) }
+html.bp-mv .mvm-tabs{ display:flex; padding:4px; border-radius:9999px; background:var(--mx-s1); gap:4px }
+html.bp-mv .mvm-tabs button{ flex:1; min-height:40px; border:0; border-radius:9999px; background:none; font-weight:500; font-size:15px; line-height:20px; font-family:inherit; color:var(--mx-t4); cursor:pointer; -webkit-tap-highlight-color:transparent }
+html.bp-mv .mvm-tabs button.on{ background:var(--mx-s2); color:#fff; box-shadow:inset 0 -4px 12px 1px rgba(255,255,255,.08) }
+html.bp-mv .mvm-banks{ display:flex; flex-wrap:wrap; gap:8px }
+
+/* ═══ 3 · «Верификация» (их /verification) ═══ */
+html.bp-mv .mvv-hero{ display:flex; flex-direction:column; align-items:center; text-align:center; min-height:200px; box-sizing:border-box; margin-top:8px; padding:28px 24px; border-radius:20px; border:1px solid var(--mx-line); background:var(--mx-s1) }
+html.bp-mv .mvv-shield{ display:flex; align-items:center; justify-content:center; width:92px; height:92px; margin-bottom:20px; color:var(--mx-purple) }
+html.bp-mv .mvv-shield.green{ color:var(--mx-green) }
+html.bp-mv .mvv-shield.amber{ color:#f5a524 }
+html.bp-mv .mvv-shield.red{ color:#ff6b6b }
+html.bp-mv .mvv-shield svg{ width:92px; height:92px }
+html.bp-mv .mvv-hero h2{ margin:0; font-size:20px; line-height:28px; font-weight:600; color:#fff; letter-spacing:0 }
+html.bp-mv .mvv-hero p{ margin:8px 0 0; max-width:320px; font-size:14px; line-height:20px; color:var(--mx-t3); text-wrap:pretty }
+html.bp-mv .mvv-steps{ margin-top:14px; padding:20px 18px; border-radius:20px; border:1px solid var(--mx-line); background:var(--mx-s1) }
+html.bp-mv .mvv-row{ position:relative; display:grid; grid-template-columns:34px 1fr auto; column-gap:14px; align-items:start }
+html.bp-mv .mvv-row + .mvv-row{ margin-top:28px }
+html.bp-mv .mvv-row:not(:last-child)::after{ content:''; position:absolute; left:16px; top:38px; bottom:-28px; border-left:1.5px dashed rgba(255,255,255,.14) }
+html.bp-mv .mvv-num{ display:grid; place-items:center; width:34px; height:34px; border-radius:50%; font-size:14px; font-weight:600; background:var(--mx-blue); color:#fff }
+html.bp-mv .mvv-num.lock{ background:rgba(255,255,255,.06); color:var(--mx-t3) }
+html.bp-mv .mvv-num.done{ background:var(--mx-green) }
+html.bp-mv .mvv-num.wait{ background:rgba(245,165,36,.16); color:#f5a524 }
+html.bp-mv .mvv-num.bad{ background:rgba(255,107,107,.16); color:#ff6b6b }
+html.bp-mv .mvv-num svg{ width:16px; height:16px }
+html.bp-mv .mvv-row h3{ margin:0; font-size:16px; line-height:22px; font-weight:500; color:#fff; letter-spacing:0 }
+html.bp-mv .mvv-row p{ margin:4px 0 0; font-size:14px; line-height:20px; color:var(--mx-t3); text-wrap:pretty; overflow-wrap:anywhere }
+html.bp-mv .mvv-act{ align-self:center }
+html.bp-mv .mvv-bp{ min-width:104px; height:42px; padding:0 16px; border:0; border-radius:9999px; background:linear-gradient(180deg,#508aff,#3765f6); color:#fff; font-weight:600; font-size:14px; line-height:20px; font-family:inherit; white-space:nowrap; cursor:pointer; -webkit-tap-highlight-color:transparent }
+html.bp-mv .mvv-bs{ height:38px; padding:0 16px; border-radius:9999px; border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.06); color:#fff; font-weight:500; font-size:14px; line-height:20px; font-family:inherit; white-space:nowrap; cursor:pointer; -webkit-tap-highlight-color:transparent }
+html.bp-mv .mvv-bl{ display:grid; place-items:center; width:46px; height:42px; border:0; border-radius:16px; background:rgba(255,255,255,.04); color:var(--mx-t4) }
+html.bp-mv .mvv-bl svg{ width:18px; height:18px }
+html.bp-mv .mvv-bp:active, html.bp-mv .mvv-bs:active{ opacity:.86 }
+html.bp-mv .mvv-bp:focus-visible, html.bp-mv .mvv-bs:focus-visible{ outline:2px solid var(--mx-focus)!important; outline-offset:2px!important }
+html.bp-mv .mvv-info{ display:flex; gap:14px; margin-top:14px; padding:18px; border-radius:20px; border:1px solid var(--mx-line); background:var(--mx-s1) }
+html.bp-mv .mvv-info > svg{ flex:none; width:28px; height:28px; color:var(--mx-blue) }
+html.bp-mv .mvv-info.ok > svg{ color:#f5c84c }
+html.bp-mv .mvv-info h3{ margin:0; font-size:15px; line-height:22px; font-weight:600; color:#fff; letter-spacing:0 }
+html.bp-mv .mvv-info p{ margin:4px 0 0; font-size:14px; line-height:20px; color:var(--mx-t3); text-wrap:pretty }
+@media (max-width:360px){
+  html.bp-mv .mvv-row{ grid-template-columns:30px 1fr; row-gap:10px }
+  html.bp-mv .mvv-num{ width:30px; height:30px }
+  html.bp-mv .mvv-row:not(:last-child)::after{ left:14px; top:34px }
+  html.bp-mv .mvv-act{ grid-column:2; justify-self:start }
+}
+/* шторки шагов проверки (bp-kyc-js) поверх «Верификации» и окон денег */
+html.bp-mv #kycSheet{ z-index:600!important }
+
+html.bp-mv .mvv-lnk{
+  display:inline-block; margin:8px 0 0; padding:0; border:0; background:none; cursor:pointer;
+  font-weight:600; font-size:14px; line-height:20px; font-family:inherit; color:var(--mx-blue); text-align:left;
+  -webkit-tap-highlight-color:transparent;
+}
+html.bp-mv .mvv-lnk.in{ display:inline; margin:0 }
+html.bp-mv .mvv-lnk:focus-visible{ outline:2px solid var(--mx-focus)!important; outline-offset:2px!important }
+html.bp-mv #mvVf .mx-b.mx-bfull{ margin-top:14px }
+/* ═══ 4 · страницы «Пополнение кошелька» и «Вывод средств» ═══
+   Поля, кнопки и их id — прежние (bp-wallet2: #bw2TuAmt/#tuBtn,
+   #bw2WdAmt/#wdSubmitBtn, перехват кассы bp-money). Здесь только вид их
+   окон: подпись 18/24, поле 54 px, чипы-таблетки, «Вы получите» голубым
+   пунктиром, кнопка-градиент. Классы bw2-* есть и в шторке бюджета
+   задания (#bpTmMoneySheet) — поэтому всё строго внутри страниц. */
+html.bp-mv #pg-topup, html.bp-mv #pg-withdraw{ background:var(--mx-bg) }
+html.bp-mv #pg-topup .sp-nav, html.bp-mv #pg-withdraw .wd-nav{
+  display:flex!important; align-items:center!important; gap:10px!important; min-height:56px; box-sizing:border-box;
+  margin:0!important; padding:6px 16px!important; border:0!important; background:var(--mx-bg)!important; box-shadow:none!important;
+}
+html.bp-mv #pg-topup .sp-back, html.bp-mv #pg-withdraw .wd-nav-back{
+  position:relative; flex:none; width:44px!important; height:36px!important; margin:4px 0!important; padding:0!important;
+  display:grid!important; place-items:center; border:0!important; border-radius:9999px!important; background:var(--mx-s2)!important; box-shadow:none!important;
+}
+html.bp-mv #pg-topup .sp-back svg, html.bp-mv #pg-withdraw .wd-nav-back svg{ width:20px; height:20px; stroke:#fff!important }
+html.bp-mv #pg-topup .sp-nav, html.bp-mv #pg-withdraw .wd-nav{ justify-content:flex-start!important }
+html.bp-mv #pg-topup .sp-nav h2, html.bp-mv #pg-withdraw .wd-nav h2{
+  flex:1 1 auto!important; min-width:0; position:static!important; transform:none!important; margin:0!important; font-size:18px!important; line-height:24px!important; font-weight:600!important; letter-spacing:0!important; color:#fff!important; text-align:left!important;
+}
+html.bp-mv #pg-withdraw .wd-nav-info{ display:none!important }
+html.bp-mv #pg-topup .bw2, html.bp-mv #pg-withdraw .bw2{ gap:20px; padding:4px 16px 128px!important }
+html.bp-mv #pg-topup .bw2-card, html.bp-mv #pg-withdraw .bw2-card{
+  padding:0!important; border:0!important; border-radius:0!important; background:none!important; background-image:none!important; box-shadow:none!important; animation:none!important;
+}
+html.bp-mv #pg-topup .bw2-k, html.bp-mv #pg-withdraw .bw2-k{
+  display:flex; justify-content:flex-start!important; margin:0 0 12px!important; font-size:18px!important; line-height:24px!important; font-weight:600!important;
+  letter-spacing:0!important; text-transform:none!important; color:#fff!important;
+}
+html.bp-mv #pg-topup .bw2-k svg, html.bp-mv #pg-withdraw .bw2-k svg{ display:none }
+html.bp-mv #pg-topup .bw2-amt-card, html.bp-mv #pg-withdraw .bw2-amt-card{ text-align:left!important }
+html.bp-mv #pg-topup .bw2-amt, html.bp-mv #pg-withdraw .bw2-amt{
+  display:flex!important; align-items:center!important; justify-content:space-between!important; gap:8px; box-sizing:border-box;
+  min-height:54px; padding:0 16px!important; border-radius:16px; background:var(--mx-s1); border:1px solid var(--mx-line); transition:border-color .15s ease;
+}
+html.bp-mv #pg-topup .bw2-amt:focus-within, html.bp-mv #pg-withdraw .bw2-amt:focus-within{ border-color:var(--mx-t4) }
+html.bp-mv #pg-topup .bw2-amt.err, html.bp-mv #pg-withdraw .bw2-amt.err{ border-color:#fb2c36 }
+html.bp-mv #pg-topup .bw2-amt input, html.bp-mv #pg-withdraw .bw2-amt input{
+  flex:1; width:100%!important; min-width:0; padding:15px 0!important; text-align:left!important;
+  font-size:20px!important; line-height:24px!important; font-weight:600!important; letter-spacing:0!important; caret-color:#fff;
+}
+html.bp-mv #pg-topup .bw2-amt.err input, html.bp-mv #pg-withdraw .bw2-amt.err input{ color:#ff6467; -webkit-text-fill-color:#ff6467 }
+html.bp-mv #pg-topup .bw2-amt .bw2-cur, html.bp-mv #pg-withdraw .bw2-amt .bw2-cur{ font-size:16px!important; font-weight:500!important; color:#fff!important }
+html.bp-mv #pg-topup .bw2-hint, html.bp-mv #pg-withdraw .bw2-hint{ margin-top:8px!important; min-height:20px; font-size:14px!important; line-height:20px!important; font-weight:400!important; color:#999!important }
+html.bp-mv #pg-topup .bw2-hint.err, html.bp-mv #pg-withdraw .bw2-hint.err{ color:#ff6467!important }
+html.bp-mv #pg-topup .bw2-chips, html.bp-mv #pg-withdraw .bw2-chips{ flex-wrap:wrap; gap:8px!important; margin-top:12px!important }
+html.bp-mv #pg-topup .bw2-chip, html.bp-mv #pg-withdraw .bw2-chip{
+  flex:0 0 auto!important; min-height:36px; padding:0 14px!important; border-radius:9999px!important; border:1px solid rgba(255,255,255,.08)!important;
+  background:var(--mx-s1)!important; color:#fff!important; font-size:14px!important; line-height:20px!important; font-weight:500!important;
+}
+html.bp-mv #pg-topup .bw2-chip.bump, html.bp-mv #pg-withdraw .bw2-chip.bump,
+html.bp-mv #pg-topup .bw2-chip.on, html.bp-mv #pg-withdraw .bw2-chip.on{ border-color:rgba(80,138,255,.55)!important; background:rgba(80,138,255,.14)!important; color:#fff!important }
+/* способ оплаты и реквизит — плитка */
+html.bp-mv #pg-topup .bw2-obj, html.bp-mv #pg-withdraw .bw2-obj{ gap:14px!important; min-height:72px; box-sizing:border-box; padding:14px 16px; border-radius:16px; background:var(--mx-s1) }
+html.bp-mv #pg-topup .bw2-obj-i.sq, html.bp-mv #pg-withdraw .bw2-obj-i.sq{ width:44px!important; height:44px!important; border-radius:50%!important; background:var(--mx-s3)!important; border:0!important; color:#b2b2b3!important }
+html.bp-mv #pg-topup .bw2-obj-n, html.bp-mv #pg-withdraw .bw2-obj-n{ font-size:16px!important; line-height:22px!important; font-weight:500!important; letter-spacing:0!important }
+html.bp-mv #pg-topup .bw2-obj-s, html.bp-mv #pg-withdraw .bw2-obj-s{ font-size:13px!important; line-height:18px!important; color:var(--mx-t2)!important }
+html.bp-mv #pg-topup .bw2-tag{ background:rgba(0,188,125,.1)!important; color:var(--mx-emer)!important; font-weight:600!important }
+html.bp-mv #pg-withdraw .bw2-btn-s{ min-height:36px; padding:8px 12px!important; border-radius:9999px!important; border:0!important; background:var(--mx-s2)!important; color:#fff!important; font-size:14px!important; font-weight:500!important }
+html.bp-mv #pg-withdraw .bw2-btn-s.danger{ background:rgba(251,44,54,.1)!important; color:#ff6467!important }
+html.bp-mv #pg-withdraw .bw2-add{ min-height:72px; padding:14px 16px!important; border-radius:16px!important; border:1px dashed rgba(255,255,255,.14)!important; background:var(--mx-s1)!important }
+html.bp-mv #pg-withdraw .bw2-add .bw2-obj-n{ color:#fff!important }
+html.bp-mv #pg-withdraw .bw2.mvw-haspo #bw2Dest{ display:none!important }
+/* итог — их «Вы получите» голубым пунктиром */
+html.bp-mv #pg-topup .bw2-sum, html.bp-mv #pg-withdraw .bw2-sum{
+  gap:8px!important; padding:16px 20px!important; border-radius:16px!important; border:1px dashed var(--mx-info)!important; background:rgba(15,179,250,.1)!important;
+}
+html.bp-mv #pg-topup .bw2-row, html.bp-mv #pg-withdraw .bw2-row{ font-size:14px!important; line-height:20px!important }
+html.bp-mv #pg-topup .bw2-row .bw2-rk, html.bp-mv #pg-withdraw .bw2-row .bw2-rk{ color:#b2b2b3!important; font-weight:400!important }
+html.bp-mv #pg-topup .bw2-row .bw2-rv, html.bp-mv #pg-withdraw .bw2-row .bw2-rv{ color:#fff!important; font-weight:600!important }
+html.bp-mv #pg-topup .bw2-row.total, html.bp-mv #pg-withdraw .bw2-row.total{ margin-top:4px!important; padding-top:10px!important; border-top:1px dashed rgba(15,179,250,.4)!important }
+html.bp-mv #pg-topup .bw2-row.total .bw2-rk, html.bp-mv #pg-withdraw .bw2-row.total .bw2-rk{ font-size:18px!important; line-height:24px!important; font-weight:400!important; color:#fff!important }
+html.bp-mv #pg-topup .bw2-row.total .bw2-rv, html.bp-mv #pg-withdraw .bw2-row.total .bw2-rv{ font-size:22px!important; line-height:28px!important; font-weight:700!important; letter-spacing:0!important; color:#fff!important }
+/* «Доступно к выводу: N ₽» — строкой, как у них */
+html.bp-mv #pg-withdraw .bw2-avail{ display:flex; flex-wrap:wrap; align-items:baseline; gap:6px }
+html.bp-mv #pg-withdraw .bw2-avail::before{ display:none!important }
+html.bp-mv #pg-withdraw .bw2-avail-k{ font-size:18px!important; line-height:24px!important; font-weight:400!important; color:#b2b2b3!important }
+html.bp-mv #pg-withdraw .bw2-avail-v{ margin:0!important; font-size:18px!important; line-height:24px!important; font-weight:600!important; letter-spacing:0!important }
+html.bp-mv #pg-withdraw .bw2-avail-v small{ font-size:1em!important; font-weight:600!important; color:#fff!important; margin-left:4px }
+html.bp-mv #pg-withdraw .bw2-avail-row{ width:100%; margin-top:6px!important }
+html.bp-mv #pg-withdraw .bw2-pill{ padding:6px 12px!important; border-radius:9999px!important; background:var(--mx-s1)!important; border:1px solid rgba(255,255,255,.08)!important; font-size:13px!important; color:var(--mx-t2)!important }
+html.bp-mv #pg-withdraw #bw2Pending .bw2-req{ padding:12px 0!important; border-top-color:var(--mx-div)!important }
+html.bp-mv #pg-withdraw #bw2Pending .bw2-obj-i.sq{ background:rgba(15,179,250,.1)!important; color:var(--mx-info)!important }
+html.bp-mv #pg-withdraw #mvWdWho{ padding:16px; border-radius:16px; background:var(--mx-s1) }
+/* заметка — нейтральная плашка */
+html.bp-mv #pg-topup .bw2-note, html.bp-mv #pg-withdraw .bw2-note{
+  gap:12px!important; padding:16px!important; border-radius:16px!important; border:1px solid rgba(255,255,255,.1)!important; background:rgba(29,30,32,.6)!important;
+  font-size:14px!important; line-height:20px!important; color:rgba(255,255,255,.9)!important;
+}
+html.bp-mv #pg-topup .bw2-note svg, html.bp-mv #pg-withdraw .bw2-note svg{ width:20px!important; height:20px!important; color:var(--mx-blue)!important }
+html.bp-mv #pg-topup .bw2-note b, html.bp-mv #pg-withdraw .bw2-note b{ font-size:16px!important; line-height:22px!important; font-weight:600!important; margin-bottom:4px!important }
+/* закреплённая кнопка — градиент-таблетка */
+html.bp-mv #bw2TuCta, html.bp-mv #bw2WdCta{
+  max-width:520px!important; padding:24px 16px calc(env(safe-area-inset-bottom,0px) + 16px)!important;
+  background:linear-gradient(180deg,rgba(20,20,21,0),var(--mx-bg) 42%)!important;
+}
+html.bp-mv #bw2TuCta .bw2-go, html.bp-mv #bw2WdCta .bw2-go{
+  position:relative; isolation:isolate; min-height:54px; padding:14px 18px!important; border-radius:9999px!important;
+  background:linear-gradient(180deg,#508aff 0%,#3765f6 50%,#7185ff 100%)!important; box-shadow:0 4px 4px rgba(0,0,0,.25)!important;
+  border:0!important; color:#fff!important; font-size:16px!important; line-height:22px!important; font-weight:500!important; letter-spacing:0!important;
+}
+html.bp-mv #bw2TuCta .bw2-go::before, html.bp-mv #bw2WdCta .bw2-go::before{
+  content:''; position:absolute; inset:-2px; z-index:-1; border-radius:inherit; pointer-events:none; background:linear-gradient(180deg,#92a1ff,#3d55ed,#7185ff);
+}
+html.bp-mv #bw2TuCta .bw2-go.bp-cta-idle, html.bp-mv #bw2WdCta .bw2-go.bp-cta-idle{
+  background:linear-gradient(180deg,#508aff 0%,#3765f6 50%,#7185ff 100%)!important; opacity:.6!important; color:#fff!important;
+}
+html.bp-mv #bw2TuCta .bw2-go.bp-cta-idle *, html.bp-mv #bw2WdCta .bw2-go.bp-cta-idle *{ color:#fff!important }
+html.bp-mv #bw2TuCta .bw2-go:active, html.bp-mv #bw2WdCta .bw2-go:active{ transform:none!important; opacity:.86 }
+
+/* ═══ 5 · шторки: успех, проверка личности, реквизиты, код из письма ═══ */
+html.bp-mv #bw2Sheet{ background:rgba(0,0,0,.8)!important; -webkit-backdrop-filter:none!important; backdrop-filter:none!important }
+html.bp-mv #bw2Sheet .bw2-sheet{ max-width:520px; background:var(--mx-bg)!important; border:1px solid var(--mx-s1)!important; border-bottom:0!important; border-radius:24px 24px 0 0!important; padding:10px 16px calc(16px + env(safe-area-inset-bottom,0px))!important }
+html.bp-mv #bw2Sheet .bw2-grip{ background:var(--mx-s2)!important }
+html.bp-mv #bw2Sheet .bw2-ok-i{ width:72px!important; height:72px!important; background:rgba(53,214,112,.14)!important; color:var(--mx-green)!important; box-shadow:none!important }
+html.bp-mv #bw2Sheet .bw2-ok-i.wait{ background:rgba(15,179,250,.12)!important; color:var(--mx-info)!important }
+html.bp-mv #bw2Sheet .bw2-ok-t{ font-size:20px!important; line-height:28px!important; font-weight:600!important; letter-spacing:0!important }
+html.bp-mv #bw2Sheet .bw2-ok-v{ font-size:30px!important; line-height:38px!important; font-weight:700!important; letter-spacing:0!important }
+html.bp-mv #bw2Sheet .bw2-ok-v.in{ color:var(--mx-emer)!important }
+html.bp-mv #bw2Sheet .bw2-ok-s{ font-size:14px!important; line-height:20px!important; color:var(--mx-t3)!important }
+html.bp-mv #bw2Sheet .bw2-ok-rows{ border-radius:16px!important; background:var(--mx-s1)!important; border:0!important }
+html.bp-mv #bw2Sheet .bw2-go{ position:relative; isolation:isolate; min-height:52px; border-radius:9999px!important; background:linear-gradient(180deg,#508aff 0%,#3765f6 50%,#7185ff 100%)!important; box-shadow:0 4px 4px rgba(0,0,0,.25)!important; font-size:16px!important; font-weight:500!important }
+html.bp-mv #bw2Sheet .bw2-b2{ min-height:52px; border-radius:9999px!important; border:0!important; background:var(--mx-s2)!important; box-shadow:inset 0 -4px 12px 1px rgba(255,255,255,.1)!important; font-size:16px!important; font-weight:500!important }
+
+/* проверка личности и реквизиты (bp-kyc-js, bp-payout2) */
+html.bp-mv #kycSheet{ background:rgba(0,0,0,.8)!important }
+html.bp-mv #kycSheet .kyc-card{
+  max-width:520px; background:var(--mx-bg)!important; border:1px solid var(--mx-s1)!important; border-bottom:0!important;
+  border-radius:24px 24px 0 0!important; padding:8px 16px calc(env(safe-area-inset-bottom,0px) + 20px)!important;
+}
+html.bp-mv #kycSheet .kyc-grab{ background:var(--mx-s2)!important }
+html.bp-mv #kycSheet .kyc-hero{ align-items:center!important; text-align:center }
+html.bp-mv #kycSheet .kyc-hero-ic{ width:56px!important; height:56px!important; border-radius:50%!important; background:rgba(139,92,246,.14)!important; border:0!important; box-shadow:none!important; color:var(--mx-purple)!important }
+html.bp-mv #kycSheet .kyc-hero-ic svg{ stroke:var(--mx-purple)!important }
+html.bp-mv #kycSheet .kyc-h1{ font-size:20px!important; line-height:28px!important; font-weight:600!important; letter-spacing:0!important; color:#fff!important }
+html.bp-mv #kycSheet .kyc-h2{ font-size:14px!important; line-height:20px!important; color:var(--mx-t3)!important }
+html.bp-mv #kycSheet .kyc-lbl{ font-size:14px!important; line-height:18px!important; font-weight:500!important; letter-spacing:0!important; text-transform:none!important; color:#fff!important; margin-bottom:12px!important }
+html.bp-mv #kycSheet .kyc-inp{
+  min-height:54px; padding:15px 16px!important; border-radius:16px!important; background:var(--mx-s1)!important; border:1px solid var(--mx-line)!important;
+  font-size:16px!important; line-height:22px!important; font-weight:500!important; color:#fff!important; box-shadow:none!important;
+}
+html.bp-mv #kycSheet .kyc-inp.has-ic{ padding-left:46px!important }
+html.bp-mv #kycSheet .kyc-inp:focus{ border-color:var(--mx-t4)!important; background:var(--mx-s1)!important; box-shadow:none!important }
+html.bp-mv #kycSheet .kyc-inp.bad, html.bp-mv #kycSheet .kyc-inp.bad:focus{ border-color:#fb2c36!important; background:var(--mx-s1)!important }
+html.bp-mv #kycSheet .kyc-inp-ic, html.bp-mv #kycSheet .kyc-inpwrap:focus-within .kyc-inp-ic{ color:var(--mx-t4)!important }
+html.bp-mv #kycSheet .kyc-go{
+  position:relative; isolation:isolate; min-height:54px; border-radius:9999px!important; border:0!important;
+  background:linear-gradient(180deg,#508aff 0%,#3765f6 50%,#7185ff 100%)!important; box-shadow:0 4px 4px rgba(0,0,0,.25)!important;
+  font-size:16px!important; line-height:22px!important; font-weight:500!important; letter-spacing:0!important; color:#fff!important;
+}
+html.bp-mv #kycSheet .kyc-go[disabled], html.bp-mv #kycSheet .kyc-go:disabled{ opacity:.6!important }
+html.bp-mv #kycSheet .kyc-ghost{ min-height:52px; border-radius:9999px!important; border:0!important; background:var(--mx-s2)!important; box-shadow:inset 0 -4px 12px 1px rgba(255,255,255,.1)!important; color:#fff!important; font-size:16px!important; font-weight:500!important }
+html.bp-mv #kycSheet .kyc-seg{ padding:4px!important; gap:4px!important; border-radius:9999px!important; border:0!important; background:var(--mx-s1)!important }
+html.bp-mv #kycSheet .kyc-seg-b{ min-height:40px; border-radius:9999px!important; border:0!important; background:none!important; color:var(--mx-t4)!important; font-size:15px!important; font-weight:500!important; box-shadow:none!important }
+html.bp-mv #kycSheet .kyc-seg-b.on{ background:var(--mx-s2)!important; color:#fff!important; box-shadow:inset 0 -4px 12px 1px rgba(255,255,255,.08)!important }
+html.bp-mv #kycSheet .kyc-cell{ border-radius:16px!important; border:1px solid var(--mx-line)!important; background:var(--mx-s1)!important; font-size:24px!important; font-weight:600!important; box-shadow:none!important }
+html.bp-mv #kycSheet .kyc-cell.active{ border-color:var(--mx-blue3)!important; box-shadow:0 0 0 2px rgba(60,103,246,.5)!important }
+html.bp-mv #kycSheet .kyc-cell.active::after{ background:#fff!important }
+html.bp-mv #kycSheet .kyc-cell.scan{ border-color:var(--mx-blue3)!important; color:#9db7ff!important }
+html.bp-mv #kycSheet .kyc-cell.good{ border-color:var(--mx-blue3)!important; background:rgba(60,103,246,.14)!important; color:#fff!important; box-shadow:none!important }
+html.bp-mv #kycSheet .kyc-cell.err{ border-color:rgba(251,44,54,.5)!important; background:rgba(251,44,54,.08)!important; color:#ff6467!important }
+html.bp-mv #kycSheet .kyc-demo{ border-radius:16px!important; border:1px dashed var(--mx-info)!important; background:rgba(15,179,250,.1)!important; color:rgba(255,255,255,.9)!important; font-weight:500!important; font-size:14px!important }
+html.bp-mv #kycSheet .kyc-demo b{ color:#fff!important }
+html.bp-mv #kycSheet .kyc-doc{ min-height:64px; border-radius:16px!important; border:1px dashed rgba(255,255,255,.14)!important; background:var(--mx-s1)!important; color:#fff!important; font-size:15px!important; font-weight:500!important }
+html.bp-mv #kycSheet .kyc-doc.has{ border-style:solid!important; border-color:rgba(80,138,255,.45)!important; background:rgba(80,138,255,.08)!important }
+html.bp-mv #kycSheet .kyc-doc-tx i{ color:var(--mx-blue)!important }
+html.bp-mv #kycSheet .kyc-note{ border-radius:16px!important; border:1px solid rgba(255,255,255,.1)!important; background:rgba(29,30,32,.6)!important; color:var(--mx-t3)!important; font-size:13px!important }
+html.bp-mv #kycSheet .kyc-why, html.bp-mv #kycSheet .kyc-err{ border-radius:16px!important; background:rgba(251,44,54,.1)!important; border:1px solid rgba(251,44,54,.3)!important }
+html.bp-mv #kycSheet .kyc-edit-note{ border-radius:16px!important; background:rgba(255,128,31,.1)!important; border:1px dashed var(--mx-orange)!important }
+html.bp-mv #kycSheet .kyc-stat-i.ok{ background:var(--mx-blue3)!important }
+html.bp-mv #kycSheet .kyc-re-btn{ color:var(--mx-blue)!important }
+/* реквизиты: карточка-превью — тем же синим, что кошелёк */
+html.bp-mv #kycSheet .pay2-plastic{ border-radius:20px!important; background:linear-gradient(160deg,#508aff 0%,#3765f6 55%,#7185ff 100%)!important; border:0!important; box-shadow:0 10px 30px rgba(55,101,246,.32)!important }
+html.bp-mv #kycSheet .pay2-back{ border-radius:9999px!important; background:var(--mx-s2)!important; border:0!important }
+html.bp-mv #kycSheet .pay2-err{ color:#ff6467!important }
+html.bp-mv #kycSheet .pay2-hint{ color:var(--mx-t4)!important }
+html.bp-mv #kycSheet .pay2-ok-i{ background:rgba(53,214,112,.14)!important; color:var(--mx-green)!important; box-shadow:none!important }
+
+/* код из письма при выводе (bp-wd2fa) */
+html.bp-mv .wd2-wrap{ background:rgba(0,0,0,.8)!important }
+html.bp-mv .wd2{ max-width:520px!important; background:var(--mx-bg)!important; border:1px solid var(--mx-s1)!important; border-bottom:0!important; border-radius:24px 24px 0 0!important; padding:12px 16px calc(env(safe-area-inset-bottom,0px) + 16px)!important }
+html.bp-mv .wd2-grip{ background:var(--mx-s2)!important }
+html.bp-mv .wd2-ttl{ font-size:20px!important; line-height:26px!important; font-weight:600!important }
+html.bp-mv .wd2-sub{ font-size:14px!important; line-height:20px!important; color:var(--mx-t3)!important }
+html.bp-mv .wd2-inp{ height:56px!important; border-radius:16px!important; border:1px solid var(--mx-line)!important; background:var(--mx-s1)!important; font-size:24px!important; font-weight:600!important; letter-spacing:8px!important }
+html.bp-mv .wd2-inp:focus{ border-color:var(--mx-blue3)!important; box-shadow:0 0 0 2px rgba(60,103,246,.5)!important }
+html.bp-mv .wd2-inp.bad{ border-color:rgba(251,44,54,.5)!important }
+html.bp-mv .wd2-msg{ color:#ff6467!important; font-size:14px!important }
+html.bp-mv .wd2-btn{ position:relative; isolation:isolate; height:54px!important; border-radius:9999px!important; background:linear-gradient(180deg,#508aff 0%,#3765f6 50%,#7185ff 100%)!important; box-shadow:0 4px 4px rgba(0,0,0,.25)!important; font-size:16px!important; font-weight:500!important }
+html.bp-mv .wd2-x{ color:var(--mx-t3)!important; font-size:14px!important; font-weight:500!important }
+
+html.bp-mv #kycSheet .kyc-inp:focus, html.bp-mv #kycSheet .kyc-inp:focus-visible{ outline:none!important }
+</style>
+<script id="bp-mv-me">
+/* ══ ПРОФИЛЬ «КАК У MORE VIEWS» · поведение (bp-mv-me, 13.10.2026) ════
+   Вид и замеры — в style#bp-mv-me-css. Здесь:
+   · #mvHub во вкладке «Профиль» (их /account). Прежние блоки профиля
+     остаются в разметке скрытыми: в них по-прежнему пишут слои
+     bp-profile2, bp-pfmerge, bp-accid — это якоря, их не трогаем;
+   · экран «Мой профиль» #mvMe и «Редактировать профиль» #mvEdit —
+     поверх страницы (класс mx-scr, z 360, ниже шторок проверки);
+     «Назад» системная закрывает их через closeMvMe / closeMvEdit;
+   · «Подключенные аккаунты» — те же /api/verify/list и /unlink, окно
+     «Подключить аккаунт» #mvConn и «Удаление» #mvDel;
+   · ПОДКЛЮЧЕНИЕ БЕЗ ШТОРКИ. Владелец 13.10: «убери этот блок» — шторку
+     «Подключаем TikTok… Открыть ещё раз / Отмена» (#bpVfyCode, bp-ep2).
+     В режиме MV window.bpVerifyOwn уводит на площадку В ЭТОЙ ЖЕ
+     вкладке (как у них: window.location.assign), метка проверки та же
+     (sessionStorage bpVfyPending), возврат ?vfy&claim привязывает
+     аккаунт прежним finishReturn — сессия та же, второго окна нет, и
+     «страница возврата открылась в другом браузере» больше не бывает.
+     После привязки открывается «Мой профиль» с новым аккаунтом (окно
+     «Загрузка видео» возвращает себя само — цепочка bpAbcAfterVerify).
+     В настоящем мини-аппе Телеграма (tg.initData) площадка открывается
+     через tg.openLink без шторки, ожидание — строкой в «Аккаунтах».
+   Сохранение — прежними путями: поля currentUser + saveUsers /
+   saveSession / updateProfileUI (имя уходит на сервер обёрткой
+   bp-ident-fix, остальное — конвертом prof bp-dealsync), фото —
+   bpPfPickPhoto (bp-pfmerge), роль — toggleRole.
+   Без класса bp-mv каждая обёртка сразу зовёт оригинал.
+   Наружу: bpMvMeOpen(opts), bpMvMeEdit(opts), bpMvConnect(platform),
+   bpMvAccRows(), bpMvHubRender().
+   Откат: удалить script#bp-mv-me и style#bp-mv-me-css.                */
+(function(){
+'use strict';
+if(window.__bpMvMe) return; window.__bpMvMe = 1;
+var de = document.documentElement;
+function mv(){ return de.classList.contains('bp-mv'); }
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'bp-mv-me'); }catch(_){} }
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+function me(){ try{ return (typeof currentUser !== 'undefined' && currentUser) || null; }catch(e){ return null; } }
+function isAdv(){ try{ return !!(typeof _isAdvertiser !== 'undefined' && _isAdvertiser); }catch(e){ return false; } }
+function toast(m, k){ try{ if(typeof showAuthToast === 'function') showAuthToast(m, k || 'info'); }catch(e){} }
+function srv(){ return window.bpSrv; }
+function online(){ try{ var s = srv(); return !!(s && s.configured && s.configured() && typeof s.raw === 'function'); }catch(e){ return false; } }
+function token(){ try{ return srv().token() || ''; }catch(e){ return ''; } }
+function later(fn, ms){ setTimeout(function(){ try{ fn(); }catch(e){ E(e); } }, ms || 0); }
+function onPage(id){ var p = $(id); return !!(p && p.classList.contains('on')); }
+function tgApp(){ try{ var t = window.Telegram && window.Telegram.WebApp; return (t && t.initData && typeof t.openLink === 'function') ? t : null; }catch(e){ return null; } }
+var NB = ' ';
+function num(v){ var n = Number(v); return isFinite(n) ? n : 0; }
+function int(n){ return String(Math.round(Math.abs(num(n)))).replace(/\B(?=(\d{3})+(?!\d))/g, NB); }
+function rub(n){ return int(n) + NB + '₽'; }
+/* просмотры коротко, как у них: 15,3 К · 1,2 М */
+function shortN(n){
+  n = Math.round(num(n));
+  if(n >= 1e6) return (n / 1e6).toFixed(1).replace('.0', '').replace('.', ',') + NB + 'М';
+  if(n >= 1e3) return (n / 1e3).toFixed(1).replace('.0', '').replace('.', ',') + NB + 'К';
+  return String(n);
+}
+function plural(n, a, b, c){ n = Math.abs(Math.round(n)) % 100; var d = n % 10; if(n > 10 && n < 20) return c; if(d > 1 && d < 5) return b; if(d === 1) return a; return c; }
+/* короткие предлоги держатся за следующее слово */
+function nbsp(s){ return String(s).replace(/(^|[\s«(])(в|во|с|со|к|о|об|у|и|а|не|на|по|за|из|от|до|без|для)\s/gi, '$1$2' + NB); }
+
+/* ── значки: свои, однотонные ── */
+var SV = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+var I = {
+  gear:'<svg ' + SV + '><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.2 7.5l2.1 1.2M17.7 15.3l2.1 1.2M4.2 16.5l2.1-1.2M17.7 8.7l2.1-1.2"/><circle cx="12" cy="12" r="7"/></svg>',
+  chev:'<svg ' + SV + '><path d="M9.5 6l6 6-6 6"/></svg>',
+  back:'<svg ' + SV + ' stroke-width="2.4"><path d="M14.5 5.5L8 12l6.5 6.5"/></svg>',
+  x:'<svg ' + SV + '><path d="M18 6L6 18M6 6l12 12"/></svg>',
+  check:'<svg ' + SV + ' stroke-width="2.4"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  shield:'<svg ' + SV + '><path d="M12 3l7.5 3v5.3c0 4.7-3.1 8.4-7.5 9.9-4.4-1.5-7.5-5.2-7.5-9.9V6z"/><path d="M8.8 12.2l2.2 2.2 4.2-4.4"/></svg>',
+  bell:'<svg ' + SV + '><path d="M6 9.5a6 6 0 0 1 12 0c0 4.1 1.4 6 2.2 6.9H3.8C4.6 15.5 6 13.6 6 9.5z"/><path d="M9.8 19.4a2.3 2.3 0 0 0 4.4 0"/></svg>',
+  link:'<svg ' + SV + '><path d="M10.2 13.8a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M13.8 10.2a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
+  wallet:'<svg ' + SV + '><rect x="3" y="6" width="18" height="13.5" rx="3"/><path d="M3 10.2h18"/><path d="M16.2 14.9h.01" stroke-width="3"/><path d="M6.5 6l8.6-2.6a1.6 1.6 0 0 1 2 1.1L17.6 6"/></svg>',
+  doc:'<svg ' + SV + '><path d="M7 3h7.2L19 7.8V21H7z"/><path d="M14 3v5h5M10 12.5h6M10 16.5h6"/></svg>',
+  help:'<svg ' + SV + '><path d="M4 5h16v11.2H9.4L4 20.2z"/><path d="M9.5 9.2a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.6"/><path d="M12 15.1h.01" stroke-width="2.6"/></svg>',
+  pen:'<svg ' + SV + '><path d="M4 20l1.1-4.4L15.8 4.9a2 2 0 0 1 2.8 0l.5.5a2 2 0 0 1 0 2.8L8.4 18.9z"/><path d="M13.8 6.9l3.3 3.3"/></svg>',
+  trash:'<svg ' + SV + '><path d="M4.5 7h15M9.5 7V4.8h5V7M6.6 7l.9 13h9l.9-13M10.2 11v5.5M13.8 11v5.5"/></svg>',
+  plus:'<svg ' + SV + ' stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>',
+  vid:'<svg viewBox="0 0 28 28" fill="currentColor" aria-hidden="true"><path d="M6.5 4.5h15a4 4 0 0 1 4 4v11a4 4 0 0 1-4 4h-15a4 4 0 0 1-4-4v-11a4 4 0 0 1 4-4zm5.2 5.6v7.8c0 .7.8 1.2 1.4.8l6.2-3.9c.6-.4.6-1.2 0-1.6l-6.2-3.9c-.6-.4-1.4.1-1.4.8z"/></svg>',
+  eye:'<svg viewBox="0 0 28 28" fill="currentColor" aria-hidden="true"><path d="M14 5.5c-5.4 0-9.4 3.9-11.4 7.1a2.6 2.6 0 0 0 0 2.8c2 3.2 6 7.1 11.4 7.1s9.4-3.9 11.4-7.1a2.6 2.6 0 0 0 0-2.8C23.4 9.4 19.4 5.5 14 5.5zm0 13.3a4.8 4.8 0 1 1 0-9.6 4.8 4.8 0 0 1 0 9.6zm0-7.3a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>',
+  coin:'<svg viewBox="0 0 28 28" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M14 2.8a11.2 11.2 0 1 1 0 22.4 11.2 11.2 0 0 1 0-22.4zM11.4 8a1.1 1.1 0 0 0-1.1 1.1v5.2H9.4a1 1 0 1 0 0 2h.9v1h-.9a1 1 0 1 0 0 2h.9v.6a1.1 1.1 0 1 0 2.2 0v-.6h2.8a1 1 0 1 0 0-2h-2.8v-1h2.1a4.15 4.15 0 0 0 0-8.3zm1.1 2.2h2.1a1.95 1.95 0 0 1 0 3.9h-2.1z"/></svg>',
+  task:'<svg viewBox="0 0 28 28" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M10.6 3.5h6.8a2.6 2.6 0 0 1 2.6 2.6V7h1.4a3.4 3.4 0 0 1 3.4 3.4v11.2a3.4 3.4 0 0 1-3.4 3.4H6.6a3.4 3.4 0 0 1-3.4-3.4V10.4A3.4 3.4 0 0 1 6.6 7H8v-.9a2.6 2.6 0 0 1 2.6-2.6zm.1 2.2a.5.5 0 0 0-.5.5V7h7.6v-.8a.5.5 0 0 0-.5-.5zm7.8 7.7a1.1 1.1 0 0 0-1.6 0l-4 4.1-1.8-1.8a1.1 1.1 0 1 0-1.6 1.6l2.6 2.6c.4.4 1.2.4 1.6 0l4.8-4.9c.4-.4.4-1.2 0-1.6z"/></svg>',
+  users:'<svg ' + SV + '><circle cx="9" cy="8.3" r="3.4"/><path d="M3 19.2c.7-3 3.2-5 6-5s5.3 2 6 5"/><path d="M15.8 4.9a3.2 3.2 0 0 1 0 6.3M18 14.4c1.7.7 2.8 2.4 3 4.8"/></svg>',
+  heart:'<svg ' + SV + '><path d="M12 20s-7.5-4.4-7.5-10.2A4.2 4.2 0 0 1 12 7.4a4.2 4.2 0 0 1 7.5 2.4C19.5 15.6 12 20 12 20z"/></svg>',
+  play:'<svg ' + SV + '><rect x="3" y="5" width="18" height="14" rx="3.5"/><path d="M10.4 9.3v5.4l4.4-2.7z" fill="currentColor" stroke="none"/></svg>',
+  tg:'<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.7 4.3L3.6 10.9c-1.2.5-1.2 1.2-.2 1.5l4.4 1.4 1.7 5.2c.2.6.1.8.7.8.5 0 .7-.2 1-.5l2.1-2 4.4 3.2c.8.4 1.4.2 1.6-.8l2.9-13.6c.3-1.2-.4-1.7-1.5-1.3zM9.5 14.6l8.3-7.3-6.9 8.5-.2 3z"/></svg>'
+};
+/* знаки площадок — те же, что в bp-vfy-multi */
+var GLY = {
+  youtube:'<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#ff0000" d="M23 7.2c-.3-1-1-1.8-2-2C19.2 4.7 12 4.7 12 4.7s-7.2 0-9 .5c-1 .3-1.8 1-2 2C.5 9 .5 12 .5 12s0 3 .5 4.8c.3 1 1 1.8 2 2 1.8.5 9 .5 9 .5s7.2 0 9-.5c1-.3 1.8-1 2-2 .5-1.8.5-4.8.5-4.8s0-3-.5-4.8z"/><path fill="#fff" d="M9.7 15.1V8.9l6 3.1-6 3.1z"/></svg>',
+  tiktok:'<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#25f4ee" d="M15.9 2.6h-2.7v12.5a2.5 2.5 0 1 1-2.5-2.5c.25 0 .5.03.73.1V9.9a5.3 5.3 0 1 0 4.47 5.2V8.6a6.8 6.8 0 0 0 3.97 1.3V7.2a4 4 0 0 1-3.97-4.6z" transform="translate(-.7 -.5)"/><path fill="#fe2c55" d="M15.9 2.6h-2.7v12.5a2.5 2.5 0 1 1-2.5-2.5c.25 0 .5.03.73.1V9.9a5.3 5.3 0 1 0 4.47 5.2V8.6a6.8 6.8 0 0 0 3.97 1.3V7.2a4 4 0 0 1-3.97-4.6z" transform="translate(.7 .5)"/><path fill="#fff" d="M15.9 2.6h-2.7v12.5a2.5 2.5 0 1 1-2.5-2.5c.25 0 .5.03.73.1V9.9a5.3 5.3 0 1 0 4.47 5.2V8.6a6.8 6.8 0 0 0 3.97 1.3V7.2a4 4 0 0 1-3.97-4.6z"/></svg>'
+};
+var PNAME = { youtube:'YouTube', tiktok:'TikTok' };
+var ORDER = ['youtube', 'tiktok'];
+window.bpMvGlyph = function(p){ return GLY[p] || ''; };
+
+/* ── кто я ── */
+function nameOf(u){ return String((u && u.name) || '').trim() || 'Пользователь'; }
+function accId(u){
+  try{ if(typeof window.bpAccIdOf === 'function'){ var a = window.bpAccIdOf(u); if(a) return String(a); } }catch(e){}
+  try{ if(u && u.accountId != null && typeof bpFormatAccountId === 'function') return String(bpFormatAccountId(u.accountId)); }catch(e){}
+  return '';
+}
+function roleTxt(){ return isAdv() ? 'Рекламодатель' : 'Блогер'; }
+function photoOf(u){
+  var p = String((u && (u.photo || u.avatar)) || '');
+  return (/^data:image\/(png|jpe?g|webp|gif|avif);/i.test(p) || /^https:\/\//i.test(p) || /^blob:/i.test(p)) ? p : '';
+}
+/* градиент буквы — тот же, что рисует bp-ui-js (div[data-bpava]) */
+function avaBg(){
+  try{
+    var d = document.querySelector('#pg-profile .pf-ava-img [data-bpava], .tb-ava [data-bpava], .drw-user-ava [data-bpava]');
+    var bg = d && (d.style.backgroundImage || d.style.background);
+    if(bg && /gradient/.test(bg)) return bg.replace(/"/g, "'");
+  }catch(e){}
+  return '';
+}
+function ava(u, cls){
+  var p = photoOf(u);
+  if(p) return '<span class="mx-ava' + (cls ? ' ' + cls : '') + '"><img src="' + esc(p) + '" alt=""></span>';
+  var ch = nameOf(u).charAt(0).toUpperCase() || '?';
+  var bg = avaBg();
+  return '<span class="mx-ava ini' + (cls ? ' ' + cls : '') + '"' + (bg ? ' style="--mx-ava:' + esc(bg) + '"' : '') + ' aria-hidden="true">' + esc(ch) + '</span>';
+}
+function regDate(u){
+  try{ var d = new Date(u && u.registeredAt); if(!isNaN(d)) return d.toLocaleDateString('ru-RU', { day:'numeric', month:'long', year:'numeric' }).replace(/\s?г\.$/, ''); }catch(e){}
+  return '';
+}
+function company(){ try{ return typeof loadCompanyData === 'function' ? (loadCompanyData() || {}) : {}; }catch(e){ return {}; } }
+function niches(u){ var a = (u && Array.isArray(u.niches)) ? u.niches : []; if(!a.length && u && u.theme) a = [u.theme]; return a.filter(Boolean).slice(0, 4); }
+function NICHES(){ try{ return (typeof EP_NICHES !== 'undefined' && EP_NICHES.length) ? EP_NICHES.slice() : []; }catch(e){ return []; } }
+
+/* ── подключенные аккаунты: /api/verify/list ── */
+var ACC = { at:0, rows:null, p:null, err:false, uid:'' };
+/* вошёл другой человек — чужой список аккаунтов не показываем */
+function accFresh(){ var u = me(), id = u ? String(u.srvId || u.id || '') : ''; if(ACC.uid !== id){ ACC.uid = id; ACC.rows = null; ACC.at = 0; ACC.err = false; ACC.p = null; } }
+function pullAcc(force){
+  accFresh();
+  if(!online() || !token()) return Promise.resolve(ACC.rows || []);
+  if(!force && ACC.rows && Date.now() - ACC.at < 30000) return Promise.resolve(ACC.rows);
+  if(ACC.p) return ACC.p;
+  var uid = ACC.uid;
+  ACC.p = srv().raw('GET', '/api/verify/list').then(function(j){
+    if(ACC.uid !== uid) return ACC.rows || [];   /* пока ждали — сменился аккаунт */
+    ACC.p = null; ACC.at = Date.now(); ACC.err = false;
+    ACC.rows = ((j && j.rows) || []).filter(function(r){ return r && (r.platform === 'youtube' || r.platform === 'tiktok'); });
+    return ACC.rows;
+  }, function(e){ ACC.p = null; ACC.err = true; ACC.at = Date.now() - 20000; throw e; });
+  return ACC.p;
+}
+function dropAcc(){ ACC.at = 0; }
+window.bpMvAccRows = function(){ return (ACC.rows || []).slice(); };
+/* площадки, где вход настроен (/api/verify/config) */
+var CFG = { at:0, v:null, p:null };
+function pullCfg(){
+  if(CFG.v && Date.now() - CFG.at < 300000) return Promise.resolve(CFG.v);
+  if(!online()) return Promise.resolve(null);
+  if(CFG.p) return CFG.p;
+  CFG.p = srv().raw('GET', '/api/verify/config').then(function(j){ CFG.p = null; CFG.at = Date.now(); CFG.v = (j && j.platforms) || null; return CFG.v; }, function(){ CFG.p = null; return null; });
+  return CFG.p;
+}
+function safeUrl(u){ u = String(u == null ? '' : u); return /^https:\/\/[\w.-]+\//.test(u) ? u : ''; }
+function handleOf(r){
+  var u = String(r.username || '').replace(/^@/, '');
+  if(u) return '@' + u;
+  return String(r.title || '').trim() || PNAME[r.platform] || 'Аккаунт';
+}
+function linkOf(r){
+  var u = safeUrl(r.url);
+  if(u) return u;
+  var h = String(r.username || '').replace(/^@/, '');
+  if(!h) return '';
+  return r.platform === 'tiktok' ? 'https://www.tiktok.com/@' + h : 'https://www.youtube.com/@' + h;
+}
+
+/* ── заполненность (их «Профиль заполнен на N%») ── */
+function fillItems(){
+  var u = me(); if(!u) return [];
+  accFresh();
+  var k = (window.bpMvKycInfo && window.bpMvKycInfo()) || null;
+  var out = [];
+  out.push({ id:'photo', ok:!!photoOf(u), t:'Загрузите фото в профиле', s:'С лицом доверяют больше, чем букве' });
+  out.push({ id:'about', ok:!!String(u.about || '').trim(), t:'Расскажите о себе в описании', s:'Два-три предложения о вас и контенте' });
+  if(isAdv()){
+    var c = company();
+    out.push({ id:'company', ok:!!(c && c.name && c.inn), t:'Заполните данные компании', s:'Название и ИНН — для счетов и закрывающих документов' });
+    out.push({ id:'city', ok:!!String(u.city || '').trim(), t:'Укажите город', s:'Блогерам проще понять, где вы' });
+  } else {
+    out.push({ id:'niche', ok:niches(u).length > 0, t:'Выберите тематику блога', s:'До четырёх направлений' });
+    out.push({ id:'city', ok:!!String(u.city || '').trim(), t:'Укажите город проживания', s:'Нужен для заданий в вашем городе' });
+    out.push({ id:'acc', ok:(ACC.rows || []).length > 0, t:'Подключите YouTube или TikTok', s:'С них вы загружаете видео в задания' });
+    out.push({ id:'verify', ok:!!(k && k.all), t:'Пройдите верификацию', s:'Понадобится для вывода денег' });
+  }
+  return out;
+}
+function fillPct(items){ items = items || fillItems(); if(!items.length) return 100; var d = items.filter(function(i){ return i.ok; }).length; return Math.round(d * 100 / items.length); }
+function fillGo(id){
+  if(id === 'photo'){ try{ if(typeof window.bpPfPickPhoto === 'function') window.bpPfPickPhoto(); }catch(e){ E(e); } return; }
+  if(id === 'about' || id === 'niche' || id === 'city'){ openEdit({ focus:id }); return; }
+  if(id === 'company'){ closeAll(); later(function(){ if(typeof window.goTo === 'function') window.goTo('company'); }, 120); return; }
+  if(id === 'acc'){ openConnect(); return; }
+  if(id === 'verify'){ if(typeof window.bpMvVerifyOpen === 'function') window.bpMvVerifyOpen(); return; }
+}
+
+/* ── статистика «Мой профиль» ── */
+function myVideos(){
+  var u = me(), sid = String((u && u.srvId) || '');
+  try{ return (typeof window.bpVbMyVideos === 'function' ? window.bpVbMyVideos() : []).filter(function(v){ return v && sid && String(v.bloggerId) === sid && v.status !== 'declined'; }); }catch(e){ return []; }
+}
+function myCamps(){
+  var u = me(); if(!u) return [];
+  try{ return (typeof _loadCamps === 'function' ? _loadCamps() : []).filter(function(c){ return c && String(c.ownerId) === String(u.id); }); }catch(e){ return []; }
+}
+function stats(){
+  if(isAdv()){
+    var cs = myCamps(), m = null;
+    try{ m = typeof window.bpMvSummary === 'function' ? window.bpMvSummary() : null; }catch(e){ m = null; }
+    var v = 0, w = 0;
+    cs.forEach(function(c){ var s = m && m[String(c.id)]; if(s && typeof s === 'object'){ v += num(s.videos); w += num(s.views); } });
+    return [[I.vid, String(v), 'Видео уже создано'], [I.eye, shortN(w), 'Всего просмотров'], [I.task, String(cs.filter(function(c){ return c.status !== 'draft'; }).length), 'Всего заданий']];
+  }
+  var vs = myVideos();
+  var views = vs.reduce(function(s, x){ return s + num(x.views); }, 0);
+  var paid = vs.reduce(function(s, x){ return s + num(x.paid); }, 0);
+  return [[I.vid, String(vs.length), 'Видео уже создано'], [I.eye, shortN(views), 'Всего просмотров'], [I.coin, rub(paid), 'Всего заработано']];
+}
+
+/* ══════════ окна и экраны ══════════ */
+var FOCUSABLE = 'button:not([disabled]),[href],input:not([disabled]):not([type=hidden]),textarea:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+/* Tab по кругу внутри слоя (Esc не ставим: «Назад» и Esc закрывает bp-nav) */
+function trap(root){
+  root.addEventListener('keydown', function(e){
+    if(e.key !== 'Tab') return;
+    var f = [].filter.call(root.querySelectorAll(FOCUSABLE), function(x){ return x.getClientRects().length; });
+    if(!f.length) return;
+    var a = f[0], z = f[f.length - 1];
+    if(e.shiftKey && document.activeElement === a){ e.preventDefault(); z.focus(); }
+    else if(!e.shiftKey && document.activeElement === z){ e.preventDefault(); a.focus(); }
+  });
+}
+function closerName(id){ return 'close' + id.charAt(0).toUpperCase() + id.slice(1); }
+/* окно: шторка снизу на телефоне, по центру с mid */
+function modal(id, o){
+  var old = $(id); if(old) old.remove();
+  var back = document.activeElement;
+  var ov = document.createElement('div');
+  ov.id = id; ov.className = 'mx-ov' + (o.mid ? ' mid' : '');
+  ov.innerHTML = '<div class="mx-dlg" role="dialog" aria-modal="true" tabindex="-1" aria-labelledby="' + id + 'T">'
+    + '<div class="mx-hd">' + (o.back ? '<button type="button" class="mx-ib" data-mx="back" aria-label="Назад">' + I.back + '</button>' : '')
+    + '<h2 id="' + id + 'T">' + esc(o.title) + '</h2>'
+    + '<button type="button" class="mx-ib" data-mx="x" aria-label="Закрыть">' + I.x + '</button></div>'
+    + '<div class="mx-bd">' + (o.body || '') + '</div>'
+    + (o.foot ? '<div class="mx-ft' + (o.footCls ? ' ' + o.footCls : '') + '">' + o.foot + '</div>' : '')
+    + '</div>';
+  var done = false;
+  function close(now){
+    if(done) return; done = true;
+    try{ if(window[closerName(id)] === close) delete window[closerName(id)]; }catch(e){ window[closerName(id)] = null; }
+    try{ if(o.onClose) o.onClose(); }catch(e){ E(e); }
+    if(now || !ov.isConnected){ ov.remove(); }
+    else { ov.classList.add('out'); setTimeout(function(){ ov.remove(); }, 210); }
+    try{ if(back && back.isConnected && typeof back.focus === 'function') back.focus({ preventScroll:true }); }catch(e){}
+  }
+  ov.addEventListener('click', function(e){
+    if(e.target === ov){ close(); return; }
+    var b = e.target.closest ? e.target.closest('[data-mx]') : null;
+    if(!b || !ov.contains(b)) return;
+    var k = b.getAttribute('data-mx');
+    if(k === 'x') close();
+    else if(k === 'back' && o.onBack) o.onBack();
+  });
+  trap(ov);
+  document.body.appendChild(ov);
+  window[closerName(id)] = close;
+  /* фокус — на само окно: экранная читалка слышит заголовок, а кольцо
+     фокуса не загорается на первой кнопке после нажатия пальцем */
+  later(function(){ var f = o.focus ? ov.querySelector(o.focus) : ov.querySelector('.mx-dlg'); try{ if(f) f.focus({ preventScroll:true }); }catch(e){} }, 60);
+  return { el:ov, close:close, bd:ov.querySelector('.mx-bd'), ft:ov.querySelector('.mx-ft'),
+    title:function(t){ var h = $(id + 'T'); if(h) h.textContent = t; },
+    backBtn:function(on){ var hd = ov.querySelector('.mx-hd'), b = hd.querySelector('[data-mx="back"]'); if(on && !b){ hd.insertAdjacentHTML('afterbegin', '<button type="button" class="mx-ib" data-mx="back" aria-label="Назад">' + I.back + '</button>'); } if(!on && b) b.remove(); } };
+}
+window.bpMvModal = modal;
+/* экран во весь рост со своим «Назад» */
+function screen(id, title, html, onClose){
+  var old = $(id); if(old) old.remove();
+  var back = document.activeElement;
+  var el = document.createElement('div');
+  el.id = id; el.className = 'mx-scr in';
+  el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', id + 'T');
+  el.innerHTML = '<div class="mx-in" tabindex="-1"><header class="mx-shd"><button type="button" class="mx-back" data-mx="back" aria-label="Назад">' + I.back + '</button>'
+    + '<h1 id="' + id + 'T">' + esc(title) + '</h1></header><div class="mx-sbd">' + html + '</div></div>';
+  var done = false;
+  function close(){
+    if(done) return; done = true;
+    try{ if(window[closerName(id)] === close) delete window[closerName(id)]; }catch(e){ window[closerName(id)] = null; }
+    try{ if(onClose) onClose(); }catch(e){ E(e); }
+    el.classList.remove('in'); el.classList.add('out');
+    setTimeout(function(){ el.remove(); }, 190);
+    try{ if(back && back.isConnected && typeof back.focus === 'function') back.focus({ preventScroll:true }); }catch(e){}
+  }
+  el.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('[data-mx="back"]') : null;
+    if(b && el.contains(b) && b.parentNode && b.parentNode.classList.contains('mx-shd')) close();
+  });
+  var inner = el.querySelector('.mx-in');
+  inner.addEventListener('scroll', function(){ el.classList.toggle('sc', inner.scrollTop > 4); }, { passive:true });
+  trap(el);
+  document.body.appendChild(el);
+  window[closerName(id)] = close;
+  /* въезд — один раз; класс снимаем, чтобы перерисовка не повторяла его */
+  setTimeout(function(){ el.classList.remove('in'); }, 320);
+  later(function(){ var f = el.querySelector('.mx-in'); try{ if(f) f.focus({ preventScroll:true }); }catch(e){} }, 60);
+  return { el:el, close:close, body:el.querySelector('.mx-sbd'), inner:inner };
+}
+window.bpMvScreen = screen;
+function closeAll(){ ['mvEdit', 'mvMe'].forEach(function(id){ var f = window[closerName(id)]; if(typeof f === 'function') f(); }); }
+/* все наши окна и экраны — при переходе на другую страницу (bp-mv-wal) */
+var MINE = ['mvConn', 'mvDel', 'mvOut', 'mvTu', 'mvWd', 'mvOp', 'mvEdit', 'mvMe', 'mvVf'];
+window.bpMvCloseAll = function(){ MINE.forEach(function(id){ var f = window[closerName(id)]; if(typeof f === 'function'){ try{ f(true); }catch(e){ E(e); } } }); };
+
+/* ══════════ вкладка «Профиль» ══════════ */
+function kycRow(){
+  var k = (window.bpMvKycInfo && window.bpMvKycInfo()) || null;
+  if(!k) return { st:'', cls:'', sub:'Подтвердите телефон и личность', ok:false };
+  return { st:k.hubStatus, cls:k.hubCls, sub:k.hubSub, ok:!!k.all };
+}
+function pushRow(){
+  var st = 'unsupported';
+  try{ st = typeof window.bpPushState === 'function' ? window.bpPushState() : 'unsupported'; }catch(e){}
+  var on = false; try{ on = typeof window.bpPushOn === 'function' && !!window.bpPushOn(); }catch(e){}
+  if(on) return { st:'Включены', cls:'ok', sub:'Задания, проверка видео и выплаты', ok:true };
+  if(st === 'denied') return { st:'Запрещены в браузере', cls:'', sub:'Включить можно в настройках браузера', ok:false };
+  if(st === 'unsupported') return { st:tgApp() ? 'Через Телеграм' : 'Недоступны здесь', cls:'', sub:tgApp() ? 'Сообщения присылает бот BloggerPay' : 'Этот браузер не показывает уведомления', ok:false };
+  return { st:'Выключены', cls:'', sub:'Нажмите, чтобы получать уведомления', ok:false };
+}
+function accRow(){
+  accFresh();
+  var rows = ACC.rows || [];
+  if(!rows.length) return { st:ACC.rows ? 'Не подключены' : 'Загружаем…', cls:'', sub:'TikTok и YouTube — с них загружаете видео', ok:false };
+  var names = []; rows.forEach(function(r){ var n = PNAME[r.platform]; if(n && names.indexOf(n) < 0) names.push(n); });
+  return { st:'Подключено: ' + rows.length, cls:'ok', sub:names.join(', '), ok:true };
+}
+function row(act, icCls, ic, title, r){
+  return '<button type="button" class="mvh-row" data-mh="' + act + '">'
+    + '<span class="mvh-ic' + (icCls ? ' ' + icCls : '') + '">' + ic + '</span>'
+    + '<span class="mvh-tx"><b>' + esc(title) + '</b>'
+    + (r.st ? '<em class="' + esc(r.cls || '') + '">' + esc(r.st) + '</em>' : '')
+    + (r.sub ? '<i>' + esc(nbsp(r.sub)) + '</i>' : '') + '</span>'
+    + '<span class="mvh-tr' + (r.ok && r.check ? ' ok' : '') + '">' + (r.ok && r.check ? I.check : I.chev) + '</span></button>';
+}
+function hubHtml(){
+  var u = me(); if(!u) return '';
+  var id = accId(u), items = fillItems(), pct = fillPct(items);
+  var kr = kycRow(); kr.check = true;
+  var pr = pushRow(); pr.check = true;
+  var bal = num(u.balance);
+  var h = '<section class="mvh-hero">'
+    + '<button type="button" class="mvh-gear" data-mh="settings" aria-label="Настройки">' + I.gear + '</button>'
+    + ava(u)
+    + '<h1 class="mvh-name">' + esc(nameOf(u)) + '</h1>'
+    + (id ? '<p class="mvh-user">ID' + NB + esc(id) + '</p>' : '')
+    + '<span class="mvh-pill">' + roleTxt() + '</span>'
+    + '</section>'
+    + '<button type="button" class="mvh-pbtn" data-mh="me"><span><b>Мой профиль</b><i>Перейти к настройкам</i></span>' + I.chev + '</button>';
+  if(pct < 100){
+    h += '<section class="mvh-prog" role="button" tabindex="0" data-mh="fill" aria-label="Профиль заполнен на ' + pct + '%">'
+      + '<div class="mvh-prog-h"><b>Профиль заполнен на ' + pct + '%</b><span>' + pct + '%</span></div>'
+      + '<p>Чем больше данных в профиле, тем больше подходящих заданий.</p>'
+      + '<div class="mvh-trk"><i style="width:' + pct + '%"></i></div>'
+      + '<p class="mvh-foot">Заполните ещё несколько пунктов, чтобы получать больше заданий.</p></section>';
+  }
+  h += '<h2 class="mvh-st">Статус аккаунта</h2><div class="mvh-card">'
+    + row('verify', 'purple', I.shield, 'Верификация', kr)
+    + row('notif', 'blue', I.bell, 'Уведомления', pr)
+    + (isAdv() ? '' : row('acc', '', I.link, 'Соцсети', (function(r){ r.check = false; return r; })(accRow())))
+    + '</div>';
+  h += '<h2 class="mvh-st">Возможности</h2><div class="mvh-card">'
+    + row('wallet', '', I.wallet, 'Кошелёк', { st:'', sub:'Баланс ' + rub(bal) + ' · пополнение и вывод' })
+    + row('settings', '', I.gear, 'Настройки', { st:'', sub:'Вход, безопасность и уведомления' })
+    + row('docs', '', I.doc, 'Документы', { st:'', sub:'Соглашение и политика конфиденциальности' })
+    + '</div>';
+  h += '<h2 class="mvh-st">Поддержка</h2><div class="mvh-card">'
+    + row('help', '', I.help, 'Помощь и поддержка', { st:'', sub:'Частые вопросы и связь с нами' })
+    + '</div>'
+    + '<button type="button" class="mvh-out" data-mh="logout">Выйти из аккаунта</button>';
+  return h;
+}
+var _hubKey = '';
+function hostHub(){
+  var pg = $('pg-profile'); if(!pg) return null;
+  var h = $('mvHub');
+  if(!h){
+    h = document.createElement('div'); h.id = 'mvHub';
+    pg.appendChild(h);
+    h.addEventListener('click', onHub);
+    h.addEventListener('keydown', function(e){ if((e.key === 'Enter' || e.key === ' ') && e.target && e.target.getAttribute && e.target.getAttribute('data-mh') === 'fill'){ e.preventDefault(); onHub(e); } });
+  } else if(h.parentNode !== pg){ pg.appendChild(h); }
+  return h;
+}
+function renderHub(){
+  if(!mv()) return;
+  var u = me(), pg = $('pg-profile');
+  if(!pg) return;
+  if(!u){ pg.classList.remove('mvh-on'); return; }
+  var h = hostHub(); if(!h) return;
+  var html = hubHtml();
+  if(html !== _hubKey){ _hubKey = html; h.innerHTML = html; }
+  if(!pg.classList.contains('mvh-on')) pg.classList.add('mvh-on');
+}
+window.bpMvHubRender = function(){ _hubKey = ''; renderHub(); };
+var _hubT = null;
+function hubSoon(){ if(_hubT) return; _hubT = setTimeout(function(){ _hubT = null; try{ renderHub(); refreshOpen(); }catch(e){ E(e); } }, 120); }
+function onHub(e){
+  var b = e.target.closest ? e.target.closest('[data-mh]') : null;
+  if(!b) return;
+  var k = b.getAttribute('data-mh');
+  if(k === 'me') openMe();
+  else if(k === 'fill') openMe({ fill:true });
+  else if(k === 'settings'){ if(typeof window.goTo === 'function') window.goTo('settings'); }
+  else if(k === 'verify'){ if(typeof window.bpMvVerifyOpen === 'function') window.bpMvVerifyOpen(); }
+  else if(k === 'notif'){
+    var on = false; try{ on = typeof window.bpPushOn === 'function' && !!window.bpPushOn(); }catch(_){}
+    var st = 'default'; try{ st = typeof window.bpPushState === 'function' ? window.bpPushState() : 'default'; }catch(_){}
+    if(on && typeof window.openNotifPrefsSheet === 'function'){ window.openNotifPrefsSheet(); return; }
+    if(typeof window.bpAskNotif === 'function'){
+      var r = window.bpAskNotif();
+      if(r && typeof r.then === 'function') r.then(function(){ later(window.bpMvHubRender, 60); });
+      else later(window.bpMvHubRender, 300);
+      return;
+    }
+    if(st !== 'unsupported' && typeof window.openNotifPrefsSheet === 'function') window.openNotifPrefsSheet();
+  }
+  else if(k === 'acc') openMe({ acc:true });
+  else if(k === 'wallet'){ if(typeof window.goTo === 'function') window.goTo('balance'); }
+  else if(k === 'docs'){ try{ if(typeof openLegal === 'function') openLegal('terms'); }catch(_){ E(_); } }
+  else if(k === 'help'){ try{ if(typeof openHelpSheet === 'function') openHelpSheet(); }catch(_){ E(_); } }
+  else if(k === 'logout') askLogout();
+}
+function askLogout(){
+  var m = modal('mvOut', { mid:true, title:'Выход', body:'<p class="mx-q">Выйти из аккаунта на этом устройстве?</p><p class="mx-txt">Задания, видео и деньги сохранятся — войдите снова той же почтой или через Телеграм.</p>',
+    foot:'<button type="button" class="mx-b mx-bg" data-out="no">Отмена</button><button type="button" class="mx-b mx-bp mx-bgrow" data-out="go">Выйти</button>' });
+  m.el.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('[data-out]') : null; if(!b) return;
+    if(b.getAttribute('data-out') === 'no'){ m.close(); return; }
+    m.close(true); closeAll();
+    try{ if(typeof doLogout === 'function') doLogout(); }catch(err){ E(err); }
+  });
+}
+
+/* ══════════ «Мой профиль» ══════════ */
+var ME = null, _meKey = '', meOpts = {}, NOTE = null;
+function accHtml(){
+  var rows = ACC.rows;
+  var h = '<section class="mvp-acc" id="mvMeAcc"><div class="mvp-acc-h"><h2>Подключенные аккаунты</h2><span class="mx-cnt">' + (rows ? rows.length : 0) + '</span></div>';
+  if(NOTE) h += '<div class="mx-pl ' + (NOTE.kind === 'err' ? 'orange' : 'blue') + '" role="status">' + NOTE.html + '</div>';
+  if(!rows && !ACC.err && online() && token()) h += '<div class="mvp-load" aria-label="Загружаем аккаунты"><i></i></div>';
+  else if(rows && rows.length){
+    h += '<div class="mvp-acl">' + rows.map(function(r){
+      var url = linkOf(r), img = safeUrl(r.avatar), p = r.platform;
+      var who = '<span class="mvp-aci">' + (img ? '<img src="' + esc(img) + '" alt="" data-mvg="' + esc(p) + '">' : (GLY[p] || '')) + '</span>'
+        + '<span class="mvp-act"><b>' + esc(handleOf(r)) + '</b><span>' + esc(PNAME[p] || p) + '</span></span>';
+      var subs = num(r.subs), likes = num(r.likes_total), vids = num(r.videos_total);
+      var met = (subs || likes || vids) ? '<div class="mvp-acs">'
+        + (subs ? '<span title="Подписчики">' + I.users + shortN(subs) + '</span>' : '')
+        + (likes ? '<span title="Лайки">' + I.heart + shortN(likes) + '</span>' : '')
+        + (vids ? '<span title="Видео">' + I.play + shortN(vids) + '</span>' : '') + '</div>' : '';
+      return '<article class="mvp-ac' + (NOTE && NOTE.flash && String(NOTE.flash) === String(r.external_id) ? ' flash' : '') + '">'
+        + (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer" data-mvopen="' + esc(url) + '">' + who + '</a>' : '<div class="mvp-acm">' + who + '</div>')
+        + '<button type="button" class="mvp-acx" aria-label="Удалить аккаунт ' + esc(handleOf(r)) + '" data-mvdel="' + esc(p) + '|' + esc(String(r.external_id || '')) + '">' + I.trash + '</button>'
+        + met + '</article>';
+    }).join('') + '</div>';
+  } else {
+    h += '<div class="mvp-ace">' + (ACC.err ? 'Не удалось загрузить аккаунты. Проверьте связь и откройте экран ещё раз.' : (!online() ? 'Аккаунты подключаются, когда есть связь с сервером.' : 'Подключенные аккаунты не найдены. Добавьте аккаунт, чтобы начать работу.')) + '</div>';
+  }
+  h += '<div class="mvp-acb"><button type="button" class="mx-b mx-bg" data-mp="connect">' + I.plus + 'Подключить</button></div></section>';
+  return h;
+}
+function meHtml(){
+  var u = me(); if(!u) return '';
+  var id = accId(u), adv = isAdv();
+  var h = '<section class="mvp-head">' + ava(u)
+    + '<div class="mvp-hi"><div class="mvp-hn"><b>' + esc(nameOf(u)) + '</b><span class="mx-role">' + roleTxt() + '</span></div>'
+    + '<div class="mvp-hm">' + (id ? '<span>ID: ' + esc(id) + '</span>' : '') + (regDate(u) ? (id ? '<i aria-hidden="true"></i>' : '') + '<span>с ' + esc(regDate(u)) + '</span>' : '') + '</div></div>'
+    + '<button type="button" class="mx-b mx-bg mx-bs" data-mp="edit" aria-label="Редактировать профиль">' + I.pen + '</button></section>';
+  h += '<section class="mvp-stats">' + stats().map(function(s){ return '<div class="mvp-stat"><b>' + s[0] + esc(s[1]) + '</b><span>' + esc(s[2]) + '</span></div>'; }).join('') + '</section>';
+  var about = String(u.about || '').trim();
+  h += '<section class="mvp-sec"><h2>Описание</h2>' + (about ? '<p>' + esc(about) + '</p>' : '<p>Описание ещё не заполнено.</p>') + '</section>';
+  if(adv){
+    var c = company();
+    h += '<section class="mvp-box"><div><h3>Компания</h3>' + (c && c.name ? '<p class="v">' + esc(c.name) + '</p>' + (c.inn ? '<p>ИНН ' + esc(c.inn) + '</p>' : '<p>ИНН не указан</p>') : '<p>Данные компании не заполнены.</p>') + '</div>'
+      + '<button type="button" class="mx-b mx-bg mx-bs" data-mp="company">' + (c && c.name ? 'Изменить данные' : 'Заполнить данные') + '</button></section>';
+    var mail = String(u.email || ''); if(/@telegram\.local$/i.test(mail)) mail = '';
+    h += '<section class="mvp-box"><div><h3>Информация</h3></div><div class="mvo-tbl mvp-info">'
+      + info('Полное имя', nameOf(u)) + (id ? info('ID пользователя', id) : '') + (mail ? info('Электронная почта', mail) : '')
+      + info('Город', String(u.city || '').trim() || 'Не указан') + (regDate(u) ? info('Зарегистрирован', regDate(u)) : '') + '</div></section>';
+  } else {
+    var ns = niches(u), city = String(u.city || '').trim();
+    h += '<section class="mvp-box"><div><h3>Тематика блога</h3>' + (ns.length ? '<div class="mvp-chips">' + ns.map(function(n){ return '<span class="mx-chip">' + esc(n) + '</span>'; }).join('') + '</div>' : '<p>Тематика ещё не выбрана.</p>') + '</div>'
+      + '<div><h3>Город</h3>' + (city ? '<p class="v">' + esc(city) + '</p>' : '<p>Город не указан.</p>') + '</div></section>';
+  }
+  var items = fillItems(), pct = fillPct(items), miss = items.filter(function(i){ return !i.ok; });
+  if(miss.length){
+    h += '<section class="mvp-fill" id="mvMeFill"><h2>Заполнить профиль</h2>'
+      + '<p>' + (adv ? 'Заполненный профиль вызывает больше доверия у блогеров' : 'Заполните профиль, чтобы вступать в задания') + '</p>'
+      + '<p>Осталось заполнить ' + miss.length + ' из ' + items.length + ' ' + plural(items.length, 'пункта', 'пунктов', 'пунктов') + '.</p>'
+      + '<div class="mvp-fp"><b>' + pct + '%</b><div class="mvh-trk"><i style="width:' + pct + '%"></i></div></div>'
+      + '<div class="mvp-fl">' + miss.map(function(i){ return '<button type="button" class="mvp-fi" data-mpf="' + i.id + '"><i aria-hidden="true">!</i><span><b>' + esc(i.t) + '</b><span>' + esc(nbsp(i.s)) + '</span></span></button>'; }).join('') + '</div></section>';
+  }
+  if(!adv) h += accHtml();
+  return h;
+}
+function info(k, v){ return '<div class="mvo-tr"><span>' + esc(k) + '</span><b>' + esc(v) + '</b></div>'; }
+function paintMe(force){
+  if(!ME || !ME.el.isConnected) return;
+  var html = meHtml();
+  if(!force && html === _meKey) return;
+  _meKey = html;
+  ME.body.innerHTML = html;
+  fixImgs(ME.body);
+}
+/* картинка аккаунта не открылась (ссылка площадки устарела) — знак площадки */
+function fixImgs(root){
+  [].forEach.call(root.querySelectorAll('img[data-mvg]'), function(im){
+    function fb(){ var p = im.getAttribute('data-mvg'), w = im.parentNode; if(!w) return; im.remove(); w.innerHTML = GLY[p] || ''; }
+    im.addEventListener('error', fb);
+    if(im.complete && !im.naturalWidth) fb();
+  });
+}
+function openMe(o){
+  if(!mv()) { if(typeof window.goTo === 'function') window.goTo('profile'); return; }
+  if(!me()){ toast('Сначала войдите в аккаунт', 'err'); return; }
+  meOpts = o || {};
+  if(ME && ME.el.isConnected){ paintMe(true); }
+  else {
+    _meKey = '';
+    ME = screen('mvMe', 'Мой профиль', '', function(){ ME = null; NOTE = null; });
+    ME.body.addEventListener('click', onMe);
+    paintMe(true);
+  }
+  if(!isAdv()) pullAcc(!!meOpts.acc || !ACC.rows).then(function(){ paintMe(); hubSoon(); }, function(){ paintMe(true); });
+  if(meOpts.acc || meOpts.fill){
+    later(function(){
+      var t = $(meOpts.acc ? 'mvMeAcc' : 'mvMeFill') || $('mvMeAcc');
+      if(t && ME){ try{ t.scrollIntoView({ block:'start', behavior:'smooth' }); }catch(e){ t.scrollIntoView(); } }
+    }, meOpts.acc ? 420 : 260);
+  }
+}
+window.bpMvMeOpen = openMe;
+function onMe(e){
+  var t = e.target;
+  var del = t.closest ? t.closest('[data-mvdel]') : null;
+  if(del){ e.preventDefault(); var v = String(del.getAttribute('data-mvdel') || '').split('|'); askDel(v[0], v[1]); return; }
+  var op = t.closest ? t.closest('[data-mvopen]') : null;
+  if(op){
+    var tg = tgApp(), url = op.getAttribute('data-mvopen');
+    if(tg){ e.preventDefault(); try{ tg.openLink(url); }catch(_){} }
+    return;   /* обычная ссылка target=_blank */
+  }
+  var f = t.closest ? t.closest('[data-mpf]') : null;
+  if(f){ fillGo(f.getAttribute('data-mpf')); return; }
+  var b = t.closest ? t.closest('[data-mp]') : null;
+  if(!b) return;
+  var k = b.getAttribute('data-mp');
+  if(k === 'edit') openEdit();
+  else if(k === 'connect') openConnect();
+  else if(k === 'company'){ closeAll(); later(function(){ if(typeof window.goTo === 'function') window.goTo('company'); }, 150); }
+}
+function refreshOpen(){ try{ paintMe(); }catch(e){ E(e); } }
+
+/* ── удаление аккаунта (их «Удаление») ── */
+function askDel(platform, ext){
+  var r = (ACC.rows || []).filter(function(x){ return x.platform === platform && String(x.external_id) === String(ext); })[0];
+  if(!r) return;
+  var img = safeUrl(r.avatar);
+  var m = modal('mvDel', { mid:true, title:'Удаление',
+    body:'<p class="mvd-q">Вы уверены, что хотите удалить этот подключенный аккаунт?</p>'
+      + '<div class="mvd-acc"><div class="mvp-acm" style="padding:0"><span class="mvp-aci">' + (img ? '<img src="' + esc(img) + '" alt="" data-mvg="' + esc(platform) + '">' : (GLY[platform] || '')) + '</span>'
+      + '<span class="mvp-act"><b>' + esc(handleOf(r)) + '</b><span>' + esc(PNAME[platform] || platform) + '</span></span></div></div>'
+      + '<p class="mx-txt">Видео на проверке с этого аккаунта снимутся с заданий, зачтённые останутся. Подключить снова можно в любой момент.</p>',
+    foot:'<button type="button" class="mx-b mx-bg" data-del="go">Удалить</button><button type="button" class="mx-b mx-bp mx-bgrow" data-del="no">Отмена</button>', footCls:'c' });
+  fixImgs(m.bd);
+  m.el.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('[data-del]') : null; if(!b) return;
+    if(b.getAttribute('data-del') === 'no'){ m.close(); return; }
+    if(b.disabled) return;
+    if(!online() || !token()){ toast('Нет связи с сервером', 'err'); return; }
+    b.disabled = true; b.textContent = 'Удаление…';
+    srv().raw('POST', '/api/verify/unlink', { platform:platform, externalId:String(ext) }).then(function(){
+      m.close();
+      toast('Аккаунт ' + handleOf(r) + ' удалён', 'ok');
+      dropCaches();
+      ACC.rows = (ACC.rows || []).filter(function(x){ return x !== r; });
+      paintMe(true); hubSoon();
+      pullAcc(true).then(function(){ paintMe(); hubSoon(); }, function(){});
+    }, function(err){
+      b.disabled = false; b.textContent = 'Удалить';
+      toast((err && err.message) || 'Не получилось удалить — попробуйте ещё раз', 'err');
+    });
+  });
+}
+function dropCaches(){
+  dropAcc();
+  ['bpPf2DropChannels', 'bpAbcDropCache', 'bpVbDropCache'].forEach(function(n){ try{ if(typeof window[n] === 'function') window[n](); }catch(e){ E(e); } });
+}
+
+/* ══════════ «Подключить аккаунт» ══════════ */
+var PDESC = { youtube:'Подключите свой YouTube канал', tiktok:'Подключите свой TikTok аккаунт' };
+var CONN = null;
+function openConnect(pre){
+  if(!mv()) return;
+  if(!online()){ toast('Подключение работает, когда есть связь с сервером', 'err'); return; }
+  var sel = pre === 'youtube' || pre === 'tiktok' ? pre : '';
+  var tg = !!tgApp();
+  function body(cfg){
+    var rows = ACC.rows || [];
+    return '<div class="mx-pl blue">Подключение YouTube и TikTok проходит через официальную авторизацию площадок. Мы не получаем ваш пароль и не храним данные для входа. Подключение нужно, чтобы проверять статистику и видео в заданиях.</div>'
+      + '<p class="mx-txt">Выберите платформу для подключения аккаунта</p>'
+      + '<div class="mvc-pls" role="radiogroup" aria-label="Платформа">' + ORDER.map(function(p){
+        var on = cfg && cfg[p] && cfg[p].configured === false;
+        var has = rows.some(function(r){ return r.platform === p; });
+        return '<button type="button" class="mvc-pl' + (sel === p ? ' on' : '') + '" role="radio" aria-checked="' + (sel === p) + '" data-cp="' + p + '"' + (on ? ' disabled' : '') + '>'
+          + '<span class="mvc-ic">' + GLY[p] + '</span><span class="mvc-tx"><span><b>' + PNAME[p] + '</b>'
+          + (has ? '<em>Подключен • можно добавить ещё</em>' : '') + (on ? '<em class="off">Скоро</em>' : '') + '</span>'
+          + '<i>' + PDESC[p] + '</i></span></button>';
+      }).join('') + '</div>'
+      + (tg ? '<div class="mx-pl blue" id="mvConnTg"' + (sel ? '' : ' hidden') + '><span>Авторизация откроется во <b>внешнем браузере</b>. После подключения вернитесь в Телеграм — вход сохранится.</span></div>' : '');
+  }
+  CONN = modal('mvConn', { title:'Подключить аккаунт', mid:true, body:body(CFG.v),
+    foot:'<button type="button" class="mx-b mx-bg" data-cn="no">Отмена</button><button type="button" class="mx-b mx-bp" data-cn="go"' + (sel ? '' : ' disabled') + '>Подключить</button>',
+    onClose:function(){ CONN = null; } });
+  var m = CONN;
+  function paintSel(){
+    [].forEach.call(m.bd.querySelectorAll('[data-cp]'), function(b){ var on = b.getAttribute('data-cp') === sel; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+    var go = m.ft.querySelector('[data-cn="go"]'); if(go && !go.__busy) go.disabled = !sel;
+    var t = $('mvConnTg'); if(t) t.hidden = !sel;
+  }
+  m.el.addEventListener('click', function(e){
+    var p = e.target.closest ? e.target.closest('[data-cp]') : null;
+    if(p && !p.disabled){ sel = p.getAttribute('data-cp'); paintSel(); return; }
+    var b = e.target.closest ? e.target.closest('[data-cn]') : null; if(!b) return;
+    if(b.getAttribute('data-cn') === 'no'){ m.close(); return; }
+    if(!sel || b.__busy) return;
+    mvConnect(sel, b);
+  });
+  pullCfg().then(function(cfg){ if(CONN === m && cfg){ m.bd.innerHTML = body(cfg); paintSel(); } });
+  if(!ACC.rows) pullAcc(false).then(function(){ if(CONN === m){ m.bd.innerHTML = body(CFG.v); paintSel(); } }, function(){});
+}
+window.bpMvConnectOpen = openConnect;
+
+/* ── подключение: та же вкладка, без шторки ── */
+var BACK_KEY = 'bpMvVfyBack';
+var _busy = false, _rel = null;
+/* ушли на площадку и вернулись кнопкой «Назад» браузера (страница из
+   кэша, без перезагрузки) — кнопка «Подключить» снова живая */
+window.addEventListener('pageshow', function(e){ if(e && e.persisted && typeof _rel === 'function'){ try{ _rel(); }catch(err){ E(err); } } });
+function mvConnect(p, btn){
+  var name = PNAME[p] || 'площадку';
+  if(!online()){ toast('Подключение работает, когда есть связь с сервером', 'err'); return; }
+  if(!token()){
+    if(typeof window.bpEnsureSrv === 'function'){
+      window.bpEnsureSrv('Аккаунт привязывается к вашему профилю BloggerPay').then(function(ok){ if(ok) mvConnect(p, btn); });
+      return;
+    }
+    toast('Сначала войдите в аккаунт — подключение привязывается к нему', 'err'); return;
+  }
+  if(_busy) return;
+  _busy = true;
+  if(btn){ btn.__busy = 1; btn.disabled = true; btn.textContent = 'Подключение…'; }
+  function release(){ _busy = false; _rel = null; if(btn){ btn.__busy = 0; btn.disabled = false; btn.textContent = 'Подключить'; } }
+  _rel = release;
+  srv().raw('GET', '/api/verify/start?platform=' + encodeURIComponent(p)).then(function(j){
+    if(!j || !j.url || !j.nonce) throw new Error(name + ' не ответил — попробуйте ещё раз');
+    /* метка — та же, что пишет bp-ep2 (finishReturn узнаёт по ней площадку) */
+    try{ sessionStorage.setItem('bpVfyPending', JSON.stringify({ p:p, n:j.nonce, u:j.url, at:Date.now() })); }catch(e){}
+    try{ sessionStorage.setItem(BACK_KEY, JSON.stringify({ p:p, at:Date.now() })); }catch(e){}
+    var tg = tgApp();
+    if(tg){
+      release();
+      try{ if(CONN) CONN.close(true); }catch(e){}
+      try{ tg.openLink(j.url); }catch(e){ E(e); }
+      note({ kind:'info', html:'<span>Авторизация ' + esc(name) + ' открыта в браузере. Войдите там в аккаунт — когда вернётесь сюда, список обновится.</span>' });
+      watchTg(p, j.nonce);
+      openMe({ acc:true });
+      return;
+    }
+    /* как у них: уходим на площадку в этой же вкладке и возвращаемся
+       сюда же — канал привяжет прежний finishReturn */
+    try{ location.assign(j.url); }catch(e){ location.href = j.url; }
+    setTimeout(release, 8000);
+  }).catch(function(e){
+    release();
+    var m = String((e && e.message) || '');
+    toast(/не настроено/i.test(m) ? ('Подключение ' + name + ' ещё не настроено на сервере') : (m || 'Не получилось открыть ' + name), 'err');
+  });
+}
+window.bpMvConnect = mvConnect;
+function readBack(){ try{ var v = JSON.parse(sessionStorage.getItem(BACK_KEY) || 'null'); return v && Date.now() - (v.at || 0) < 20 * 60000 ? v : null; }catch(e){ return null; } }
+function clearBack(){ try{ sessionStorage.removeItem(BACK_KEY); }catch(e){} }
+function note(n){ NOTE = n; if(ME) paintMe(true); }
+/* настоящий мини-апп: вход идёт во внешнем браузере — следим тихо */
+var _tgW = null;
+function watchTg(p, nonce){
+  clearInterval(_tgW);
+  var t0 = Date.now();
+  _tgW = setInterval(function(){
+    if(Date.now() - t0 > 15 * 60000){ clearInterval(_tgW); return; }
+    if(document.hidden || !online() || !token()) return;
+    pullAcc(true).then(function(rows){
+      if(rows.some(function(r){ return r.platform === p && Date.parse(String(r.checked_at || '').replace(' ', 'T') + 'Z') > t0 - 60000; })){
+        clearInterval(_tgW); NOTE = null; paintMe(true); hubSoon(); toast(PNAME[p] + ' подключён', 'ok'); return;
+      }
+      srv().raw('GET', '/api/verify/pending?nonce=' + encodeURIComponent(nonce)).then(function(j){
+        if(j && j.state === 'awaiting_code') note({ kind:'err', html:'<span>Вход в ' + esc(PNAME[p]) + ' прошёл в браузере, но привязать аккаунт можно только там, где вы вошли в BloggerPay. Откройте BloggerPay в том же браузере или нажмите «Подключить» ещё раз.</span>' });
+      }, function(){});
+    }, function(){});
+  }, 4000);
+}
+
+/* window.bpVerifyOwn в MV: вход без шторки. Гость — прежний путь
+   (bp-guest2 предложит завести аккаунт). */
+function wrapVerify(){
+  var o = window.bpVerifyOwn;
+  if(typeof o !== 'function' || inChain(o, '__bpMvMe')) return;
+  var w = function(platform){
+    if(!mv() || window.bpIsGuest) return o.apply(this, arguments);
+    if(platform !== 'youtube' && platform !== 'tiktok') return o.apply(this, arguments);
+    return mvConnect(platform, null);
+  };
+  w.__bpMvMe = 1; w.__orig = o;
+  window.bpVerifyOwn = w;
+}
+function wrapResume(){
+  var o = window.bpVfyResume;
+  if(typeof o !== 'function' || inChain(o, '__bpMvMe')) return;
+  var w = function(){
+    if(!mv()) return o.apply(this, arguments);
+    var r = null; try{ r = typeof window.bpVfyPending === 'function' ? window.bpVfyPending() : null; }catch(e){}
+    if(!r) return false;
+    note({ kind:'err', html:'<span>Подключение ' + esc(PNAME[r.p] || '') + ' не завершено. Нажмите «Подключить» и войдите в аккаунт ещё раз.</span>' });
+    openMe({ acc:true });
+    return true;
+  };
+  w.__bpMvMe = 1; w.__orig = o;
+  window.bpVfyResume = w;
+}
+/* привязка прошла (finishReturn → bpAbcAfterVerify): «Мой профиль» с
+   новым аккаунтом. Окно «Загрузка видео» возвращает себя само
+   (bpvbResume) — тогда профиль не открываем. */
+function wrapAfter(){
+  var o = window.bpAbcAfterVerify;
+  if(typeof o !== 'function' || inChain(o, '__bpMvMe')) return;
+  var w = function(pid){
+    var resume = null; try{ resume = sessionStorage.getItem('bpvbResume'); }catch(e){}
+    var r; try{ r = o.apply(this, arguments); }catch(e){ E(e); }
+    if(mv()){
+      var back = readBack(); clearBack(); NOTE = null; dropAcc();
+      if(!resume && back){
+        later(function(){
+          pullAcc(true).then(function(rows){
+            var fresh = rows.filter(function(x){ return x.platform === pid; })[0];
+            NOTE = { kind:'info', html:'<span><b>' + esc(PNAME[pid] || 'Аккаунт') + ' подключён.</b> Теперь с него можно загружать видео в задания.</span>', flash: fresh ? fresh.external_id : '' };
+            openMe({ acc:true });
+            later(function(){ NOTE = null; }, 9000);
+          }, function(){ openMe({ acc:true }); });
+        }, 250);
+      } else { pullAcc(true).then(function(){ paintMe(); hubSoon(); }, function(){}); }
+    }
+    return r;
+  };
+  w.__bpMvMe = 1; w.__orig = o;
+  window.bpAbcAfterVerify = w;
+}
+/* если шторка #bpVfyCode всё же создана (ошибка привязки после
+   возврата) — закрываем её её же «Отменой» и говорим строкой */
+function killSheet(){
+  if(!mv()) return;
+  var ov = $('bpVfyCode');
+  if(ov){
+    var x = $('bpVfyX');
+    try{ if(x) x.click(); else ov.remove(); }catch(e){ ov.remove(); }
+    note({ kind:'err', html:'<span>Не получилось привязать аккаунт. Нажмите «Подключить» и войдите ещё раз.</span>' });
+    clearBack();
+    later(function(){ openMe({ acc:true }); }, 120);
+  }
+  var lk = $('bpVfyLink'); if(lk) lk.remove();
+}
+function watchBody(){
+  if(typeof MutationObserver === 'undefined' || !document.body || document.body.__bpMvMeMo) return;
+  document.body.__bpMvMeMo = 1;
+  new MutationObserver(function(list){
+    for(var i = 0; i < list.length; i++){
+      var a = list[i].addedNodes;
+      for(var j = 0; j < a.length; j++){ var n = a[j]; if(n && (n.id === 'bpVfyCode' || n.id === 'bpVfyLink')){ killSheet(); return; } }
+    }
+  }).observe(document.body, { childList:true });
+}
+
+/* ══════════ «Редактировать профиль» ══════════ */
+var ED = null;
+function openEdit(o){
+  if(!mv()) return;
+  var u = me(); if(!u){ toast('Сначала войдите в аккаунт', 'err'); return; }
+  o = o || {};
+  var adv = isAdv(), ns = niches(u).slice(), all = NICHES();
+  var mail = String(u.email || ''); if(/@telegram\.local$/i.test(mail)) mail = '';
+  var wantAdv = adv;
+  var html = '<section class="mve-ava">' + ava(u) + '<button type="button" class="mx-b mx-bg mx-bs" data-me="photo">Изменить</button><h3>Аватар</h3></section>'
+    + '<div class="mx-fld"><label class="mx-lbl" for="mvEdNm">Имя</label><div class="mx-ctl" id="mvEdNmW"><input id="mvEdNm" data-bp-kind="none" type="text" maxlength="60" autocomplete="name" placeholder="Введите имя" value="' + esc(String(u.name || '')) + '"></div><div class="mx-err" id="mvEdNmE" role="alert"></div></div>'
+    + (mail ? '<div class="mx-fld"><label class="mx-lbl" for="mvEdMl">E-mail</label><div class="mx-ctl"><input id="mvEdMl" data-bp-kind="none" type="text" value="' + esc(mail) + '" disabled></div></div>' : '')
+    + '<div class="mx-fld"><div class="mve-row"><label class="mx-lbl" for="mvEdAb">Описание</label><span class="mve-cnt" id="mvEdAbC">' + String(u.about || '').length + '/150</span></div>'
+    + '<div class="mx-ctl"><textarea id="mvEdAb" data-bp-kind="none" maxlength="150" rows="4" placeholder="' + (adv ? 'Расскажите о компании и о том, какие задания вы даёте' : 'Расскажите о себе и своём контенте') + '">' + esc(String(u.about || '')) + '</textarea></div></div>'
+    + '<div class="mx-fld"><label class="mx-lbl" for="mvEdCt">Город</label><div class="mx-ctl"><input id="mvEdCt" data-bp-kind="none" type="text" maxlength="60" autocomplete="address-level2" placeholder="Например, Москва" value="' + esc(String(u.city || '')) + '"></div>'
+    + '<div class="mx-hint">' + (adv ? 'Видно блогерам в ваших заданиях.' : 'Город, где вы живёте и можете снимать офлайн-задания.') + '</div></div>'
+    + (adv ? '' : '<section class="mve-box" id="mvEdNi"><div class="mve-row"><h4>Тематика блога</h4><span class="mve-cnt" id="mvEdNiC">' + ns.length + '/4</span></div>'
+      + '<div class="mvp-chips">' + all.map(function(n){ return '<button type="button" class="mx-chip' + (ns.indexOf(n) >= 0 ? ' on' : '') + '" aria-pressed="' + (ns.indexOf(n) >= 0) + '" data-ni="' + esc(n) + '">' + esc(n) + '</button>'; }).join('') + '</div>'
+      + '<div class="mx-err" id="mvEdNiE" role="alert"></div></section>')
+    + '<section class="mve-box"><h3>Тип аккаунта</h3><p>От него зависят задания, кошелёк и кнопки на главной.</p><div class="mve-roles">'
+    + '<button type="button" class="mve-role' + (!adv ? ' on' : '') + '" aria-pressed="' + (!adv) + '" data-rl="blogger"><b>Блогер</b><span>Вступаю в задания, загружаю видео и получаю деньги за просмотры.</span></button>'
+    + '<button type="button" class="mve-role' + (adv ? ' on' : '') + '" aria-pressed="' + adv + '" data-rl="advertiser"><b>Рекламодатель</b><span>Создаю задания и плачу блогерам только за реальные просмотры.</span></button>'
+    + '</div></section>'
+    + '<div class="mve-fix"><button type="button" class="mx-b mx-bp" data-me="save">Сохранить</button></div>';
+  ED = screen('mvEdit', 'Редактировать профиль', html, function(){ ED = null; });
+  var b = ED.body;
+  var ab = $('mvEdAb'), abc = $('mvEdAbC');
+  if(ab) ab.addEventListener('input', function(){ abc.textContent = ab.value.length + '/150'; });
+  b.addEventListener('click', function(e){
+    var t = e.target;
+    var ni = t.closest ? t.closest('[data-ni]') : null;
+    if(ni){
+      var v = ni.getAttribute('data-ni'), i = ns.indexOf(v), er = $('mvEdNiE');
+      if(i >= 0) ns.splice(i, 1);
+      else if(ns.length >= 4){ if(er) er.textContent = 'Можно выбрать до четырёх направлений'; return; }
+      else ns.push(v);
+      if(er) er.textContent = '';
+      ni.classList.toggle('on', ns.indexOf(v) >= 0); ni.setAttribute('aria-pressed', String(ns.indexOf(v) >= 0));
+      var c = $('mvEdNiC'); if(c) c.textContent = ns.length + '/4';
+      return;
+    }
+    var rl = t.closest ? t.closest('[data-rl]') : null;
+    if(rl){
+      wantAdv = rl.getAttribute('data-rl') === 'advertiser';
+      [].forEach.call(b.querySelectorAll('[data-rl]'), function(x){ var on = (x.getAttribute('data-rl') === 'advertiser') === wantAdv; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); });
+      return;
+    }
+    var a = t.closest ? t.closest('[data-me]') : null; if(!a) return;
+    var k = a.getAttribute('data-me');
+    if(k === 'photo'){ try{ if(typeof window.bpPfPickPhoto === 'function') window.bpPfPickPhoto(); }catch(err){ E(err); } return; }
+    if(k === 'save') save();
+  });
+  function save(){
+    var u2 = me(); if(!u2) return;
+    var nm = String(($('mvEdNm') || {}).value || '').replace(/\s+/g, ' ').trim();
+    var ne = $('mvEdNmE'), nw = $('mvEdNmW');
+    if(!nm){ if(ne) ne.textContent = 'Укажите имя — его видят в заданиях и чатах'; if(nw) nw.classList.add('bad'); try{ $('mvEdNm').focus(); }catch(err){} return; }
+    if(ne) ne.textContent = ''; if(nw) nw.classList.remove('bad');
+    u2.name = nm.slice(0, 60);
+    u2.about = String(($('mvEdAb') || {}).value || '').replace(/[ \t]+/g, ' ').trim().slice(0, 150);
+    u2.city = String(($('mvEdCt') || {}).value || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if(!isAdv()){ u2.niches = ns.slice(0, 4); u2.theme = u2.niches[0] || ''; }
+    try{ if(typeof saveUsers === 'function') saveUsers(); }catch(err){ E(err); }
+    try{ if(typeof saveSession === 'function') saveSession(u2); }catch(err){ E(err); }
+    try{ if(typeof updateProfileUI === 'function') updateProfileUI(); }catch(err){ E(err); }
+    var roleChanged = wantAdv !== isAdv();
+    if(roleChanged){ try{ if(typeof toggleRole === 'function') toggleRole(); }catch(err){ E(err); } }
+    toast(roleChanged ? ('Профиль сохранён · теперь вы ' + (wantAdv ? 'рекламодатель' : 'блогер')) : 'Профиль сохранён', 'ok');
+    if(ED) ED.close();
+    _hubKey = ''; renderHub(); paintMe(true);
+  }
+  if(o.focus){
+    later(function(){
+      var map = { about:'mvEdAb', city:'mvEdCt', niche:'mvEdNi', name:'mvEdNm' };
+      var el = $(map[o.focus]);
+      if(!el) return;
+      try{ el.scrollIntoView({ block:'center', behavior:'smooth' }); }catch(err){ el.scrollIntoView(); }
+      if(el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') later(function(){ try{ el.focus({ preventScroll:true }); }catch(err){} }, 320);
+    }, 280);
+  }
+}
+window.bpMvMeEdit = openEdit;
+/* фото сменили из «Редактировать профиль» (bpPfPickPhoto → updateProfileUI) */
+function edAva(){
+  if(!ED || !ED.el.isConnected) return;
+  var box = ED.el.querySelector('.mve-ava'), old = box && box.querySelector('.mx-ava'), u = me();
+  if(!old || !u) return;
+  var t = document.createElement('span'); t.innerHTML = ava(u);
+  var nw = t.firstChild;
+  if(nw && nw.outerHTML !== old.outerHTML) box.replaceChild(nw, old);
+}
+
+/* ══════════ обёртки и сборка ══════════ */
+/* Наша обёртка уже где-то в цепочке (__orig) — второй раз не ставим:
+   переустановка по таймерам иначе наращивала бы цепочку. */
+function inChain(fn, flag){ for(var i = 0; fn && i < 40; i++){ if(fn[flag]) return true; fn = fn.__orig; } return false; }
+function after(name, fn){
+  var o = window[name];
+  if(typeof o !== 'function' || inChain(o, '__bpMvMeA')) return;
+  var w = function(){ var r = o.apply(this, arguments); if(mv()){ try{ fn.apply(this, arguments); }catch(e){ E(e); } } return r; };
+  w.__bpMvMeA = 1; w.__orig = o;
+  window[name] = w;
+}
+var _svT = null;
+function install(){
+  try{ wrapVerify(); }catch(e){ E(e); }
+  try{ wrapResume(); }catch(e){ E(e); }
+  try{ wrapAfter(); }catch(e){ E(e); }
+  after('updateProfileUI', function(){ hubSoon(); edAva(); });
+  after('toggleRole', function(){ _hubKey = ''; later(function(){ renderHub(); if(ME) paintMe(true); }, 60); });
+  after('saveUsers', function(){ if(_svT) return; _svT = setTimeout(function(){ _svT = null; if(onPage('pg-profile') || ME) hubSoon(); }, 250); });
+  after('bpPf2DropChannels', function(){ dropAcc(); if(onPage('pg-profile') || ME) pullAcc(true).then(function(){ paintMe(); hubSoon(); }, function(){}); });
+}
+/* вкладку «Профиль» открывают из полки, шапки, меню и кода — следим за
+   самой страницей, а не за goTo */
+function onShow(){
+  if(!mv() || !onPage('pg-profile')) return;
+  renderHub();
+  if(!isAdv()) pullAcc(false).then(function(){ hubSoon(); }, function(){});
+}
+function watchPage(){
+  var pg = $('pg-profile');
+  if(!pg || pg.__bpMvMeMo || typeof MutationObserver === 'undefined') return;
+  pg.__bpMvMeMo = 1;
+  var was = pg.classList.contains('on');
+  new MutationObserver(function(){ var on = pg.classList.contains('on'); if(on && !was) onShow(); was = on; }).observe(pg, { attributes:true, attributeFilter:['class'] });
+  if(was) onShow();
+}
+install();
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ install(); watchBody(); watchPage(); });
+else { later(install, 0); watchBody(); watchPage(); }
+[1200, 3000].forEach(function(ms){ later(install, ms); });
+/* профиль мог открыться до нас (перезагрузка с #/profile) */
+later(function(){ watchPage(); onShow(); }, 900);
+/* Возврат с площадки открылся там, где вход в BloggerPay не выполнен
+   (TikTok открыл ссылку в другом браузере): bp-ep2 молча ждёт входа и
+   привяжет аккаунт сам — подсказываем, что от человека нужно только это. */
+later(function(){
+  if(!mv() || token()) return;
+  var v = null; try{ v = JSON.parse(localStorage.getItem('bpVfyClaim') || 'null'); }catch(e){}
+  if(!v || !v.n || Date.now() - (v.at || 0) > 15 * 60000) return;
+  var pend = null; try{ pend = JSON.parse(sessionStorage.getItem('bpVfyPending') || 'null'); }catch(e){}
+  var nm = PNAME[(pend && pend.p) || 'tiktok'] || 'аккаунт';
+  toast('Войдите в BloggerPay — подключение ' + nm + ' завершится само', 'info');
+}, 2600);
+/* вернулись во вкладку: уведомления и аккаунты могли измениться */
+document.addEventListener('visibilitychange', function(){
+  if(document.hidden || !mv()) return;
+  if(onPage('pg-profile') || ME){ dropAcc(); pullAcc(true).then(function(){ paintMe(); hubSoon(); }, function(){}); hubSoon(); }
+});
+})();
+</script>
+<script id="bp-mv-wal">
+/* ══ КОШЕЛЁК «КАК У MORE VIEWS» · поведение (bp-mv-wal, 13.10.2026) ═══
+   Вид — style#bp-mv-wal-css. Деньги НЕ трогаем: всё идёт прежними
+   путями, которые проверены тестами кассы.
+   · «Кошелёк» #mvWal в #pg-balance (прежние блоки скрыты, в них
+     по-прежнему пишет updateBalanceUI). Цифры — currentUser.balance/
+     hold (с сервера, bpMoney.sync), история — /api/ledger и
+     /api/withdrawals (без сервера — местные topupHistory/
+     withdrawHistory). Нажатие на операцию — окно «Операция»; заявку в
+     очереди там же можно отменить (window.bw2Cancel — серверная
+     обёртка bp-money).
+   · «Пополнить» — окно «Пополнение кошелька»: «Банковская карта» ведёт
+     на прежнюю страницу #pg-topup (её поле, кнопка #tuBtn и перехват
+     кассы bp-money — без изменений; здесь только вид), «По счёту» —
+     шаги через поддержку.
+   · «Вывести средства» — окно «Вывод средств»: доступно к выводу,
+     «Рубли (₽)» с реквизитами; не хватает проверки — «Требуется
+     верификация»; всё готово — прежняя страница #pg-withdraw (поле
+     #bw2WdAmt, кнопка #wdSubmitBtn, перехват кассы, код из письма
+     bp-wd2fa — без изменений; сверху блок «кто и куда», сумма сразу
+     вся доступная, как у них).
+   · «Верификация» #mvVf: телефон → паспорт и селфи → реквизиты. Шаги —
+     прежние шторки bp-kyc-js (bpKycPhone / bpKycIdent / bpKycResend /
+     bpKycPayout), состояние — тот же currentUser.kyc и bpPullKyc, что
+     у bp-kycfirst. goTo('withdraw') без пройденной проверки в MV
+     открывает этот экран вместо «Проверки личности».
+   Без класса bp-mv каждая обёртка сразу зовёт оригинал.
+   Наружу: bpMvKycInfo(), bpMvVerifyOpen(), bpMvTopupOpen(),
+   bpMvWithdrawOpen(), bpMvWalRender().
+   Откат: удалить script#bp-mv-wal и style#bp-mv-wal-css.              */
+(function(){
+'use strict';
+if(window.__bpMvWal) return; window.__bpMvWal = 1;
+var de = document.documentElement;
+function mv(){ return de.classList.contains('bp-mv'); }
+function E(e){ try{ if(typeof BPERR === 'function') BPERR(e, 'bp-mv-wal'); }catch(_){} }
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+function me(){ try{ return (typeof currentUser !== 'undefined' && currentUser) || null; }catch(e){ return null; } }
+function isAdv(){ try{ return !!(typeof _isAdvertiser !== 'undefined' && _isAdvertiser); }catch(e){ return false; } }
+function toast(m, k){ try{ if(typeof showAuthToast === 'function') showAuthToast(m, k || 'info'); }catch(e){} }
+function srv(){ return window.bpSrv; }
+function online(){ try{ var s = srv(); return !!(s && s.configured && s.configured() && typeof s.raw === 'function'); }catch(e){ return false; } }
+function token(){ try{ return srv().token() || ''; }catch(e){ return ''; } }
+function later(fn, ms){ setTimeout(function(){ try{ fn(); }catch(e){ E(e); } }, ms || 0); }
+function onPage(id){ var p = $(id); return !!(p && p.classList.contains('on')); }
+function call(n){ try{ if(typeof window[n] === 'function') return window[n](); }catch(e){ E(e); } return undefined; }
+var NB = ' ';
+function num(v){ var n = Number(v); return isFinite(n) ? n : 0; }
+function int(n){ return String(Math.round(Math.abs(num(n)))).replace(/\B(?=(\d{3})+(?!\d))/g, NB); }
+function rub(n){ return int(n) + NB + '₽'; }
+function srub(n){ n = num(n); return (n > 0 ? '+' + NB : n < 0 ? '−' + NB : '') + rub(n); }
+function shortN(n){
+  n = Math.round(num(n));
+  if(n >= 1e6) return (n / 1e6).toFixed(1).replace('.0', '').replace('.', ',') + NB + 'М';
+  if(n >= 1e3) return (n / 1e3).toFixed(1).replace('.0', '').replace('.', ',') + NB + 'К';
+  return String(n);
+}
+function plural(n, a, b, c){ n = Math.abs(Math.round(n)) % 100; var d = n % 10; if(n > 10 && n < 20) return c; if(d > 1 && d < 5) return b; if(d === 1) return a; return c; }
+function nbsp(s){ return String(s).replace(/(^|[\s«(])(в|во|с|со|к|о|об|у|и|а|не|на|по|за|из|от|до|без|для)\s/gi, '$1$2' + NB); }
+function modal(id, o){ return typeof window.bpMvModal === 'function' ? window.bpMvModal(id, o) : null; }
+function screen(id, t, h, c){ return typeof window.bpMvScreen === 'function' ? window.bpMvScreen(id, t, h, c) : null; }
+var MIN_WD = 1000, FEE = 0.04;
+
+var SV = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+var I = {
+  chev:'<svg ' + SV + ' stroke-width="2.4"><path d="M9.5 6l6 6-6 6"/></svg>',
+  plus:'<svg ' + SV + ' stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>',
+  out:'<svg ' + SV + ' stroke-width="2.2"><path d="M12 19V6M6.5 11.5L12 6l5.5 5.5"/><path d="M5 20h14"/></svg>',
+  inArr:'<svg ' + SV + ' stroke-width="2.2"><path d="M7 7l10 10M17 9v8H9"/></svg>',
+  outArr:'<svg ' + SV + ' stroke-width="2.2"><path d="M17 17L7 7M7 15V7h8"/></svg>',
+  lock:'<svg ' + SV + '><rect x="5" y="11" width="14" height="10" rx="2.2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+  check:'<svg ' + SV + ' stroke-width="2.6"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  clock:'<svg ' + SV + ' stroke-width="2.2"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3 2"/></svg>',
+  alert:'<svg ' + SV + ' stroke-width="2.4"><path d="M12 7.5v6M12 17h.01"/></svg>',
+  info:'<svg ' + SV + ' stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 10.5v6"/><circle cx="12" cy="7.6" r="1" fill="currentColor" stroke="none"/></svg>',
+  star:'<svg ' + SV + ' stroke-width="1.6"><path d="M12 3.2l2.5 5.4 5.9.7-4.4 4 1.2 5.8L12 16.2 6.8 19.1 8 13.3l-4.4-4 5.9-.7z"/></svg>',
+  mail:'<svg ' + SV + '><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3.8 7l8.2 6 8.2-6"/></svg>',
+  vid:'<svg viewBox="0 0 28 28" fill="currentColor" aria-hidden="true"><path d="M6.5 4.5h15a4 4 0 0 1 4 4v11a4 4 0 0 1-4 4h-15a4 4 0 0 1-4-4v-11a4 4 0 0 1 4-4zm5.2 5.6v7.8c0 .7.8 1.2 1.4.8l6.2-3.9c.6-.4.6-1.2 0-1.6l-6.2-3.9c-.6-.4-1.4.1-1.4.8z"/></svg>',
+  eye:'<svg viewBox="0 0 28 28" fill="currentColor" aria-hidden="true"><path d="M14 5.5c-5.4 0-9.4 3.9-11.4 7.1a2.6 2.6 0 0 0 0 2.8c2 3.2 6 7.1 11.4 7.1s9.4-3.9 11.4-7.1a2.6 2.6 0 0 0 0-2.8C23.4 9.4 19.4 5.5 14 5.5zm0 13.3a4.8 4.8 0 1 1 0-9.6 4.8 4.8 0 0 1 0 9.6zm0-7.3a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/></svg>',
+  coin:'<svg viewBox="0 0 28 28" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M14 2.8a11.2 11.2 0 1 1 0 22.4 11.2 11.2 0 0 1 0-22.4zM11.4 8a1.1 1.1 0 0 0-1.1 1.1v5.2H9.4a1 1 0 1 0 0 2h.9v1h-.9a1 1 0 1 0 0 2h.9v.6a1.1 1.1 0 1 0 2.2 0v-.6h2.8a1 1 0 1 0 0-2h-2.8v-1h2.1a4.15 4.15 0 0 0 0-8.3zm1.1 2.2h2.1a1.95 1.95 0 0 1 0 3.9h-2.1z"/></svg>',
+  avg:'<svg viewBox="0 0 28 28" fill="currentColor" aria-hidden="true"><path d="M5 22.5a1.2 1.2 0 0 1-.85-2.05l5.4-5.4a2.4 2.4 0 0 1 3.4 0l2.1 2.1 5.9-5.9H18.6a1.2 1.2 0 1 1 0-2.4h5.3c.66 0 1.2.54 1.2 1.2v5.3a1.2 1.2 0 1 1-2.4 0v-2.4l-6.75 6.75a1.2 1.2 0 0 1-1.7 0l-2.95-2.95-5.45 5.4c-.23.24-.54.35-.85.35z"/></svg>',
+  /* плитки окон, 64 px — свои рисунки */
+  card64:'<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="32" fill="#272829"/><rect x="11" y="19" width="42" height="27" rx="5" fill="#b2b2b3"/><rect x="11" y="25" width="42" height="5" fill="#272829"/><rect x="15" y="36" width="9" height="4" rx="1.5" fill="#272829"/><rect x="26" y="36" width="9" height="4" rx="1.5" fill="#272829"/></svg>',
+  bank64:'<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="32" fill="#272829"/><path d="M32 12l19 9.5v3.5H13v-3.5z" fill="#b2b2b3"/><rect x="16" y="28" width="5" height="16" rx="1.5" fill="#b2b2b3"/><rect x="26" y="28" width="5" height="16" rx="1.5" fill="#b2b2b3"/><rect x="36" y="28" width="5" height="16" rx="1.5" fill="#b2b2b3"/><rect x="46" y="28" width="3" height="16" rx="1.5" fill="#b2b2b3"/><rect x="13" y="46" width="38" height="5" rx="1.5" fill="#b2b2b3"/></svg>',
+  rub64:'<svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="mvwRubG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6f9bff"/><stop offset="1" stop-color="#3765f6"/></linearGradient></defs><circle cx="32" cy="32" r="30" fill="url(#mvwRubG)"/><circle cx="32" cy="32" r="24.5" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="1.5"/><path d="M27 19h8.2a7.6 7.6 0 0 1 0 15.2H27M24 19v27M22 40h13M22 34.2h5" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  shield:function(kind){
+    var badge = kind === 'ok' ? '<circle cx="66" cy="66" r="12" fill="#35d670"/><path d="M61 66l3.5 3.5L71 63" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+      : kind === 'step' ? '<circle cx="66" cy="66" r="12" fill="#35d670"/><path d="M61 66l3.5 3.5L71 63" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+      : kind === 'wait' ? '<circle cx="66" cy="66" r="12" fill="#f5a524"/><path d="M66 60.5v6l3.6 2.2" stroke="#141415" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+      : kind === 'bad' ? '<circle cx="66" cy="66" r="12" fill="#ff6b6b"/><path d="M66 60v7M66 71.5h.01" stroke="#141415" stroke-width="2.6" stroke-linecap="round" fill="none"/>' : '';
+    return '<svg viewBox="0 0 92 92" fill="none" aria-hidden="true"><path d="M46 12L72 24V42C72 58.2 61.4 72.8 46 77C30.6 72.8 20 58.2 20 42V24L46 12Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/><circle cx="46" cy="38" r="10" stroke="currentColor" stroke-width="3"/><path d="M30 58c2.8-6.2 8.8-10 16-10s13.2 3.8 16 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>' + badge + '</svg>';
+  }
+};
+/* карман кошелька: вогнутый верх, строчка по краю — свой рисунок */
+var POCKET = '<svg viewBox="0 0 325 118" preserveAspectRatio="none" aria-hidden="true"><defs>'
+  + '<linearGradient id="mvwPk" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3f6af0"/><stop offset=".55" stop-color="#2f58db"/><stop offset="1" stop-color="#3a62ea"/></linearGradient>'
+  + '<linearGradient id="mvwPkS" x1="0" y1="0" x2="1" y2=".4"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".55" stop-color="#fff" stop-opacity=".09"/><stop offset=".72" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>'
+  + '<path d="M0 22C0 10 8 3 20 4c50 5 94 10 142 10S272 9 305 4c12-1 20 6 20 18v60c0 20-16 36-36 36H36C16 118 0 102 0 82z" fill="url(#mvwPk)"/>'
+  + '<path d="M0 22C0 10 8 3 20 4c50 5 94 10 142 10S272 9 305 4c12-1 20 6 20 18v60c0 20-16 36-36 36H36C16 118 0 102 0 82z" fill="url(#mvwPkS)"/>'
+  + '<path d="M6 23.5C6 14 12.5 9.4 21 10c49 5 93 10 141 10s110-5 142-10c8.5-.6 15 4 15 13.5V82c0 16.6-13.4 30-30 30H36C19.4 112 6 98.6 6 82z" fill="none" stroke="#fff" stroke-opacity=".38" stroke-width="1.2" stroke-dasharray="4 4"/>'
+  + '<path d="M20 4c50 5 94 10 142 10S272 9 305 4" fill="none" stroke="#fff" stroke-opacity=".55" stroke-width="1"/></svg>';
+
+/* ══════════ проверка личности: те же поля, что у bp-kyc-js ══════════ */
+var EDIT_MS = 3600e3, LATE_MS = 24 * 3600e3;
+function K(){ var u = me(); return (u && u.kyc) || {}; }
+function phoneOk(){ var k = K(); return !!(k.phone && k.phone.verified); }
+function payoutOk(){ var k = K(); return !!(k.payout && k.payout.done); }
+function idn(){ return K().identity || {}; }
+function idSt(){ return idn().status || 'none'; }
+function idSent(){ return !!idn().sent; }
+function idNote(){ var n = String(idn().note || '').trim().replace(/[.!?…\s]+$/, ''); return /^отклонен[ао]? оператором$/i.test(n) ? '' : n; }
+function editLeft(){ var at = num(idn().at); return at ? Math.max(0, at + EDIT_MS - Date.now()) : 0; }
+function canEdit(){ return idSt() === 'pending' && idSent() && editLeft() > 0; }
+function late(){ var at = num(idn().at); return !!at && Date.now() - at > LATE_MS; }
+function srvState(){
+  var s = srv();
+  try{
+    if(!s || !s.configured()) return 'none';
+    if(typeof s.online === 'function' && !s.online()) return 'offline';
+    if(typeof s.token === 'function' && !s.token()) return 'login';
+  }catch(e){}
+  return 'ok';
+}
+function phoneMask(){ var d = String((K().phone || {}).value || '').replace(/\D/g, ''); return d.length >= 11 ? '+7' + NB + '(' + d.slice(1, 4) + ')' + NB + '***-**-' + d.slice(9, 11) : ''; }
+function sinceSent(){
+  var at = num(idn().at); if(!at) return '';
+  var m = Math.floor((Date.now() - at) / 60000);
+  if(m < 1) return 'только что';
+  if(m < 60) return m + NB + plural(m, 'минуту', 'минуты', 'минут') + ' назад';
+  var h = Math.floor(m / 60);
+  if(h < 24) return h + NB + plural(h, 'час', 'часа', 'часов') + ' назад';
+  var d = Math.floor(h / 24);
+  return d === 1 ? 'вчера' : d + NB + plural(d, 'день', 'дня', 'дней') + ' назад';
+}
+/* куда уйдут деньги — те же правила, что у bp-wallet2 payout() */
+function brand(n){
+  var d = String(n || '').replace(/\D/g, ''); if(!d) return 'Карта';
+  var n2 = +d.slice(0, 2), n4 = +d.slice(0, 4);
+  if(n4 >= 2200 && n4 <= 2204) return 'МИР';
+  if(d.charAt(0) === '4') return 'Visa';
+  if((n2 >= 51 && n2 <= 55) || (n4 >= 2221 && n4 <= 2720)) return 'Mastercard';
+  if(n2 === 62) return 'UnionPay';
+  return 'Карта';
+}
+function payoutInfo(){
+  var u = me(); if(!u) return null;
+  try{
+    var k = u.kyc && u.kyc.payout;
+    if(k && k.done){
+      if(k.method === 'sbp' && k.phone){ var d = String(k.phone).replace(/\D/g, ''); return { kind:'sbp', label:'СБП' + NB + '+7' + NB + '(' + d.slice(1, 4) + ')' + NB + '***-**-' + d.slice(-2), short:'по СБП', holder:k.holder || '' }; }
+      if(k.card){ var c = String(k.card).replace(/\D/g, ''); return { kind:'card', label:brand(c) + NB + '••••' + NB + c.slice(-4), short:'на карту •••• ' + c.slice(-4), holder:k.holder || '' }; }
+    }
+  }catch(e){}
+  return null;
+}
+function reqLabel(s){
+  s = String(s || '');
+  if(/^sbp:/.test(s)){ var p = s.slice(4).replace(/\D/g, ''); return 'СБП' + NB + '+7' + NB + '(' + p.slice(1, 4) + ')' + NB + '***-**-' + p.slice(-2); }
+  var d = s.replace(/\D/g, '');
+  return d.length >= 12 ? brand(d) + NB + '••••' + NB + d.slice(-4) : (s ? s.slice(0, 24) : '—');
+}
+function kycInfo(){
+  var p = phoneOk(), st = idSt(), sent = idSent(), pay = payoutOk(), sv = srvState();
+  var all = p && st === 'verified' && pay;
+  var left = (p ? 0 : 1) + (st === 'verified' ? 0 : 1) + (pay ? 0 : 1);
+  var hs, hc = '', hsub;
+  if(sv === 'none'){ hs = 'Недоступна здесь'; hsub = 'Откройте BloggerPay через бота в Телеграме'; }
+  else if(all){ hs = 'Пройдена'; hc = 'ok'; hsub = 'Телефон, документы и реквизиты подтверждены'; }
+  else if(st === 'rejected'){ hs = 'Документы вернули'; hc = 'bad'; hsub = 'Посмотрите причину и отправьте снова'; }
+  else if(st === 'pending' && sent){ hs = 'На проверке'; hc = 'wait'; hsub = 'Оператор проверяет документы'; }
+  else if(left === 1){ hs = 'Остался 1 шаг'; hsub = !p ? 'Подтвердите номер телефона' : st !== 'verified' ? 'Загрузите паспорт и селфи' : 'Укажите карту или СБП для выплат'; }
+  else { hs = 'Не пройдена'; hsub = 'Телефон, паспорт и реквизиты — для вывода денег'; }
+  return { all:all, phone:p, st:st, sent:sent, pay:pay, srv:sv, left:left, hubStatus:hs, hubCls:hc, hubSub:hsub };
+}
+window.bpMvKycInfo = kycInfo;
+
+/* ══════════ «Верификация» ══════════ */
+var VF = null, _vfKey = '', _vfT = null;
+function stepRow(n, cls, title, desc, act, extra){
+  var mark = cls === 'done' ? I.check : cls === 'wait' ? I.clock : cls === 'bad' ? I.alert : String(n);
+  return '<div class="mvv-row"><div class="mvv-num' + (cls && cls !== 'now' ? ' ' + cls : '') + '">' + mark + '</div>'
+    + '<div><h3>' + esc(title) + '</h3>' + (desc ? '<p>' + desc + '</p>' : '') + (extra || '') + '</div>'
+    + '<div class="mvv-act">' + (act || '') + '</div></div>';
+}
+function btnP(k, t){ return '<button type="button" class="mvv-bp" data-vf="' + k + '">' + esc(t) + '</button>'; }
+function btnS(k, t){ return '<button type="button" class="mvv-bs" data-vf="' + k + '">' + esc(t) + '</button>'; }
+var BTN_L = '<span class="mvv-bl" aria-label="Заблокировано" role="img">' + I.lock + '</span>';
+function vfHtml(){
+  var k = kycInfo(), sv = k.srv, p = k.phone, st = k.st, sent = k.sent, pay = k.pay;
+  var hero, shieldCls = '', badge = '';
+  if(sv === 'none'){ hero = ['Вывод здесь недоступен', 'Эта версия открыта без сервера BloggerPay — документы отправить некуда. Откройте приложение через бота в Телеграме.']; shieldCls = 'red'; }
+  else if(k.all){ hero = ['Вы верифицированы!', 'Теперь вы можете выводить деньги на свою карту или по СБП.']; shieldCls = 'green'; badge = 'ok'; }
+  else if(st === 'rejected'){ hero = ['Документы вернули', 'Оператор не принял документы — посмотрите причину ниже и отправьте их снова.']; shieldCls = 'red'; badge = 'bad'; }
+  else if(st === 'pending' && sent){ hero = [late() ? 'Проверка идёт дольше обычного' : 'Документы на проверке', 'Оператор проверит их в течение суток. ' + ((typeof window.bpPushOn === 'function' && window.bpPushOn()) ? 'Пришлём уведомление, когда он решит.' : 'Ответ появится на этом экране.')]; shieldCls = 'amber'; badge = 'wait'; }
+  else if(st === 'verified' && p && !pay){ hero = ['Почти готово!', 'Личность подтверждена. Остался последний шаг — укажите, куда выводить деньги.']; badge = 'step'; }
+  else if(p){ hero = ['Отличная работа!', 'Вы подтвердили номер телефона. Осталось загрузить документы и указать реквизиты.']; badge = 'step'; }
+  else hero = ['Пройдите верификацию', 'Чтобы выводить средства с платформы, нужно подтвердить телефон и личность. Это займёт несколько минут.'];
+  var h = '<section class="mvv-hero"><div class="mvv-shield' + (shieldCls ? ' ' + shieldCls : '') + '">' + I.shield(badge) + '</div><h2>' + esc(hero[0]) + '</h2><p>' + esc(nbsp(hero[1])) + '</p></section>';
+  if(sv === 'none') return h;
+  var rows = '';
+  /* 1 · телефон */
+  if(p) rows += stepRow(1, 'done', 'Номер телефона подтверждён', esc(phoneMask() || 'Номер привязан к аккаунту'), btnS('phone', 'Изменить'));
+  else rows += stepRow(1, 'now', 'Подтвердите номер телефона', 'Это нужно для безопасности аккаунта и выплат.', btnP('phone', 'Подтвердить'));
+  /* 2 · паспорт и селфи */
+  var fe = String(idn().formError || '');
+  if(st === 'verified') rows += stepRow(2, 'done', 'Личность подтверждена', 'Паспорт и селфи проверены оператором.', '');
+  else if(!p) rows += stepRow(2, 'lock', 'Паспорт и селфи', 'Откроется после подтверждения телефона.', BTN_L);
+  else if(st === 'rejected'){
+    var nt = idNote();
+    rows += stepRow(2, 'bad', 'Документы вернули', nt ? 'Причина: ' + esc(nt) : 'Оператор не смог проверить фото. Переснимите паспорт и селфи при хорошем свете, без бликов.', btnP('ident', 'Отправить снова'));
+  }
+  else if(st === 'pending' && sent){
+    var ed = canEdit() ? '<button type="button" class="mvv-lnk" data-vf="ident">Изменить данные · ещё ' + Math.max(1, Math.ceil(editLeft() / 60000)) + NB + 'мин</button>' : '';
+    rows += late()
+      ? stepRow(2, 'wait', 'Проверка идёт дольше обычного', 'Отправлено ' + esc(sinceSent()) + '. Если ответа нет, напишите нам — разберёмся.', btnS('help', 'Поддержка'), ed)
+      : stepRow(2, 'wait', 'Документы на проверке', 'Отправлено ' + esc(sinceSent()) + '. Обычно проверка занимает до суток.', btnS('refresh', 'Обновить'), ed);
+  }
+  else if(st === 'pending'){
+    var sv2 = srvState();
+    var why = sv2 === 'offline' ? 'Нет связи с сервером. Анкета и фото сохранены на этом телефоне — отправим сами, когда связь появится.'
+      : sv2 === 'login' ? 'Чтобы отправить, войдите в аккаунт. Пока анкета и фото есть только на этом телефоне.'
+      : 'Анкета и фото сохранены на этом телефоне, но ещё не дошли до оператора.';
+    rows += stepRow(2, 'now', 'Документы ещё не ушли', esc(why), btnP('resend', 'Отправить'), '<button type="button" class="mvv-lnk" data-vf="ident">Проверить и изменить</button>');
+  }
+  else if(fe) rows += stepRow(2, 'now', 'Исправьте анкету', esc(fe), btnP('ident', 'Исправить'));
+  else rows += stepRow(2, 'now', 'Загрузите паспорт и селфи', 'Фото разворота паспорта и селфи с ним. Их видит только оператор выплат.', btnP('ident', 'Загрузить'));
+  /* 3 · реквизиты */
+  var po = payoutInfo();
+  if(pay) rows += stepRow(3, 'done', 'Реквизиты указаны', esc(po ? po.label : 'Карта или СБП для выплат'), btnS('payout', 'Изменить'));
+  else if(p && st === 'verified') rows += stepRow(3, 'now', 'Укажите реквизиты для выплат', 'Карта или номер телефона для СБП — туда придут деньги.', btnP('payout', 'Указать'));
+  else rows += stepRow(3, 'lock', 'Реквизиты для выплат', 'Откроются после проверки личности.', BTN_L);
+  h += '<section class="mvv-steps" aria-label="Шаги верификации">' + rows + '</section>';
+  if(k.all){
+    h += '<section class="mvv-info ok">' + I.star + '<div><h3>Верификация пройдена полностью</h3><p>Спасибо! Вывод открыт: от 1' + NB + '000' + NB + '₽, комиссия сервиса 4' + NB + '%.</p></div></section>'
+      + '<button type="button" class="mx-b mx-bp mx-bfull" data-vf="withdraw">Перейти к выводу</button>';
+  } else {
+    h += '<section class="mvv-info">' + I.info + '<div><h3>Зачем это нужно?</h3><p>' + esc(nbsp('Деньги выводятся только на ваш счёт — так они не уйдут чужому человеку. Документы видит только оператор выплат.')) + ' <button type="button" class="mvv-lnk in" data-vf="privacy">Политика конфиденциальности</button></p></div></section>';
+  }
+  return h;
+}
+function paintVf(force){
+  if(!VF || !VF.el.isConnected) return;
+  var html = vfHtml();
+  if(!force && html === _vfKey) return;
+  _vfKey = html; VF.body.innerHTML = html;
+}
+function openVerify(){
+  if(!mv()) { if(typeof window.goTo === 'function') window.goTo('withdraw'); return; }
+  if(!me()){ toast('Сначала войдите в аккаунт', 'err'); return; }
+  if(VF && VF.el.isConnected){ paintVf(true); return; }
+  _vfKey = '';
+  VF = screen('mvVf', 'Верификация', '', function(){ VF = null; clearInterval(_vfT); _vfT = null; });
+  if(!VF) return;
+  VF.body.addEventListener('click', onVf);
+  paintVf(true);
+  clearInterval(_vfT);
+  _vfT = setInterval(function(){ if(!VF){ clearInterval(_vfT); return; } paintVf(); }, 1200);
+  try{ if(typeof window.bpPullKyc === 'function'){ var r = window.bpPullKyc(false); if(r && r.then) r.then(function(){ paintVf(); }, function(){}); } }catch(e){ E(e); }
+}
+window.bpMvVerifyOpen = openVerify;
+function onVf(e){
+  var b = e.target.closest ? e.target.closest('[data-vf]') : null; if(!b) return;
+  var k = b.getAttribute('data-vf');
+  if(k === 'phone') call('bpKycPhone');
+  else if(k === 'ident') call('bpKycIdent');
+  else if(k === 'resend') call('bpKycResend');
+  else if(k === 'payout') call('bpKycPayout');
+  else if(k === 'help'){ try{ if(typeof openHelpSheet === 'function') openHelpSheet(); }catch(_){ E(_); } }
+  else if(k === 'privacy'){ try{ if(typeof openLegal === 'function') openLegal('privacy'); }catch(_){ E(_); } }
+  else if(k === 'refresh'){
+    b.disabled = true; b.textContent = 'Проверяем…';
+    var done = function(){ later(function(){ paintVf(true); }, 50); };
+    try{ var r = typeof window.bpPullKyc === 'function' ? window.bpPullKyc(true) : null; if(r && r.then) r.then(done, done); else later(done, 1200); }catch(_){ done(); }
+  }
+  else if(k === 'withdraw'){ var c = window.closeMvVf; if(typeof c === 'function') c(); later(function(){ if(typeof window.goTo === 'function') window.goTo('withdraw'); }, 120); }
+}
+
+/* ══════════ данные кошелька ══════════ */
+var LED = { at:0, rows:null, wd:null, p:null, err:false, uid:'' };
+/* вошёл другой человек — его история, не прежняя */
+function ledFresh(){ var u = me(), id = u ? String(u.srvId || u.id || '') : ''; if(LED.uid !== id){ LED.uid = id; LED.rows = null; LED.wd = null; LED.at = 0; LED.err = false; LED.p = null; } }
+function serverMode(){ try{ return typeof window.bpMoneyServerMode === 'function' ? !!window.bpMoneyServerMode() : online(); }catch(e){ return online(); } }
+function pullLed(force){
+  ledFresh();
+  if(!online() || !token()) return Promise.resolve(null);
+  if(!force && LED.rows && Date.now() - LED.at < 20000) return Promise.resolve(LED);
+  if(LED.p) return LED.p;
+  var uid = LED.uid;
+  LED.p = Promise.all([
+    srv().raw('GET', '/api/ledger'),
+    srv().raw('GET', '/api/withdrawals').then(null, function(){ return null; })
+  ]).then(function(a){
+    if(LED.uid !== uid) return LED;   /* пока ждали — сменился аккаунт */
+    LED.p = null; LED.at = Date.now(); LED.err = false;
+    LED.rows = (a[0] && a[0].rows) || [];
+    LED.wd = (a[1] && a[1].rows) || [];
+    return LED;
+  }, function(e){ LED.p = null; LED.err = true; LED.at = Date.now() - 12000; throw e; });
+  return LED.p;
+}
+function ts(s){ var t = Date.parse(String(s || '').replace(' ', 'T') + (/Z|[+-]\d\d:?\d\d$/.test(String(s || '')) ? '' : 'Z')); return isFinite(t) ? t : 0; }
+function camps(){ try{ return (typeof _loadCamps === 'function' ? _loadCamps() : []) || []; }catch(e){ return []; } }
+function campName(id){
+  var c = camps().filter(function(x){ return x && String(x.id) === String(id); })[0];
+  return c ? String(c.name || c.title || 'Задание') : '';
+}
+function wdStatus(st){
+  return st === 'paid' ? ['ok', 'Выполнено'] : st === 'rejected' ? ['bad', 'Отклонено'] : st === 'cancelled' ? ['off', 'Отменено']
+    : st === 'processing' ? ['wait', 'В работе'] : ['wait', 'В обработке'];
+}
+function items(){
+  ledFresh();
+  var out = [];
+  if(LED.rows && serverMode()){
+    LED.rows.forEach(function(r){
+      if(!r || r.bucket !== 'available') return;
+      var a = num(r.amount); if(!a) return;
+      var k = String(r.kind || ''), ref = String(r.ref || '');
+      if(/^(withdraw|wd-cancel|wd-reject|wd-paid|fee)$/.test(k)) return;   /* вывод — строками заявок */
+      var m = /^camp:(.+)$/.exec(ref), cid = m ? m[1] : '';
+      var it = { key:'l' + r.id, ts:ts(r.created_at), amount:a, kind:k, campId:cid, st:'ok', stText:'Выполнено' };
+      if(k === 'topup'){ it.title = 'Пополнение счёта'; it.method = /ЮKassa/i.test(ref) ? 'Банковская карта' : /тестов/i.test(ref) ? 'Тестовое зачисление' : ''; }
+      else if(k === 'hold') it.title = cid ? 'Бюджет задания' : 'Оплата';
+      else if(k === 'refund' || k === 'settle-refund' || k === 'release') it.title = cid ? 'Возврат бюджета задания' : 'Возврат';
+      else if(k === 'payout' || k === 'settle-payout') it.title = cid ? 'Выплата за видео' : 'Выплата';
+      else if(k === 'admin_adjust') it.title = 'Корректировка баланса';
+      else it.title = 'Операция';
+      if(cid) it.campName = campName(cid);
+      out.push(it);
+    });
+    (LED.wd || []).forEach(function(w){
+      if(!w) return;
+      var s = wdStatus(String(w.status || ''));
+      out.push({ key:'w' + w.id, ts:ts(w.created_at), amount:-num(w.amount), kind:'withdraw', title:'Вывод средств', st:s[0], stText:s[1], wd:w });
+    });
+  } else {
+    var u = me(); if(!u) return out;
+    (u.topupHistory || []).forEach(function(h, i){
+      if(!h) return; var a = num(h.amount); if(!a) return;
+      out.push({ key:'t' + i, ts:num(h.ts), amount:a, kind:a > 0 ? 'topup' : 'other', title:String(h.label || (a > 0 ? 'Пополнение счёта' : 'Списание')), st:'ok', stText:'Выполнено' });
+    });
+    (u.withdrawHistory || []).forEach(function(h, i){
+      if(!h) return;
+      var st = h.status === 'pending' ? 'queued' : String(h.status || ''), s = wdStatus(st === 'ok' ? 'paid' : st);
+      out.push({ key:'h' + i, ts:num(h.ts), amount:-num(h.amount), kind:'withdraw', title:'Вывод средств', st:s[0], stText:s[1],
+        wd:{ amount:h.amount, fee:h.fee, net:h.net, requisites:h.card, status:st, local:h.ts } });
+    });
+  }
+  out.sort(function(a, b){ return b.ts - a.ts; });
+  return out;
+}
+function money(){
+  ledFresh();
+  var u = me() || {}, bal = Math.max(0, num(u.balance)), hold = Math.max(0, num(u.hold));
+  var wds = (LED.wd && serverMode()) ? LED.wd : ((u.withdrawHistory || []).map(function(h){ return { amount:h.amount, status:h.status === 'pending' ? 'queued' : h.status }; }));
+  var queued = wds.filter(function(w){ return w && (w.status === 'queued' || w.status === 'processing'); }).reduce(function(s, w){ return s + num(w.amount); }, 0);
+  var topups = 0, earned = 0;
+  if(LED.rows && serverMode()){
+    LED.rows.forEach(function(r){ if(!r || r.bucket !== 'available') return; if(r.kind === 'topup') topups += num(r.amount); if(r.kind === 'payout' || r.kind === 'settle-payout') earned += num(r.amount); });
+  } else {
+    topups = num(u.totalTopup);
+    (u.topupHistory || []).forEach(function(h){ if(h && num(h.amount) > 0 && /^Выплата/.test(String(h.label || ''))) earned += num(h.amount); });
+  }
+  return { bal:bal, hold:hold, queued:Math.min(queued, hold), inTasks:Math.max(0, hold - Math.min(queued, hold)), topups:topups, earned:earned, total:bal + hold };
+}
+function myVideos(){
+  var u = me(), sid = String((u && u.srvId) || '');
+  try{ return (typeof window.bpVbMyVideos === 'function' ? window.bpVbMyVideos() : []).filter(function(v){ return v && sid && String(v.bloggerId) === sid && v.status !== 'declined'; }); }catch(e){ return []; }
+}
+function statsRow(){
+  var GL = window.bpMvGlyph || function(){ return ''; };
+  function pl(p, txt){ return '<div><em class="' + (p === 'youtube' ? 'yt' : 'tt') + '">' + (p === 'youtube' ? '<svg viewBox="0 0 24 24"><path d="M9.7 15.1V8.9l6 3.1z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M16.5 2h-3.2v13.3a2.8 2.8 0 1 1-2.8-2.8c.3 0 .6 0 .8.1V9.4a6 6 0 1 0 5.2 6V8.8a7.4 7.4 0 0 0 4.3 1.4V7a4.3 4.3 0 0 1-4.3-4.3z"/></svg>') + '</em>' + esc(txt) + '</div>'; }
+  if(isAdv()){
+    var u = me(), mine = camps().filter(function(c){ return c && u && String(c.ownerId) === String(u.id); });
+    var m = null; try{ m = typeof window.bpMvSummary === 'function' ? window.bpMvSummary() : null; }catch(e){}
+    var spent = 0, vids = 0, views = 0;
+    mine.forEach(function(c){ var s = m && m[String(c.id)]; if(s && typeof s === 'object'){ spent += num(s.paid); vids += num(s.videos); views += num(s.views); } });
+    var avg = vids ? spent / vids : 0;
+    return [
+      { t:'Потрачено всего', v:rub(spent), s:'За ' + vids + NB + plural(vids, 'видео', 'видео', 'видео'), ic:I.coin },
+      { t:'Средняя выплата', v:rub(avg), s:'За 1 видео', ic:I.avg },
+      { t:'Всего просмотров', v:shortN(views), s:'На ' + vids + NB + 'видео', ic:I.eye }
+    ];
+  }
+  var vs = myVideos(), by = { youtube:{ e:0, n:0, w:0, c:0 }, tiktok:{ e:0, n:0, w:0, c:0 } };
+  var e = 0, n = 0, w = 0;
+  vs.forEach(function(v){
+    var p = v.platform === 'youtube' ? 'youtube' : 'tiktok', paid = num(v.paid);
+    by[p].c++; by[p].w += num(v.views); w += num(v.views);
+    if(paid > 0){ by[p].e += paid; by[p].n++; e += paid; n++; }
+  });
+  function lines(kind){
+    return ['youtube', 'tiktok'].map(function(p){
+      var b = by[p];
+      var t = kind === 'e' ? rub(b.e) + ' (' + b.n + NB + 'видео)' : kind === 'a' ? rub(b.n ? b.e / b.n : 0) + ' (' + b.n + NB + 'видео)' : shortN(b.w) + ' (' + b.c + NB + 'видео)';
+      return pl(p, t);
+    }).join('');
+  }
+  return [
+    { t:'Заработано всего', v:rub(e), s:'За ' + n + NB + 'видео', ic:I.coin, pl:lines('e') },
+    { t:'Средняя выплата', v:rub(n ? e / n : 0), s:'За 1 видео', ic:I.avg, pl:lines('a') },
+    { t:'Всего просмотров', v:shortN(w), s:'На ' + vs.length + NB + 'видео', ic:I.eye, pl:lines('w') }
+  ];
+}
+var MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+function dstr(t){ if(!t) return ''; var d = new Date(t); return ('0' + d.getDate()).slice(-2) + '.' + ('0' + (d.getMonth() + 1)).slice(-2) + '.' + d.getFullYear(); }
+function tstr(t){ if(!t) return ''; var d = new Date(t); return dstr(t) + ', ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+
+/* ══════════ страница «Кошелёк» ══════════ */
+var HIST_N = 30, histMore = false, _walKey = '', ITEMS = [];
+function logoSrc(){ try{ var L = String(window.BP_LOGO || ''); return /^(data:image\/(png|jpe?g|webp|svg\+xml);|https:\/\/)/i.test(L) ? L : ''; }catch(e){ return ''; } }
+function walHtml(){
+  var u = me(); if(!u) return '';
+  var adv = isAdv(), mo = money();
+  var stack = adv
+    ? [['avail', 'Доступно', mo.bal], ['tasks', 'В заданиях', mo.inTasks], ['tops', 'Всего пополнено', mo.topups]]
+    : [['avail', 'Доступно', mo.bal], ['queue', 'На выводе', mo.queued], ['earned', 'Заработано всего', mo.earned]];
+  var logo = !!logoSrc();
+  var acts = adv
+    ? '<button type="button" class="mx-b mx-bg mx-bs" data-mw="wd">Вывести</button><button type="button" class="mx-b mx-bp mx-bs" data-mw="tu">' + I.plus + 'Пополнить</button>'
+    : '<button type="button" class="mx-b mx-bp mx-bs" data-mw="wd">' + I.out + 'Вывести средства</button>';
+  var h = '<div class="mvw-top"><h1>Кошелёк</h1><div class="mvw-acts">' + acts + '</div></div>'
+    + '<section class="mvw-card" aria-label="Баланс">'
+    + '<div class="mvw-body" aria-hidden="true"></div>'
+    + '<div class="mvw-stack">' + stack.map(function(s){ return '<button type="button" class="mvw-cc" data-mw="cc-' + s[0] + '"><span>' + esc(s[1]) + '</span><b>' + rub(s[2]) + I.chev + '</b></button>'; }).join('') + '</div>'
+    + '<div class="mvw-pocket">' + POCKET + '</div>'
+    + '<div class="mvw-bal"><span>Текущий баланс</span><b>' + rub(mo.total) + '</b></div>'
+    + (logo ? '<div class="mvw-mark"><img data-mvlogo="1" alt=""></div>' : '')
+    + '</section>';
+  h += '<div class="mvw-stats" role="list">' + statsRow().map(function(s){
+    return '<div class="mvw-st" role="listitem"><span>' + esc(s.t) + '</span>' + s.ic + '<b>' + esc(s.v) + '</b><i>' + esc(s.s) + '</i>' + (s.pl ? '<div class="mvw-pls">' + s.pl + '</div>' : '') + '</div>';
+  }).join('') + '</div>';
+  h += '<div class="mvw-tabs"><span class="mvw-tab">История операций</span></div>';
+  ITEMS = items();
+  if(!ITEMS.length){
+    h += '<div class="mvw-hist" id="mvWalHist">' + (LED.p && !LED.rows ? '<div class="mvp-load" aria-label="Загружаем историю"><i></i></div>' : '<div class="mvw-empty">' + (LED.err ? 'Не удалось загрузить историю. Потяните экран или откройте кошелёк ещё раз.' : 'Операций пока нет') + '</div>') + '</div>';
+    return h;
+  }
+  var shown = histMore ? ITEMS : ITEMS.slice(0, HIST_N), groups = [], last = '';
+  shown.forEach(function(it, i){
+    var d = it.ts ? new Date(it.ts) : null, g = d ? MONTHS[d.getMonth()] + ' ' + d.getFullYear() : 'Раньше';
+    if(g !== last){ groups.push({ g:g, rows:[] }); last = g; }
+    groups[groups.length - 1].rows.push(i);
+  });
+  h += '<div class="mvw-hist" id="mvWalHist">' + groups.map(function(gr){
+    return '<section class="mvw-mon"><h3>' + esc(gr.g) + '</h3><div class="mvw-rows">' + gr.rows.map(function(i){
+      var it = shown[i], pos = it.amount > 0;
+      var sub = it.campName ? (it.title === 'Выплата за видео' ? 'За задание' : it.title) : (pos ? 'Пополнение' : 'Списание');
+      var main = it.campName ? (it.title === 'Выплата за видео' ? it.campName : it.title + ': ' + it.campName) : it.title;
+      return '<button type="button" class="mvw-op" data-mwi="' + i + '"><div class="mvw-op-r"><div class="mvw-op-l">'
+        + '<span class="mvw-op-k">' + esc(sub) + (pos ? I.inArr.replace('<svg ', '<svg class="in" ') : I.outArr.replace('<svg ', '<svg class="out" ')) + '</span>'
+        + '<span class="mvw-op-t">' + esc(main) + '</span></div>'
+        + '<div class="mvw-op-v"><b class="' + (pos ? 'pos' : '') + '">' + srub(it.amount) + '</b><span class="mx-st ' + esc(it.st) + '">' + esc(it.stText) + '</span></div></div>'
+        + '<span class="mvw-op-d">' + esc(dstr(it.ts)) + '</span></button>';
+    }).join('') + '</div></section>';
+  }).join('') + '</div>';
+  if(!histMore && ITEMS.length > HIST_N) h += '<div class="mvw-more"><button type="button" class="mx-b mx-bg mx-bs" data-mw="more">Показать ещё · ' + (ITEMS.length - HIST_N) + '</button></div>';
+  return h;
+}
+function hostWal(){
+  var pg = $('pg-balance'); if(!pg) return null;
+  var w = $('mvWal');
+  if(!w){
+    w = document.createElement('div'); w.id = 'mvWal';
+    pg.appendChild(w);
+    w.addEventListener('click', onWal);
+  }
+  return w;
+}
+function renderWal(){
+  if(!mv()) return;
+  var u = me(), pg = $('pg-balance'); if(!pg) return;
+  if(!u){ pg.classList.remove('mvw-on'); return; }
+  var w = hostWal(); if(!w) return;
+  var html = walHtml();
+  if(html !== _walKey){
+    _walKey = html; w.innerHTML = html;
+    /* логотип вшит в файл (≈40 КБ) — в разметку и в ключ сравнения его
+       не кладём, ставим картинке отдельно */
+    var lg = w.querySelector('img[data-mvlogo]'); if(lg) lg.src = logoSrc();
+    /* сторож deGreen красит «средний зелёный» фон в серый — наша зелёная
+       карточка кошелька своя, помечаем её */
+    [].forEach.call(w.querySelectorAll('.mvw-cc'), function(el){ el.__bpGreenDone = 1; el.style.removeProperty('background-color'); el.style.removeProperty('background-image'); });
+  }
+  if(!pg.classList.contains('mvw-on')) pg.classList.add('mvw-on');
+}
+window.bpMvWalRender = function(){ _walKey = ''; renderWal(); };
+var _walT = null;
+function walSoon(){ if(_walT) return; _walT = setTimeout(function(){ _walT = null; try{ if(onPage('pg-balance')) renderWal(); }catch(e){ E(e); } }, 120); }
+function onWal(e){
+  var it = e.target.closest ? e.target.closest('[data-mwi]') : null;
+  if(it){ var x = ITEMS[Number(it.getAttribute('data-mwi'))]; if(x) openOp(x); return; }
+  var b = e.target.closest ? e.target.closest('[data-mw]') : null; if(!b) return;
+  var k = b.getAttribute('data-mw');
+  if(k === 'tu') openTopup();
+  else if(k === 'wd') openWithdraw();
+  else if(k === 'more'){ histMore = true; _walKey = ''; renderWal(); }
+  else if(k === 'cc-avail'){ if(isAdv()) openTopup(); else openWithdraw(); }
+  else if(k === 'cc-tasks'){ if(typeof window.goTo === 'function') window.goTo('campaigns'); }
+  else if(k === 'cc-earned'){ if(typeof window.goTo === 'function') window.goTo('mytasks'); }
+  else if(k === 'cc-tops' || k === 'cc-queue'){ var hh = $('mvWalHist'); if(hh){ try{ hh.scrollIntoView({ block:'start', behavior:'smooth' }); }catch(_){ hh.scrollIntoView(); } } }
+}
+
+/* ── окно «Операция» ── */
+function wdTs(id){ try{ var m = JSON.parse(localStorage.getItem('bp_wd_srv_map') || '{}') || {}; for(var t in m){ if(String(m[t]) === String(id)) return t; } }catch(e){} return null; }
+function openOp(it){
+  var pos = it.amount > 0, w = it.wd;
+  var rows = '<div class="mvo-tr"><span>Тип</span><b>' + (pos ? 'Пополнение' : 'Списание') + '</b></div>'
+    + '<div class="mvo-tr"><span>Статус</span><b><span class="mx-st ' + esc(it.st) + '">' + esc(it.stText) + '</span></b></div>'
+    + '<div class="mvo-tr"><span>Дата</span><b>' + esc(tstr(it.ts)) + '</b></div>';
+  if(it.method) rows += '<div class="mvo-tr"><span>Метод оплаты</span><b>' + esc(it.method) + '</b></div>';
+  if(it.campName) rows += '<div class="mvo-tr"><span>Задание</span><b>' + esc(it.campName) + '</b></div>';
+  if(w){
+    var amt = num(w.amount), fee = w.fee != null ? num(w.fee) : Math.round(amt * FEE), net = w.net != null ? num(w.net) : amt - fee;
+    rows += '<div class="mvo-tr"><span>Сумма</span><b>' + rub(amt) + '</b></div>'
+      + '<div class="mvo-tr"><span>Комиссия сервиса, 4' + NB + '%</span><b>' + rub(fee) + '</b></div>'
+      + '<div class="mvo-tr"><span>К получению</span><b>' + rub(net) + '</b></div>'
+      + (w.requisites ? '<div class="mvo-tr"><span>Куда</span><b>' + esc(reqLabel(w.requisites)) + '</b></div>' : '')
+      + (w.note && w.status === 'rejected' ? '<div class="mvo-tr"><span>Причина</span><b>' + esc(String(w.note).slice(0, 200)) + '</b></div>' : '');
+  }
+  var canCancel = !!(w && (w.status === 'queued' || w.status === 'pending'));
+  var m = modal('mvOp', { title:'Операция',
+    body:'<div class="mvo-sum"><b class="' + (pos ? 'pos' : '') + '">' + srub(it.amount) + '</b><span>' + esc(it.campName && it.title === 'Выплата за видео' ? 'Выплата за видео' : it.title) + '</span></div><div class="mvo-tbl">' + rows + '</div>'
+      + (canCancel ? '<p class="mx-txt">' + esc(nbsp('Заявка ждёт в очереди на выплату. Пока оператор её не взял, её можно отменить — вся сумма вернётся на баланс без комиссии.')) + '</p>' : ''),
+    foot:(canCancel ? '<button type="button" class="mx-b mx-bg" data-op="cancel">Отменить заявку</button>' : '') + '<button type="button" class="mx-b mx-bp mx-bgrow" data-op="ok">Понятно</button>' });
+  if(!m) return;
+  m.el.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('[data-op]') : null; if(!b) return;
+    if(b.getAttribute('data-op') === 'ok'){ m.close(); return; }
+    if(b.disabled) return;
+    b.disabled = true; b.textContent = 'Отменяем…';
+    var fin = function(){ m.close(); LED.at = 0; pullLed(true).then(function(){ window.bpMvWalRender(); }, function(){ window.bpMvWalRender(); }); };
+    var go = function(t){
+      if(!t){ b.disabled = false; b.textContent = 'Отменить заявку'; toast('Не нашли заявку на этом устройстве — обновите страницу', 'err'); return; }
+      var r; try{ r = window.bw2Cancel(t); }catch(err){ E(err); }
+      if(r && r.then) r.then(fin, fin); else later(fin, 400);
+    };
+    if(w.local != null) return go(String(w.local));
+    var t0 = wdTs(w.id);
+    if(t0) return go(t0);
+    if(typeof window.bpWdRefresh === 'function') window.bpWdRefresh().then(function(){ go(wdTs(w.id)); }, function(){ go(null); });
+    else go(null);
+  });
+}
+
+/* ══════════ «Пополнение кошелька» ══════════ */
+var SUPPORT = 'support@bloggerpay.ru';
+function openTopup(){
+  if(!mv()){ if(typeof window.goTo === 'function') window.goTo('topup'); return; }
+  var step1 = '<p class="mx-q">Как вы хотите пополнить кошелёк?</p><div class="mvm-opts">'
+    + '<button type="button" class="mvm-opt" data-tu="card"><span class="mvm-ico">' + I.card64 + '</span><span><b>Банковская карта (₽)</b><i>Физ. лица</i></span></button>'
+    + '<button type="button" class="mvm-opt" data-tu="bill"><span class="mvm-ico">' + I.bank64 + '</span><span><b>По счёту (₽)</b><i>Компании, ИП и ООО</i></span></button>'
+    + '</div>';
+  var m = modal('mvTu', { title:'Пополнение кошелька', body:step1 });
+  if(!m) return;
+  function bill(){
+    m.title('Пополнение кошелька'); m.backBtn(true);
+    var subj = encodeURIComponent('Счёт на пополнение BloggerPay'), u = me();
+    var bodyTxt = encodeURIComponent('Здравствуйте! Нужен счёт на пополнение кошелька BloggerPay.\nID аккаунта: ' + ((u && window.bpAccIdOf) ? window.bpAccIdOf(u) : '') + '\nКомпания и ИНН: \nСумма: ');
+    m.bd.innerHTML = '<div class="mvm-steps">'
+      + '<div class="mvm-step"><div><span class="mvm-n">1</span><div><h4>Напишите менеджеру</h4><p>' + esc(nbsp('Сообщите название компании, ИНН и сумму пополнения')) + '</p></div></div>'
+      + '<a class="mvm-tg" href="mailto:' + SUPPORT + '?subject=' + subj + '&body=' + bodyTxt + '"><span>' + I.mail + 'Почта</span><b>Написать' + I.chev + '</b></a></div>'
+      + '<div class="mvm-step"><div><span class="mvm-n">2</span><div><h4>Менеджер выставит счёт</h4><p>' + esc(nbsp('Пришлём счёт на оплату с реквизитами BloggerPay')) + '</p></div></div></div>'
+      + '<div class="mvm-step"><div><span class="mvm-n">3</span><div><h4>Оплата счёта</h4><p>' + esc(nbsp('Оплатите счёт со счёта компании')) + '</p></div></div></div>'
+      + '<div class="mvm-step"><div><span class="mvm-n">4</span><div><h4>Зачисление средств</h4><p>' + esc(nbsp('Деньги появятся на балансе после поступления оплаты')) + '</p></div></div></div>'
+      + '</div>';
+  }
+  m.el.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('[data-tu]') : null;
+    if(b){
+      var k = b.getAttribute('data-tu');
+      if(k === 'card'){ m.close(true); later(function(){ if(typeof window.goTo === 'function') window.goTo('topup'); }, 30); }
+      else if(k === 'bill') bill();
+      return;
+    }
+    var bk = e.target.closest ? e.target.closest('[data-mx="back"]') : null;
+    if(bk){ m.backBtn(false); m.bd.innerHTML = step1; }
+  });
+}
+window.bpMvTopupOpen = openTopup;
+
+/* ══════════ «Вывод средств» ══════════ */
+function openWithdraw(){
+  if(!mv()){ if(typeof window.goTo === 'function') window.goTo('withdraw'); return; }
+  var u = me(); if(!u){ toast('Сначала войдите в аккаунт', 'err'); return; }
+  var mo = money(), k = kycInfo(), po = payoutInfo();
+  var avail = Math.floor(mo.bal);
+  var sub = po ? '<i class="ok">' + esc(po.label) + '</i>' : '<i>Нет подключённого счёта</i>';
+  var body = '<div class="mx-pl blue">' + esc(nbsp('Вывод — от 1 000 ₽, комиссия сервиса 4 %. Деньги приходят на банковскую карту или по СБП после проверки заявки.')) + '</div>'
+    + '<div><div class="mvm-av"><span>Доступно к выводу:</span><b>' + rub(avail) + '</b></div><p class="mx-q" style="margin-top:8px">Куда вывести средства?</p></div>'
+    + '<section class="mvm-sec"><h3>Для резидентов РФ</h3>'
+    + '<button type="button" class="mvm-opt" data-wd="rub"><span class="mvm-tag">Для граждан РФ</span><span class="mvm-ico">' + I.rub64 + '</span><span><b>Рубли (₽)</b>' + sub + '</span></button></section>'
+    + '<div id="mvWdGate"></div>';
+  var m = modal('mvWd', { title:'Вывод средств', body:body });
+  if(!m) return;
+  function gate(kind){
+    var g = $('mvWdGate'); if(!g) return;
+    if(kind === 'kyc') g.innerHTML = '<div class="mx-pl orange"><b>Требуется верификация</b><span>' + esc(nbsp(k.st === 'pending' && k.sent ? 'Документы на проверке у оператора — вывод откроется, как только он их одобрит.' : 'Для вывода средств нужно подтвердить номер телефона и личность — это займёт несколько минут.')) + '</span>'
+      + '<div style="display:flex;gap:12px;flex-wrap:wrap"><button type="button" class="mx-b mx-bg mx-bs" data-wd="cancel">Отмена</button><button type="button" class="mx-b mx-bp mx-bs" data-wd="verify">' + (k.st === 'pending' && k.sent ? 'Открыть верификацию' : 'Пройти верификацию') + '</button></div></div>';
+    else if(kind === 'min') g.innerHTML = '<div class="mx-pl orange"><b>Пока нечего выводить</b><span>' + esc(nbsp('Минимальная сумма вывода — 1 000 ₽. Сейчас доступно ' + rub(avail) + '.')) + '</span></div>';
+    else if(kind === 'srv') g.innerHTML = '<div class="mx-pl orange"><b>Вывод здесь недоступен</b><span>' + esc(nbsp('Эта версия открыта без сервера BloggerPay. Откройте приложение через бота в Телеграме.')) + '</span></div>';
+    try{ g.scrollIntoView({ block:'nearest', behavior:'smooth' }); }catch(e){}
+  }
+  m.el.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('[data-wd]') : null; if(!b) return;
+    var a = b.getAttribute('data-wd');
+    if(a === 'cancel'){ var g = $('mvWdGate'); if(g) g.innerHTML = ''; return; }
+    if(a === 'verify'){ m.close(true); later(openVerify, 30); return; }
+    if(a !== 'rub') return;
+    if(k.srv === 'none'){ gate('srv'); return; }
+    if(!k.phone || k.st !== 'verified'){ gate('kyc'); return; }
+    if(!k.pay){ m.close(true); later(function(){ call('bpKycPayout'); }, 30); return; }
+    if(avail < MIN_WD){ gate('min'); return; }
+    m.close(true);
+    later(function(){ if(typeof window.goTo === 'function') window.goTo('withdraw'); }, 30);
+  });
+}
+window.bpMvWithdrawOpen = openWithdraw;
+
+/* ══════════ страницы #pg-withdraw и #pg-topup: только вид ══════════ */
+function decorateWithdraw(){
+  if(!mv() || !onPage('pg-withdraw')) return;
+  var body = document.querySelector('#pg-withdraw .wd-body.bw2'); if(!body) return;
+  var u = me(); if(!u) return;
+  var po = payoutInfo(), ph = phoneMask();
+  /* реквизит показан в блоке «кто и куда» — карточку «Куда выводим»
+     прячем; без реквизита она остаётся (там «Добавить реквизиты») */
+  body.classList.toggle('mvw-haspo', !!po);
+  var who = $('mvWdWho');
+  if(!who){ who = document.createElement('div'); who.id = 'mvWdWho'; who.className = 'mvm-who'; }
+  var av = $('bw2Avail');
+  if(av && who.nextElementSibling !== av) body.insertBefore(who, av);
+  else if(!who.parentNode) body.insertBefore(who, body.firstChild);
+  var html = '<div><b>' + esc(String((po && po.holder) || u.name || 'Пользователь')) + '</b><span>Телефон: <em>' + esc(ph || '—') + '</em></span>'
+    + (po ? '<span>Вывод: <em>' + esc(po.label) + '</em></span>' : '') + '</div>'
+    + (po ? '<button type="button" class="mx-b mx-bg mx-bs" onclick="bw2EditPayout()">Изменить</button>' : '');
+  if(who.innerHTML !== html) who.innerHTML = html;
+  var note = document.querySelector('#pg-withdraw .bw2 > .bw2-note > div');
+  var nt = '<b>Как проходит вывод</b>Заявка создаётся сразу и резервирует сумму. Оператор отправляет деньги на ваши реквизиты; пока заявка в очереди, её можно отменить в кошельке — сумма вернётся целиком.';
+  if(note && note.innerHTML !== nt) note.innerHTML = nt;
+  var k = document.querySelector('#pg-withdraw .bw2-amt-card .bw2-k');
+  if(k && !k.__mv){ k.__mv = 1; k.lastChild && (k.lastChild.textContent = 'Сколько вывести'); }
+  /* сумма сразу вся доступная — как у них (её можно поправить) */
+  var inp = $('bw2WdAmt');
+  if(inp && !inp.__mvFill && !String(inp.value || '').trim()){
+    inp.__mvFill = 1;
+    var a = Math.floor(Math.max(0, num(u.balance)));
+    if(a >= MIN_WD){ inp.value = String(a); try{ inp.dispatchEvent(new Event('input', { bubbles:true })); }catch(e){ E(e); } }
+  }
+}
+function decorateTopup(){
+  if(!mv() || !onPage('pg-topup')) return;
+  var k = document.querySelector('#pg-topup .bw2-amt-card .bw2-k');
+  if(k && !k.__mv){ k.__mv = 1; k.lastChild && (k.lastChild.textContent = 'Сумма пополнения'); }
+}
+/* 2FA: шторка кода без id — системная «Назад» прятала её display:none
+   навсегда. В MV даём ей имя и закрывашку, а display снимаем при показе. */
+function fix2fa(){
+  if(!mv()) return;
+  var w = document.querySelector('.wd2-wrap');
+  if(!w || w.__mvFix) return;
+  w.__mvFix = 1;
+  if(!w.id) w.id = 'wd2Wrap';
+  window.closeWd2Wrap = function(){ var x = $('wd2X'); if(x) x.click(); var ww = document.querySelector('.wd2-wrap'); if(ww) ww.classList.remove('on'); };
+  if(typeof MutationObserver !== 'undefined') new MutationObserver(function(){
+    if(w.classList.contains('on') && w.style.display === 'none') w.style.removeProperty('display');
+  }).observe(w, { attributes:true, attributeFilter:['class'] });
+}
+
+/* ══════════ обёртки и сборка ══════════ */
+function inChain(fn, flag){ for(var i = 0; fn && i < 40; i++){ if(fn[flag]) return true; fn = fn.__orig; } return false; }
+function wrapGo(){
+  var og = window.goTo;
+  if(typeof og !== 'function' || inChain(og, '__bpMvWal')) return;
+  var w = function(id){
+    if(!mv()) return og.apply(this, arguments);
+    var p = String(id == null ? '' : id);
+    /* ушли на другую страницу — наши окна и экраны поверх неё не нужны */
+    try{ var cur = document.querySelector('.pg.on'); if(p && (!cur || cur.id !== 'pg-' + p) && typeof window.bpMvCloseAll === 'function') window.bpMvCloseAll(); }catch(e){ E(e); }
+    if(p === 'withdraw' && me()){
+      var k = kycInfo();
+      if(!k.all && k.srv !== 'none'){
+        /* вместо «Проверки личности» — их «Верификация»; страница под
+           экраном — кошелёк (перезагрузка с #/withdraw) */
+        var anyOn = !!document.querySelector('.pg.on');
+        if(!anyOn || onPage('pg-withdraw')){ var a = Array.prototype.slice.call(arguments); a[0] = 'balance'; og.apply(this, a); }
+        later(openVerify, 0);
+        return undefined;
+      }
+    }
+    var r = og.apply(this, arguments);
+    if(p === 'balance'){ later(renderWal, 0); later(function(){ pullLed(false).then(walSoon, walSoon); }, 60); }
+    if(p === 'withdraw'){ later(decorateWithdraw, 60); later(decorateWithdraw, 400); later(fix2fa, 500); }
+    if(p === 'topup') later(decorateTopup, 60);
+    return r;
+  };
+  w.__bpMvWal = 1; w.__orig = og;
+  window.goTo = w;
+}
+function after(name, fn){
+  var o = window[name];
+  if(typeof o !== 'function' || inChain(o, '__bpMvWalA')) return;
+  var w = function(){ var r = o.apply(this, arguments); if(mv()){ try{ fn.apply(this, arguments); }catch(e){ E(e); } } return r; };
+  w.__bpMvWalA = 1; w.__orig = o;
+  window[name] = w;
+}
+var _ledT = null;
+function install(){
+  try{ wrapGo(); }catch(e){ E(e); }
+  after('updateBalanceUI', function(){
+    /* деньги сдвинулись вне кошелька (пополнение, вывод, задание) — история
+       устарела: при следующем открытии кошелька спросим кассу заново */
+    if(!onPage('pg-balance')) LED.at = 0;
+    if(onPage('pg-balance')){
+      walSoon();
+      /* деньги сдвинулись — история догоняет (не чаще раза в 4 с) */
+      if(!_ledT) _ledT = setTimeout(function(){ _ledT = null; LED.at = 0; pullLed(true).then(walSoon, walSoon); }, 4000);
+    }
+    if(onPage('pg-withdraw')) later(decorateWithdraw, 30);
+  });
+  after('toggleRole', function(){ _walKey = ''; walSoon(); });
+  after('bpKycClose', function(){ later(function(){ paintVf(true); try{ if(window.bpMvHubRender) window.bpMvHubRender(); }catch(e){} }, 120); });
+}
+/* кошелёк открывают и не через goTo (перезагрузка с #/balance) — следим
+   за самой страницей */
+function watchPages(){
+  if(typeof MutationObserver === 'undefined') return;
+  [['pg-balance', function(){ renderWal(); pullLed(false).then(walSoon, walSoon); }],
+   ['pg-withdraw', function(){ later(decorateWithdraw, 60); later(fix2fa, 500); }],
+   ['pg-topup', function(){ later(decorateTopup, 60); }]].forEach(function(x){
+    var pg = $(x[0]);
+    if(!pg || pg.__bpMvWalMo) return;
+    pg.__bpMvWalMo = 1;
+    var was = pg.classList.contains('on');
+    new MutationObserver(function(){ var on = pg.classList.contains('on'); if(on && !was && mv()){ try{ x[1](); }catch(e){ E(e); } } was = on; }).observe(pg, { attributes:true, attributeFilter:['class'] });
+  });
+}
+install();
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function(){ install(); watchPages(); });
+else { later(install, 0); watchPages(); }
+[1300, 3200].forEach(function(ms){ later(install, ms); });
+later(function(){ watchPages(); if(mv() && onPage('pg-balance')){ renderWal(); pullLed(false).then(walSoon, walSoon); } if(mv() && onPage('pg-withdraw')) decorateWithdraw(); }, 950);
+document.addEventListener('visibilitychange', function(){
+  if(document.hidden || !mv()) return;
+  if(onPage('pg-balance')){ LED.at = 0; pullLed(true).then(walSoon, walSoon); }
+  if(VF){ try{ if(typeof window.bpPullKyc === 'function') window.bpPullKyc(true); }catch(e){} later(function(){ paintVf(); }, 900); }
+});
+/* шторка кода появляется при первом выводе */
+if(typeof MutationObserver !== 'undefined'){
+  var bo = function(){ if(!document.body) return; new MutationObserver(function(){ if(mv() && !document.body.__mvW2 && document.querySelector('.wd2-wrap')){ document.body.__mvW2 = 1; fix2fa(); } }).observe(document.body, { childList:true }); };
+  if(document.body) bo(); else document.addEventListener('DOMContentLoaded', bo);
+}
+})();
+</script>
 </body>
 </html>
