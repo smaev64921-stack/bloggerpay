@@ -173,15 +173,48 @@ function keyboard(payload) {
   };
 }
 
+/* ── Крючки для сервера (14.10.2026) ───────────────────────────────
+   Пополнение по счёту ведётся здесь, в чате: сервер ставит крючки
+   (setHooks), бот отдаёт им /start с меткой, ответы владельца на
+   пересланные сообщения и сообщения клиентов. Крючок вернул true —
+   сообщение обработано, обычный ответ бота не нужен. */
+let HOOKS = {};
+let ME_NAME = '';
+function setHooks(h) { HOOKS = Object.assign({}, HOOKS, h || {}); }
+function botName() { return ME_NAME || String(ENV.BOT_USERNAME || '').replace(/^@/, ''); }
+async function say(chatId, text, extra) {
+  if (!TOKEN || !chatId) return null;
+  try {
+    return await tg('sendMessage', Object.assign({
+      chat_id: chatId, text: String(text).slice(0, 3900), disable_web_page_preview: true,
+    }, extra || {}));
+  } catch (e) { console.error('[бот] не отправил сообщение: ' + e.message); return null; }
+}
+async function copy(toChat, fromChat, messageId) {
+  if (!TOKEN || !toChat || !fromChat || !messageId) return null;
+  try { return await tg('copyMessage', { chat_id: toChat, from_chat_id: fromChat, message_id: messageId }); }
+  catch (e) { console.error('[бот] не переслал сообщение: ' + e.message); return null; }
+}
+async function hook(name, ...args) {
+  if (typeof HOOKS[name] !== 'function') return false;
+  try { return !!(await HOOKS[name](...args)); }
+  catch (e) { console.error('[бот] ' + name + ': ' + ((e && e.message) || e)); return false; }
+}
+
 /* ── Обработка сообщений ───────────────────────────────────────────── */
 
 async function onMessage(msg) {
   const chatId = msg.chat && msg.chat.id;
   if (!chatId) return;
   const text = String(msg.text || '').trim();
+  const admin = String(ENV.ADMIN_CHAT_ID || '').trim();
+
+  /* владелец ответил на пересланное сообщение — ответ уходит клиенту */
+  if (admin && String(chatId) === admin && msg.reply_to_message && await hook('adminReply', msg)) return;
 
   /* «/start метка» — метка это приглашение или ссылка на карточку */
   const start = /^\/start(?:@\w+)?(?:\s+(\S+))?/.exec(text);
+  if (start && start[1] && await hook('start', start[1], msg)) return;
   if (start) {
     await tg('sendMessage', {
       chat_id: chatId, text: HELLO, parse_mode: 'HTML',
@@ -200,6 +233,9 @@ async function onMessage(msg) {
     return;
   }
 
+  /* открыта заявка на счёт — сообщение уходит владельцу */
+  if (await hook('message', msg)) return;
+
   /* На любое другое сообщение не молчим: человек написал боту, значит
      ждёт ответа. Переписки здесь нет — вся работа в приложении. */
   await tg('sendMessage', {
@@ -213,6 +249,7 @@ async function onMessage(msg) {
 
 async function setup() {
   const me = await tg('getMe');
+  ME_NAME = String((me && me.username) || '');
   console.log('[бот] подключился: @' + me.username + ' (' + (me.first_name || '') + ')');
 
   /* Кнопка рядом с полем ввода показывает список команд, а не приложение.
@@ -329,7 +366,7 @@ async function boot() {
   return true;
 }
 
-module.exports = { boot, appUrl, keyboard };
+module.exports = { boot, appUrl, keyboard, setHooks, say, copy, botName };
 
 /* Запущен напрямую (node server/bot.js) — работаем как отдельный процесс. */
 if (require.main === module) {

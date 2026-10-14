@@ -871,6 +871,138 @@ const qm = {
   get: db.prepare('SELECT mime, data FROM media WHERE id = ?'),
   stat: db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(size), 0) AS bytes FROM media WHERE user_id = ?'),
 };
+/* Пополнение по счёту (14.10.2026). Рекламодатель оставляет заявку в
+   приложении (компания, ИНН, сумма) и продолжает в Телеграме: бот по
+   ссылке t.me/<бот>?start=inv_<code> связывает чат с заявкой, сообщает
+   владельцу и передаёт переписку в обе стороны (tg_relay: сообщение в
+   чате владельца → чат клиента). Деньги после оплаты зачисляет владелец
+   в /admin → «Счета» — через журнал, ключ операции invoice:<id>, повтор
+   не зачислит второй раз. */
+db.exec(`CREATE TABLE IF NOT EXISTS invoice_requests (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL,
+  code       TEXT NOT NULL UNIQUE,
+  amount     INTEGER NOT NULL,
+  company    TEXT NOT NULL,
+  inn        TEXT NOT NULL,
+  email      TEXT,
+  comment    TEXT,
+  status     TEXT NOT NULL DEFAULT 'new',
+  tg_chat    TEXT,
+  tg_user    TEXT,
+  tg_name    TEXT,
+  paid       INTEGER,
+  note       TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+db.exec('CREATE INDEX IF NOT EXISTS inv_user ON invoice_requests(user_id)');
+db.exec(`CREATE TABLE IF NOT EXISTS tg_relay (
+  admin_msg INTEGER PRIMARY KEY,
+  user_chat TEXT NOT NULL,
+  inv_id    INTEGER,
+  at        TEXT NOT NULL DEFAULT (datetime('now'))
+)`);
+const qi = {
+  ins: db.prepare('INSERT INTO invoice_requests (user_id, code, amount, company, inn, email, comment) VALUES (?,?,?,?,?,?,?)'),
+  byId: db.prepare('SELECT * FROM invoice_requests WHERE id = ?'),
+  byCode: db.prepare('SELECT * FROM invoice_requests WHERE code = ?'),
+  mine: db.prepare(`SELECT id, code, amount, company, inn, status, paid, note, created_at, updated_at,
+      CASE WHEN tg_chat IS NOT NULL THEN 1 ELSE 0 END AS tg
+    FROM invoice_requests WHERE user_id = ? ORDER BY id DESC LIMIT 20`),
+  openByChat: db.prepare(`SELECT * FROM invoice_requests WHERE tg_chat = ? AND status IN ('new','linked')
+    ORDER BY id DESC LIMIT 1`),
+  link: db.prepare(`UPDATE invoice_requests SET tg_chat = ?, tg_user = ?, tg_name = ?,
+      status = CASE WHEN status = 'new' THEN 'linked' ELSE status END, updated_at = datetime('now') WHERE id = ?`),
+  setSt: db.prepare(`UPDATE invoice_requests SET status = ?, paid = ?, note = ?, updated_at = datetime('now') WHERE id = ?`),
+  list: db.prepare(`SELECT i.id, i.user_id, i.amount, i.company, i.inn, i.email, i.comment, i.status, i.tg_user, i.tg_name,
+      CASE WHEN i.tg_chat IS NOT NULL THEN 1 ELSE 0 END AS tg, i.paid, i.note, i.created_at, i.updated_at,
+      u.email AS user_email, u.name AS user_name
+    FROM invoice_requests i JOIN users u ON u.id = i.user_id
+    WHERE (? = '' OR i.status = ? OR (? = 'open' AND i.status IN ('new','linked')))
+    ORDER BY i.id DESC LIMIT 200`),
+  openCount: db.prepare(`SELECT COUNT(*) AS n FROM invoice_requests WHERE status IN ('new','linked')`),
+  openByUser: db.prepare(`SELECT COUNT(*) AS n FROM invoice_requests WHERE user_id = ? AND status IN ('new','linked')`),
+  relayPut: db.prepare('INSERT OR REPLACE INTO tg_relay (admin_msg, user_chat, inv_id) VALUES (?,?,?)'),
+  relayGet: db.prepare('SELECT * FROM tg_relay WHERE admin_msg = ?'),
+};
+const INV_MIN = Math.max(1000, Number(process.env.INVOICE_MIN || 10000) || 10000);
+let BOT = null;                     /* модуль бота: заявкам на счёт нужен его ответ (message_id) */
+/* ИНН: 10 цифр у организации, 12 у ИП, с контрольными цифрами */
+function innOk(s) {
+  const d = String(s || '');
+  if (!/^\d{10}$|^\d{12}$/.test(d)) return false;
+  const k = (w) => w.reduce((sum, c, i) => sum + c * Number(d[i]), 0) % 11 % 10;
+  if (d.length === 10) return k([2, 4, 10, 3, 5, 9, 4, 6, 8]) === Number(d[9]);
+  return k([7, 2, 4, 10, 3, 5, 9, 4, 6, 8]) === Number(d[10]) && k([3, 7, 2, 4, 10, 3, 5, 9, 4, 6, 8]) === Number(d[11]);
+}
+function rubTxt(n) { return Number(n || 0).toLocaleString('ru-RU').replace(/\u00a0|\u202f/g, ' ') + ' ₽'; }
+function invSay(chat, text) {
+  if (!chat || !BOT || typeof BOT.say !== 'function') return Promise.resolve(null);
+  return BOT.say(String(chat), text).catch(() => null);
+}
+/* Разговор по счёту в боте. Возвращают true — сообщение обработано. */
+function invoiceHooks(bot) {
+  const admin = String(ENV.ADMIN_CHAT_ID || '').trim();
+  return {
+    start: async (payload, msg) => {
+      const m = /^inv_([0-9a-f]{12})$/.exec(String(payload || ''));
+      if (!m) return false;
+      const chat = String(msg.chat && msg.chat.id);
+      const r = qi.byCode.get(m[1]);
+      if (!r) {
+        await bot.say(chat, 'Заявка не найдена. Создайте её заново в приложении: Кошелёк → Пополнить → По счёту.');
+        return true;
+      }
+      if (r.status === 'paid' || r.status === 'rejected') {
+        await bot.say(chat, r.status === 'paid'
+          ? 'Счёт №' + r.id + ' уже оплачен — ' + rubTxt(r.paid || r.amount) + ' на балансе BloggerPay.'
+          : 'Заявка №' + r.id + ' закрыта' + (r.note ? ': ' + r.note : '') + '. Создайте новую в приложении.');
+        return true;
+      }
+      const f = msg.from || {};
+      const tgUser = f.username ? '@' + String(f.username).slice(0, 40) : null;
+      const tgName = [f.first_name, f.last_name].filter(Boolean).join(' ').slice(0, 80) || null;
+      qi.link.run(chat, tgUser, tgName, r.id);
+      await bot.say(chat, '🧾 Заявка на пополнение по счёту №' + r.id + '\n\n'
+        + 'Сумма: ' + rubTxt(r.amount) + '\nПлательщик: ' + r.company + '\nИНН: ' + r.inn + '\n\n'
+        + 'Менеджер выставит счёт и пришлёт его сюда, в этот чат, в течение рабочего дня. '
+        + 'После оплаты деньги поступят на баланс BloggerPay — мы напишем.\n\n'
+        + 'Нужны другие реквизиты или договор? Напишите сюда — менеджер ответит.');
+      if (admin && chat !== admin) {
+        const a = await bot.say(admin, '🧾 Клиент по счёту №' + r.id + ' на связи в боте' + (tgUser ? ' — ' + tgUser : '') + '\n'
+          + rubTxt(r.amount) + ' · ' + r.company + ' · ИНН ' + r.inn + '\n\n'
+          + 'Ответьте на это сообщение (Ответить) — бот передаст ответ клиенту. Счёт можно прислать файлом.');
+        if (a && a.message_id) qi.relayPut.run(Number(a.message_id), chat, r.id);
+      }
+      return true;
+    },
+    message: async (msg) => {
+      const chat = String(msg.chat && msg.chat.id);
+      if (!admin || chat === admin) return false;
+      const r = qi.openByChat.get(chat);
+      if (!r) return false;
+      const f = msg.from || {};
+      const who = f.username ? '@' + f.username : (r.tg_name || 'клиент');
+      const h = await bot.say(admin, '💬 Счёт №' + r.id + ' · ' + who + ' пишет:');
+      const c = await bot.copy(admin, chat, msg.message_id);
+      if (h && h.message_id) qi.relayPut.run(Number(h.message_id), chat, r.id);
+      if (c && c.message_id) qi.relayPut.run(Number(c.message_id), chat, r.id);
+      if (!c) await bot.say(chat, 'Не получилось передать сообщение менеджеру — попробуйте ещё раз.');
+      return true;
+    },
+    adminReply: async (msg) => {
+      const ref = msg.reply_to_message && msg.reply_to_message.message_id;
+      const row = ref ? qi.relayGet.get(Number(ref)) : null;
+      if (!row) return false;
+      const c = await bot.copy(row.user_chat, String(msg.chat.id), msg.message_id);
+      await bot.say(String(msg.chat.id), c
+        ? '✓ Передано клиенту по счёту №' + row.inv_id
+        : '✗ Не дошло: клиент мог остановить бота. Свяжитесь с ним по почте из заявки.');
+      return true;
+    },
+  };
+}
 const MEDIA_MAX = 1024 * 1024;              /* JPEG — до 1 МБ: приложение само его ужимает */
 /* Анимированный баннер (GIF, анимированные PNG и WebP) и видео-баннер
    пережимать нельзя — анимация пропадёт. Им до 6 МБ (05.10.2026). */
@@ -3604,6 +3736,51 @@ const routes = {
     });
   },
 
+  /* Пополнение по счёту: заявка → чат с ботом → счёт → зачисление
+     владельцем (/admin → «Счета»). Денег здесь не двигаем. */
+  'POST /api/topup/invoice': async (req, body) => {
+    if (!rateLimit(req, 'invoice', 6, 60000)) return tooOften;
+    const u = auth(req);
+    if (!u) return { status: 401, body: { error: 'Нужен вход' } };
+    const amount = body.amount;
+    if (!Number.isInteger(amount) || amount < INV_MIN || amount > 100000000) {
+      return { status: 400, body: { error: 'Сумма по счёту — от ' + rubTxt(INV_MIN) + ', целым числом' } };
+    }
+    const company = String(body.company || '').trim().replace(/\s+/g, ' ').slice(0, 160);
+    if (company.length < 2) return { status: 400, body: { error: 'Укажите компанию или ИП' } };
+    const inn = String(body.inn || '').replace(/\D/g, '');
+    if (!innOk(inn)) return { status: 400, body: { error: 'ИНН — 10 цифр у компании или 12 у ИП; проверьте цифры' } };
+    const email = String(body.email || u.email || '').trim().slice(0, 160);
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { status: 400, body: { error: 'Проверьте почту для счёта' } };
+    const comment = String(body.comment || '').trim().replace(/\s+/g, ' ').slice(0, 500);
+    if (qi.openByUser.get(u.id).n >= 5) {
+      return { status: 429, body: { error: 'Открытых заявок уже пять — дождитесь ответа менеджера или закройте старые' } };
+    }
+    const code = crypto.randomBytes(6).toString('hex');
+    const info = qi.ins.run(u.id, code, amount, company, inn, email || null, comment || null);
+    const id = Number(info.lastInsertRowid);
+    if (ALERTS_ON) {
+      tgSendTo(ADMIN_CHAT_ID, '🧾 Заявка на пополнение по счёту №' + id + '\n\n' + rubTxt(amount) + '\n' + company + ' · ИНН ' + inn
+        + '\n' + (email || u.email) + (comment ? '\n«' + comment + '»' : '')
+        + '\n\nКлиент откроет чат с ботом — его сообщения придут сюда. Зачислить после оплаты: админ-панель → Счета.', 'счёт');
+    }
+    adminLog(req, 'inv-new', 'user ' + u.id, 'счёт №' + id + ' · ' + amount + ' ₽');
+    const bot = (BOT && typeof BOT.botName === 'function' && BOT.botName()) || String(ENV.BOT_USERNAME || '').replace(/^@/, '') || 'BloggerPay_bot';
+    return { status: 200, body: { ok: true, id, code, amount, bot, min: INV_MIN } };
+  },
+
+  'GET /api/topup/invoices': async (req) => {
+    const u = auth(req);
+    if (!u) return { status: 401, body: { error: 'Нужен вход' } };
+    const bot = (BOT && typeof BOT.botName === 'function' && BOT.botName()) || String(ENV.BOT_USERNAME || '').replace(/^@/, '') || 'BloggerPay_bot';
+    const rows = qi.mine.all(u.id).map((r) => {
+      const open = r.status === 'new' || r.status === 'linked';
+      return { id: r.id, amount: r.amount, company: r.company, inn: r.inn, status: r.status, paid: r.paid, note: r.note,
+        tg: !!r.tg, created_at: r.created_at, updated_at: r.updated_at, code: open ? r.code : undefined };
+    });
+    return { status: 200, body: { rows, bot, min: INV_MIN } };
+  },
+
   /* ── НАСТОЯЩИЕ ПЛАТЕЖИ (ЮKassa) ──────────────────────────────────
      Схема: создать платёж → человек платит на странице кассы → касса
      бьёт вебхуком ИЛИ приложение само спрашивает статус → зачисление
@@ -4747,6 +4924,51 @@ const routes = {
     return { status: 200, body: { ok: true, requestId: k.id, status: 'rejected' } };
   },
 
+  /* ── Счета: пополнение по счёту ── */
+  'GET /api/admin/invoices': async (req, body, url) => {
+    if (!isAdmin(req)) return { status: 403, body: { error: 'Нужен X-Admin-Key' } };
+    const st = String(url.searchParams.get('status') || '');
+    return { status: 200, body: { rows: qi.list.all(st, st, st), min: INV_MIN } };
+  },
+
+  'POST /api/admin/invoices/credit': async (req, body) => {
+    if (!isAdmin(req)) return { status: 403, body: { error: 'Нужен X-Admin-Key' } };
+    const r = qi.byId.get(Number(body.id));
+    if (!r) return { status: 404, body: { error: 'Заявка не найдена' } };
+    if (r.status === 'rejected') return { status: 409, body: { error: 'Заявка закрыта — зачислить нельзя' } };
+    const amount = body.amount == null || body.amount === '' ? r.amount : Number(body.amount);
+    if (!Number.isInteger(amount) || amount < 1 || amount > 100000000) {
+      return { status: 400, body: { error: 'Сумма — целое число от 1 ₽' } };
+    }
+    if (r.status === 'paid' && amount !== r.paid) {
+      return { status: 409, body: { error: 'Счёт уже оплачен: зачислено ' + rubTxt(r.paid) } };
+    }
+    const res = moneyOp('invoice:' + r.id, r.user_id, 'topup', (add) => {
+      add(r.user_id, 'available', amount, 'topup', 'пополнение по счёту №' + r.id);
+      return { ok: true, id: r.id, amount, balance: q.balance.get(r.user_id) };
+    });
+    if (res.status === 200 && !res.body.repeated) {
+      qi.setSt.run('paid', amount, null, r.id);
+      adminLog(req, 'inv-credit', 'user ' + r.user_id, 'счёт №' + r.id + ' · ' + amount + ' ₽');
+      pushTo(r.user_id, 'Оплата по счёту получена', rubTxt(amount) + ' на балансе', '/');
+      invSay(r.tg_chat, '✅ Оплата по счёту №' + r.id + ' получена — ' + rubTxt(amount) + ' зачислены на баланс BloggerPay.');
+    }
+    return res;
+  },
+
+  'POST /api/admin/invoices/reject': async (req, body) => {
+    if (!isAdmin(req)) return { status: 403, body: { error: 'Нужен X-Admin-Key' } };
+    const r = qi.byId.get(Number(body.id));
+    if (!r) return { status: 404, body: { error: 'Заявка не найдена' } };
+    if (r.status === 'paid') return { status: 409, body: { error: 'Счёт уже оплачен — закрыть нельзя' } };
+    if (r.status === 'rejected') return { status: 200, body: { ok: true, id: r.id, status: 'rejected', repeated: true } };
+    const note = String(body.note || '').trim().slice(0, 200);
+    qi.setSt.run('rejected', null, note || null, r.id);
+    adminLog(req, 'inv-reject', 'user ' + r.user_id, 'счёт №' + r.id + (note ? ' · ' + note : ''));
+    invSay(r.tg_chat, 'Заявка на счёт №' + r.id + ' закрыта' + (note ? ': ' + note : '') + '. Если нужно, создайте новую в приложении.');
+    return { status: 200, body: { ok: true, id: r.id, status: 'rejected' } };
+  },
+
   'GET /api/admin/deals': async (req) => {
     if (!isAdmin(req)) return { status: 403, body: { error: 'Нужен X-Admin-Key' } };
     return { status: 200, body: { rows: q.openDeals.all() } };
@@ -5535,6 +5757,7 @@ const routes = {
         сумма_к_выплате: queued.reduce((s, w) => s + w.net, 0),
         взято_в_работу: processing.length,
         верификаций_в_очереди: q.kycQueuedCount.get().n,
+        счетов_ждут: qi.openCount.get().n,
         /* значок раздела «Видео»: вернул рекламодатель, держит накрутка,
            не хватило денег или замера, либо выплату держит спор */
         видео_на_решении: q.vidQueueCount.get().n,
@@ -8356,7 +8579,10 @@ function boot() {
      сайта не нужен. Бот не роняет сервер: не заладилось с токеном —
      сайт продолжает работать, в консоли причина. */
   try {
-    require('./bot').boot().then((ok) => {
+    const botMod = require('./bot');
+    BOT = botMod;
+    if (typeof botMod.setHooks === 'function') botMod.setHooks(invoiceHooks(botMod));
+    botMod.boot().then((ok) => {
       if (ok) console.log('[BloggerPay] бот запущен, кнопка ведёт на ' + PUBLIC_URL);
     }).catch((e) => console.error('[бот] ' + ((e && e.message) || e)));
   } catch (e) {

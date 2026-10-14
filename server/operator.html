@@ -462,6 +462,7 @@ var ICON = {
   home:'<svg class="i" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>',
   wd:'<svg class="i" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>',
   kyc:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="11" r="2.5"/><path d="M5.5 17c.8-1.8 2-2.6 3.5-2.6s2.7.8 3.5 2.6"/><path d="M15 10h3M15 14h3"/></svg>',
+  inv:'<svg class="i" viewBox="0 0 24 24"><path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z"/><path d="M9 8h6M9 11.6h6M9 15.2h3.6"/></svg>',
   deals:'<svg class="i" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M5 7h14"/><path d="M5 7l-3 7a4 4 0 0 0 6 0z"/><path d="M19 7l-3 7a4 4 0 0 0 6 0z"/></svg>',
   users:'<svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.9-3.4 3.4-5.2 6.5-5.2s5.6 1.8 6.5 5.2"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.9c1.8.7 3 2.4 3.5 5.1"/></svg>',
   cards:'<svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h6M7 13h10M7 16h4"/></svg>',
@@ -482,6 +483,7 @@ var SECTIONS = [
   { id:'home',   t:'Обзор',          sub:'Деньги в системе, сверка и всё, что ждёт вашего решения.' },
   { id:'wd',     t:'Выплаты',        sub:'Сервер деньги не отправляет — переводите своим банком и отмечайте здесь.', badge:'wd' },
   { id:'kyc',    t:'Верификация',    sub:'Сверьте анкету с фото паспорта и селфи. Без подтверждения вывод закрыт.', badge:'kyc' },
+  { id:'inv',    t:'Счета',          sub:'Пополнение по счёту: клиент пишет в бот, вы присылаете ему счёт там же, а после оплаты зачисляете сумму здесь.', badge:'inv' },
   { id:'deals',  t:'Спорные деньги', sub:'Деньги, замороженные под сделки и бюджеты кампаний. Делить — только по спору.' },
   /* tool — своя кнопка раздела в шапке, рядом с «Обновить»: «Обновить»
      перечитывает нашу базу, а эта спрашивает площадки (TikTok, YouTube)
@@ -595,7 +597,7 @@ function leave(){
 
 /* ─────────────────────────── меню и маршруты ─────────────────────────── */
 var SEC = 'home';
-var BADGES = { wd:'', kyc:'', videos:'', errors:'' };
+var BADGES = { wd:'', kyc:'', inv:'', videos:'', errors:'' };
 function paintNav(){
   $('nav').innerHTML = SECTIONS.map(function(s){
     if(s === 'sep') return '<div class="sep"></div>';
@@ -643,6 +645,7 @@ function refreshBadges(){
     OV = o;
     BADGES.wd = o.заявок_в_очереди ? String(o.заявок_в_очереди) : '';
     BADGES.kyc = o.верификаций_в_очереди ? String(o.верификаций_в_очереди) : '';
+    BADGES.inv = o.счетов_ждут ? String(o.счетов_ждут) : '';
     BADGES.videos = o.видео_на_решении ? String(o.видео_на_решении) : '';
     BADGES.errors = (o.ошибок_за_сутки && o.ошибок_за_сутки.n) ? String(o.ошибок_за_сутки.n) : '';
     paintNav();
@@ -795,6 +798,9 @@ VIEWS.home = function(){
       + todoBtn('kyc', 'kyc', o.верификаций_в_очереди ? 'warn' : 'ok',
           o.верификаций_в_очереди ? ('Проверка личности: ' + o.верификаций_в_очереди) : 'Проверок личности нет',
           o.верификаций_в_очереди ? 'без решения вывод у людей закрыт' : 'все анкеты разобраны')
+      + (o.счетов_ждут == null ? '' : todoBtn('inv', 'inv', o.счетов_ждут ? 'warn' : 'ok',
+          o.счетов_ждут ? ('Счетов ждут: ' + o.счетов_ждут) : 'Заявок на счёт нет',
+          o.счетов_ждут ? 'пришлите счёт в бот, после оплаты — «Зачислить»' : 'пополнения по счёту разобраны'))
       /* сервер без «Видео заданий» поля не пришлёт — тогда и строки нет,
          а не ложное «всё разобрано» */
       + (o.видео_на_решении == null ? '' : todoBtn('videos', 'videos', o.видео_на_решении ? 'warn' : 'ok',
@@ -898,6 +904,46 @@ VIEWS.kyc = function(first, seq){
     $('view').innerHTML = chips + body
       + '<p class="note">Откройте паспорт, сверьте ФИО и дату рождения с анкетой. Откройте селфи и сравните лицо с фото в документе — '
       + 'паспорт должен быть в руках у того, кто на снимке. Затем <b>подтвердите</b> или <b>отклоните</b> с причиной: её человек увидит в приложении и сможет прислать документы заново.</p>';
+  });
+};
+
+/* ── Счета (пополнение по счёту, 14.10.2026) ──
+   Клиент оставил заявку в приложении и открыл бота: его сообщения
+   приходят вам в Телеграм, ответ на них бот передаёт клиенту. Счёт
+   пришлите туда же. Деньги пришли на расчётный счёт — «Зачислить»:
+   сумма ложится на баланс через журнал, повтор второй раз не платит. */
+var INV_TAB = 'open';
+function invRu(s){ return { 'new':'Ждёт Телеграма', linked:'В переписке', paid:'Оплачен', rejected:'Закрыт' }[s] || (s || '—'); }
+function invSt(s){ return s === 'paid' ? 'approved' : s === 'rejected' ? 'rejected' : 'queued'; }
+VIEWS.inv = function(first, seq){
+  var tab = INV_TAB;
+  return api('GET', '/api/admin/invoices' + (tab ? ('?status=' + tab) : '')).then(function(j){
+    if(SEC !== 'inv' || seq !== loadSeq || tab !== INV_TAB) return;
+    var rows = j.rows || [];
+    var chips = '<div class="chips">' + [['open','Ждут'],['paid','Оплаченные'],['rejected','Закрытые'],['','Все']].map(function(t){
+      return '<button type="button" class="chip' + (t[0] === INV_TAB ? ' on' : '') + '" data-invtab="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    var body = !rows.length ? '<div class="box"><div class="empty">' + (INV_TAB === 'open' ? 'Заявок на счёт нет' : 'Здесь пусто') + '</div></div>'
+      : '<div class="box"><table class="rt"><thead><tr><th>Кто в приложении</th><th>Плательщик</th><th class="num">Сумма</th><th>Телеграм</th><th>Статус</th><th>Создана</th><th></th></tr></thead><tbody>'
+      + rows.map(function(r){
+          var open = r.status === 'new' || r.status === 'linked';
+          var acts = open
+            ? '<div class="acts"><button type="button" class="btn ok sm" data-invok="' + r.id + '" data-amt="' + r.amount + '" data-co="' + esc(r.company) + '">Зачислить</button>'
+              + '<button type="button" class="btn ghost sm" data-invno="' + r.id + '">Закрыть</button></div>'
+            : '<span class="mute">' + (r.status === 'paid' ? 'зачислено ' + money(r.paid) : (r.note ? esc(r.note) : '—')) + '</span>';
+          return '<tr><td class="first who"><button type="button" class="linkish" data-user="' + r.user_id + '"><b>' + esc(r.user_name) + '</b><span>' + esc(r.user_email) + ' · id ' + r.user_id + '</span></button></td>'
+            + '<td class="who" data-l="Плательщик"><b>' + esc(r.company) + '</b><span>ИНН ' + esc(r.inn) + (r.email && r.email !== r.user_email ? ' · счёт на ' + esc(r.email) : '') + '</span>'
+            + (r.comment ? '<div class="mute" style="margin-top:4px">«' + esc(r.comment) + '»</div>' : '') + '</td>'
+            + '<td class="num" data-l="Сумма"><b>' + money(r.amount) + '</b><div class="mute">счёт №' + r.id + '</div></td>'
+            + '<td data-l="Телеграм">' + (r.tg ? '<b>' + esc(r.tg_user || r.tg_name || 'в боте') + '</b>' : '<span class="mute">ещё не открыл бота</span>') + '</td>'
+            + '<td data-l="Статус"><span class="st ' + invSt(r.status) + '">' + invRu(r.status) + '</span></td>'
+            + '<td class="mute" data-l="Создана" style="white-space:nowrap">' + when(r.created_at) + '</td>'
+            + '<td class="acts-td">' + acts + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    $('view').innerHTML = chips + body
+      + '<p class="note">Как это работает: человек в приложении выбирает «Пополнить → По счёту», указывает компанию, ИНН и сумму и открывает бота. '
+      + 'Его сообщения приходят вам в Телеграм — <b>отвечайте на них кнопкой «Ответить»</b>, бот передаст ответ, можно прислать счёт файлом. '
+      + 'Когда деньги пришли на расчётный счёт, нажмите <b>«Зачислить»</b>: сумма ляжет на баланс клиента, ему придёт сообщение. '
+      + 'Минимальная сумма заявки — ' + money(j.min || 10000) + '.</p>';
   });
 };
 
@@ -1649,6 +1695,28 @@ document.addEventListener('click', function(e){
   if(ds.act === 'umore'){ t.disabled = true; usersFetch(false).then(paintUsers).catch(function(er){ say(er.message, true); t.disabled = false; }); return; }
   if(ds.wdtab !== undefined){ WD_TAB = ds.wdtab; load(true); return; }
   if(ds.kyctab !== undefined){ KYC_TAB = ds.kyctab; load(true); return; }
+  if(ds.invtab !== undefined){ INV_TAB = ds.invtab; load(true); return; }
+  if(ds.invok){
+    ask({ title:'Зачислить по счёту №' + ds.invok, html:'Деньги от <b>' + esc(ds.co) + '</b> пришли на расчётный счёт? Укажите, сколько пришло — эта сумма ляжет на баланс клиента.',
+          input:'text', value:String(ds.amt || ''), required:'Укажите сумму',
+          check:function(v){ var n = Number(String(v).replace(/[\s\u00a0]/g, '')); return Number.isInteger(n) && n > 0 ? '' : 'Сумма — целое число рублей'; },
+          ok:'Зачислить', okClass:'ok' })
+      .then(function(r){
+        if(!r.ok) return;
+        var n = Number(String(r.value).replace(/[\s\u00a0]/g, ''));
+        return api('POST', '/api/admin/invoices/credit', { id: Number(ds.invok), amount: n }).then(function(){ after('Зачислено ' + money(n)); });
+      }).catch(function(er){ say(er.message, true); after(); });
+    return;
+  }
+  if(ds.invno){
+    ask({ title:'Закрыть заявку №' + ds.invno, text:'Клиент увидит причину в приложении и в боте.', input:'area', required:'Напишите причину',
+          placeholder:'Например: дубль заявки', sugg:['Дубль заявки', 'Клиент передумал', 'Оплата не пришла'], ok:'Закрыть заявку', danger:true })
+      .then(function(r){
+        if(!r.ok) return;
+        return api('POST', '/api/admin/invoices/reject', { id: Number(ds.invno), note: r.value }).then(function(){ after('Заявка закрыта'); });
+      }).catch(function(er){ say(er.message, true); after(); });
+    return;
+  }
   if(ds.errdays){ ERR_DAYS = Number(ds.errdays) || 7; load(true); return; }
   if(ds.vidtab !== undefined){ VID.tab = ds.vidtab; load(true); return; }
   if(ds.act === 'vidsync'){ vidSync(t); return; }
